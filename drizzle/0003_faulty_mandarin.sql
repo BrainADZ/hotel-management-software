@@ -1,0 +1,1 @@
+CREATE UNIQUE INDEX `idx_housekeeping_unique_checkout_inspection` ON `housekeeping_tasks` (`reservation_id`,`task_type`) WHERE "housekeeping_tasks"."task_type" = 'CHECKOUT_INSPECTION';

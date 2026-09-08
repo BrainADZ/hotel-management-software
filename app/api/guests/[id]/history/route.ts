@@ -1,0 +1,2 @@
+import { apiError, apiJson } from '@/lib/server/api-response'; import { requireReservationContext } from '@/lib/server/reservations/http'; import { guestService } from '@/lib/server/guests/service'; import { entityIdSchema } from '@/lib/server/reservations/validation';
+export const dynamic='force-dynamic'; export async function GET(request:Request,route:{params:Promise<{id:string}>}){try{const c=await requireReservationContext(request);return apiJson(await guestService.history(c,entityIdSchema.parse((await route.params).id)));}catch(e){return apiError(e);}}

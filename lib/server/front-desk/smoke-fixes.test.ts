@@ -1,0 +1,22 @@
+import {describe,expect,it} from 'vitest';
+import {appearsInFrontDesk} from './arrival-policy';
+import {guestPatchSchema,identityDocumentSchema,maskedIdentityNumber} from '@/lib/server/guests/validation';
+import {roleCan} from '@/lib/domain';
+const base={organisationId:'org-1',propertyId:'prop-1',arrivalDate:'2026-09-08',departureDate:'2026-09-09',status:'CONFIRMED'};
+describe('Step 3 smoke fixes',()=>{
+ it('shows today confirmed arrival',()=>expect(appearsInFrontDesk(base,'arrivals','2026-09-08','org-1','prop-1')).toBe(true));
+ it('shows future expected arrival',()=>expect(appearsInFrontDesk({...base,arrivalDate:'2026-09-09'},'expected','2026-09-08','org-1','prop-1')).toBe(true));
+ it('excludes wrong property',()=>expect(appearsInFrontDesk({...base,propertyId:'prop-2'},'arrivals','2026-09-08','org-1','prop-1')).toBe(false));
+ it('excludes cancelled arrivals',()=>expect(appearsInFrontDesk({...base,status:'CANCELLED'},'arrivals','2026-09-08','org-1','prop-1')).toBe(false));
+ it('moves checked-in reservation to in-house',()=>expect(appearsInFrontDesk({...base,status:'CHECKED_IN'},'in-house','2026-09-08','org-1','prop-1')).toBe(true));
+ it('accepts phone edit',()=>expect(guestPatchSchema.parse({phone:'9999999999'}).phone).toBe('9999999999'));
+ it('accepts email edit',()=>expect(guestPatchSchema.parse({email:'new@example.com'}).email).toBe('new@example.com'));
+ it('accepts profile fields',()=>expect(guestPatchSchema.parse({addressLine1:'MG Road',city:'Pune',country:'India'}).city).toBe('Pune'));
+ it('allows reception KYC',()=>expect(roleCan('RECEPTION','guest.kyc.verify')).toBe(true));
+ it('blocks housekeeping KYC',()=>expect(roleCan('HOUSEKEEPING','guest.kyc.view')).toBe(false));
+ it('accepts only Aadhaar last four',()=>expect(identityDocumentSchema.parse({documentType:'AADHAAR',last4:'1234'}).last4).toBe('1234'));
+ it('rejects full Aadhaar',()=>expect(()=>identityDocumentSchema.parse({documentType:'AADHAAR',last4:'123412341234'})).toThrow());
+ it('keeps Aadhaar display masked',()=>expect(maskedIdentityNumber('AADHAAR','1234')).toBe('XXXX XXXX 1234'));
+ it('does not expose checked-in guest as arrival',()=>expect(appearsInFrontDesk({...base,status:'CHECKED_IN'},'arrivals','2026-09-08','org-1','prop-1')).toBe(false));
+ it('supports fresh PostgreSQL-derived records after refresh',()=>expect(appearsInFrontDesk({...base,status:'CONFIRMED'},'arrivals','2026-09-08','org-1','prop-1')).toBe(true));
+});

@@ -1,0 +1,2 @@
+import { apiError, apiJson } from '@/lib/server/api-response'; import { requireReservationContext } from '@/lib/server/reservations/http'; import { FrontDeskService } from '@/lib/server/front-desk/service'; import { entityIdSchema } from '@/lib/server/reservations/validation';
+export async function POST(request:Request,route:{params:Promise<{id:string}>}){try{const c=await requireReservationContext(request);return apiJson(await new FrontDeskService().moveRoom(c,entityIdSchema.parse((await route.params).id),await request.json()));}catch(e){return apiError(e);}}

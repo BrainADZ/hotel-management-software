@@ -1,0 +1,13 @@
+{
+  "name": "@hotel/shared",
+  "private": true,
+  "type": "module",
+  "exports": {
+    "./domain": "./domain.ts"
+  },
+  "scripts": {
+    "test": "vitest run",
+    "typecheck": "tsc --noEmit",
+    "lint": "eslint ."
+  }
+}

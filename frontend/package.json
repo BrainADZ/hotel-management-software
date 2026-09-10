@@ -1,0 +1,33 @@
+{
+  "name": "@hotel/frontend",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "vinext dev --port 3000",
+    "build": "vinext build",
+    "start": "vinext start --port 3000",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "lint": "eslint ."
+  },
+  "dependencies": {
+    "dexie": "^4.4.5",
+    "jspdf": "^4.2.1",
+    "lucide-react": "^1.33.0",
+    "next": "16.2.6",
+    "react": "19.2.6",
+    "react-dom": "19.2.6",
+    "@hotel/shared": "*"
+  },
+  "devDependencies": {
+    "@tailwindcss/postcss": "4.2.1",
+    "@types/react": "19.2.14",
+    "@types/react-dom": "19.2.3",
+    "@vitejs/plugin-react": "6.0.2",
+    "@vitejs/plugin-rsc": "0.5.26",
+    "react-server-dom-webpack": "19.2.6",
+    "tailwindcss": "4.2.1",
+    "vinext": "1.0.0-beta.3",
+    "vite": "8.0.13"
+  }
+}

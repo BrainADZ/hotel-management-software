@@ -1,0 +1,10 @@
+import { z } from 'zod';
+const paise = z.number().int().positive().max(100_000_000_00);
+const reason = z.string().trim().min(3).max(500);
+export const idempotencyKeySchema = z.string().trim().min(8).max(100).regex(/^[A-Za-z0-9._:-]+$/);
+export const manualChargeSchema = z.object({ category: z.enum(['EARLY_CHECKIN','LATE_CHECKOUT','EXTRA_BED','LAUNDRY','MINIBAR','ROOM_SERVICE','RESTAURANT','DAMAGE','OTHER_SERVICE','ADJUSTMENT']), description: z.string().trim().min(2).max(200), quantity: z.number().int().min(1).max(1000), unitAmountPaise: paise, taxRateBps: z.number().int().min(0).max(10000).optional(), taxMode: z.enum(['CGST_SGST','IGST','EXEMPT']).optional(), notes: z.string().trim().max(500).optional(), idempotencyKey: idempotencyKeySchema });
+export const discountSchema = z.discriminatedUnion('kind', [z.object({ kind: z.literal('FIXED'), amountPaise: paise, reason, idempotencyKey: idempotencyKeySchema }), z.object({ kind: z.literal('PERCENTAGE'), percentageBps: z.number().int().min(1).max(10000), reason, idempotencyKey: idempotencyKeySchema })]);
+export const paymentSchema = z.object({ method: z.enum(['CASH','CARD','UPI','BANK_TRANSFER','OTHER']), amountPaise: paise, reference: z.string().trim().max(100).optional(), notes: z.string().trim().max(500).optional(), idempotencyKey: idempotencyKeySchema }).strict();
+export const reversalSchema = z.object({ reason, idempotencyKey: idempotencyKeySchema.optional() });
+export const refundSchema = z.object({ amountPaise: paise, reason, reference: z.string().trim().max(100).optional(), idempotencyKey: idempotencyKeySchema });
+export const checkoutSchema = z.object({ allowOutstanding: z.boolean().default(false), overrideReason: z.string().trim().max(500).optional() }).superRefine((value, ctx) => { if (value.allowOutstanding && (!value.overrideReason || value.overrideReason.length < 3)) ctx.addIssue({ code: 'custom', path: ['overrideReason'], message: 'An override reason is required.' }); });

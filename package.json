@@ -1,52 +1,35 @@
 {
-  "name": "sites-project",
-  "version": "0.1.0",
+  "name": "hotel-management-software",
   "private": true,
+  "type": "module",
   "engines": {
     "node": ">=22.13.0"
   },
+  "workspaces": [
+    "frontend",
+    "backend",
+    "shared"
+  ],
   "scripts": {
-    "dev": "vinext dev",
-    "build": "vinext build",
-    "start": "vinext start",
-    "lint": "eslint . --ignore-pattern dist --ignore-pattern .next",
-    "typecheck": "tsc --noEmit",
-    "test": "vitest run --config vitest.config.ts",
-    "db:generate": "drizzle-kit generate",
-    "db:migrate": "drizzle-kit migrate"
-  },
-  "dependencies": {
-    "dexie": "^4.4.5",
-    "dotenv": "^17.4.2",
-    "drizzle-orm": "0.45.2",
-    "jspdf": "^4.2.1",
-    "lucide-react": "^1.33.0",
-    "next": "16.2.6",
-    "postgres": "^3.4.7",
-    "react": "19.2.6",
-    "react-dom": "19.2.6",
-    "zod": "^4.4.3"
+    "dev": "concurrently -k -n frontend,backend \"npm run dev:frontend\" \"npm run dev:backend\"",
+    "dev:frontend": "npm run dev -w frontend",
+    "dev:backend": "npm run dev -w backend",
+    "build": "npm run build:backend && npm run build:frontend",
+    "build:frontend": "npm run build -w frontend",
+    "build:backend": "npm run build -w backend",
+    "test": "npm run test --workspaces",
+    "lint": "npm run lint --workspaces",
+    "typecheck": "npm run typecheck --workspaces",
+    "db:migrate": "npm run db:migrate -w backend",
+    "db:generate": "npm run db:generate -w backend",
+    "db:seed-local": "npm run db:seed-local -w backend"
   },
   "devDependencies": {
-    "@cloudflare/vite-plugin": "1.37.1",
-    "@cloudflare/workers-types": "4.20260515.1",
-    "@openai/sites-vite-plugin": "^0.1.0 || ^0.2.0",
-    "@tailwindcss/postcss": "4.2.1",
-    "@types/node": "22.19.19",
-    "@types/react": "19.2.14",
-    "@types/react-dom": "19.2.3",
-    "@vitejs/plugin-react": "6.0.2",
-    "@vitejs/plugin-rsc": "0.5.26",
-    "drizzle-kit": "0.31.10",
+    "typescript": "5.9.3",
+    "vitest": "^4.1.11",
     "eslint": "9.39.4",
     "eslint-config-next": "16.2.6",
-    "react-server-dom-webpack": "19.2.6",
-    "tailwindcss": "4.2.1",
-    "typescript": "5.9.3",
-    "vinext": "1.0.0-beta.3",
-    "vite": "8.0.13",
-    "vitest": "^4.1.11",
-    "wrangler": "4.92.0"
-  },
-  "type": "module"
+    "@types/node": "22.19.19",
+    "concurrently": "^9.2.0"
+  }
 }

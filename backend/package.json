@@ -1,0 +1,30 @@
+{
+  "name": "@hotel/backend",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "tsx watch --env-file-if-exists=.env src/dev.ts",
+    "build": "tsup src/server.ts --format esm --platform node --target node22 --out-dir dist --no-splitting",
+    "start": "node --env-file-if-exists=.env dist/server.js",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "lint": "eslint .",
+    "db:migrate": "drizzle-kit migrate",
+    "db:generate": "drizzle-kit generate",
+    "db:seed-local": "tsx --env-file-if-exists=.env src/scripts/seed-local-production.ts"
+  },
+  "dependencies": {
+    "dotenv": "^17.4.2",
+    "drizzle-orm": "0.45.2",
+    "postgres": "^3.4.7",
+    "zod": "^4.4.3",
+    "@hotel/shared": "*",
+    "fastify": "^5.6.0",
+    "@fastify/cors": "^11.1.0"
+  },
+  "devDependencies": {
+    "drizzle-kit": "0.31.10",
+    "tsx": "^4.20.0",
+    "tsup": "^8.5.0"
+  }
+}

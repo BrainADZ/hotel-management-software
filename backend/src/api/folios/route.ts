@@ -1,0 +1,3 @@
+import { apiError, apiJson } from '@/services/api-response'; import { requireReservationContext } from '@/services/reservations/http'; import { BillingService } from '@/modules/billing/service';
+export async function GET(request:Request){try{return apiJson({items:await new BillingService().list(await requireReservationContext(request))});}catch(e){return apiError(e);}}
+export async function POST(request:Request){try{const c=await requireReservationContext(request),body=await request.json() as {reservationId?:string};return apiJson(await new BillingService().ensureFolio(c,String(body.reservationId??'')),201);}catch(e){return apiError(e);}}

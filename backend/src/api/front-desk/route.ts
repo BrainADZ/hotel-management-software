@@ -1,0 +1,2 @@
+import { apiError, apiJson } from '@/services/api-response'; import { requireReservationContext } from '@/services/reservations/http'; import { FrontDeskService } from '@/services/front-desk/service';
+export const dynamic='force-dynamic'; export async function GET(request:Request){try{const c=await requireReservationContext(request);return apiJson(await new FrontDeskService().list(c,Object.fromEntries(new URL(request.url).searchParams)));}catch(e){return apiError(e);}}

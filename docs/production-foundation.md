@@ -46,7 +46,7 @@ Production PostgreSQL migration: `drizzle-postgres/0000_production_foundation.sq
 
 Before enabling production:
 
-1. Provision PostgreSQL, set the server-only `DATABASE_URL`, choose `DATABASE_SSL=require` for hosted databases (the default), and set an appropriate `DATABASE_POOL_SIZE`. Apply `drizzle-postgres/` with `npm run db:migrate`. No remote migration was applied by this task. The Cloudflare D1 `DB` binding is still required only for the existing demo/UAT store and must use a separate, non-production dataset.
+1. Provision PostgreSQL, set the server-only `DATABASE_URL` in `backend/.env`, choose `DATABASE_SSL=require` for hosted databases (the default), and set an appropriate `DATABASE_POOL_SIZE`. Apply `backend/drizzle-postgres/` with root `npm run db:migrate`. No remote migration was applied by this task. The separated Node backend uses its own SQLite/file demo adapter under `backend/data/`; Cloudflare bindings are no longer required. See the root README for current workspace paths and gateway routing.
 2. Create the real organisation, active properties and application users through trusted administration. Set each user's organisation, validated same-organisation property assignment and existing role. Set `auth_provider=trusted-hosting` and the verified provider subject. No demo user is automatically linked or promoted. The model currently supports one organisation per external identity.
 3. Configure and verify the trusted authentication gateway, secure secret injection, header stripping, origin restriction and sign-in/out hosting routes. Keep `AUTH_PROVIDER=disabled` until ready.
 4. Set `APP_MODE=production`, real `NEXT_PUBLIC_SITE_URL`, and all demo flags to false for clarity (production enforces their disablement regardless).

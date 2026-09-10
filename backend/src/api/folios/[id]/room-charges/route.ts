@@ -1,0 +1,2 @@
+import { apiError, apiJson } from '@/services/api-response'; import { requireReservationContext } from '@/services/reservations/http'; import { BillingService } from '@/modules/billing/service'; import { entityIdSchema } from '@/services/reservations/validation';
+export async function POST(request:Request,route:{params:Promise<{id:string}>}){try{return apiJson(await new BillingService().postRoomCharges(await requireReservationContext(request),entityIdSchema.parse((await route.params).id)));}catch(e){return apiError(e);}}

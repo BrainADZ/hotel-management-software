@@ -1,0 +1,48 @@
+{
+  "version": "7",
+  "dialect": "postgresql",
+  "entries": [
+    {
+      "idx": 0,
+      "version": "7",
+      "when": 1788770170152,
+      "tag": "0000_production_foundation",
+      "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "7",
+      "when": 1788775769719,
+      "tag": "0001_reservation_lifecycle",
+      "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1788843239972,
+      "tag": "0002_front_desk_guest_kyc",
+      "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "7",
+      "when": 1788948000000,
+      "tag": "0003_billing_payments_gst",
+      "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "7",
+      "when": 1788951000000,
+      "tag": "0004_local_production_auth",
+      "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "7",
+      "when": 1788955200000,
+      "tag": "0005_google_identity_user_profile",
+      "breakpoints": true
+    }
+  ]
+}

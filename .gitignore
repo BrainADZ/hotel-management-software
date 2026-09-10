@@ -38,3 +38,12 @@ next-env.d.ts
 /outputs/
 /work/
 *.tsbuildinfo
+
+# Workspace outputs and backend demo storage
+**/node_modules/
+**/dist/
+**/.next/
+**/.vinext/
+**/.wrangler/
+**/coverage/
+backend/data/

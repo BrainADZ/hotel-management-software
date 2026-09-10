@@ -1,0 +1,4 @@
+import { apiError, apiJson } from '@/services/api-response'; import { requireReservationContext } from '@/services/reservations/http'; import { guestService } from '@/services/guests/service'; import { entityIdSchema } from '@/services/reservations/validation';
+export const dynamic='force-dynamic'; type C={params:Promise<{id:string}>};
+export async function GET(request:Request,route:C){try{const c=await requireReservationContext(request);return apiJson(await guestService.documents(c,entityIdSchema.parse((await route.params).id)));}catch(e){return apiError(e);}}
+export async function POST(request:Request,route:C){try{const c=await requireReservationContext(request);return apiJson(await guestService.addDocument(c,entityIdSchema.parse((await route.params).id),await request.json()),201);}catch(e){return apiError(e);}}

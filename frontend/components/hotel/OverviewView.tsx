@@ -700,7 +700,7 @@ export function OverviewView({
               size={31}
             />
           }
-          label="Hotel revenue"
+          label="Folio charges (including tax)"
           value={money(
             state.metrics.revenuePaise,
           )}

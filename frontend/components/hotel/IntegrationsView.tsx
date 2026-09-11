@@ -5,7 +5,7 @@ import { useState, type FormEvent } from "react";
 import type { AppRole } from "@hotel/shared/domain";
 import { apiFetch } from "@/lib/api/client";
 import { AppGlyph, PageHeading, SandboxBadge, Status, dateTime, downloadBlob, money, type PlatformViewProps, type AppGlyphName, type Row } from "@/app/hotel-platform";
-export function IntegrationsView({ state, refresh, notify }: PlatformViewProps) {
+export function IntegrationsView({ state, refresh, notify, productionMode }: PlatformViewProps) {
   const integrations: Array<{
     key: string;
     name: string;
@@ -43,6 +43,7 @@ export function IntegrationsView({ state, refresh, notify }: PlatformViewProps) 
       glyph: "smart-lock",
     },
   ];
+  if (productionMode) return <><PageHeading eyebrow="Integrations" title="External providers" description="Live providers need account credentials and verified delivery callbacks before they can process bookings, payments or messages."/><div className="record-grid">{integrations.map(item=><article className="operation-card" key={item.key}><AppGlyph name={item.glyph} size={32}/><h3>{item.name}</h3><Status value="NOT CONFIGURED"/><p>{item.key==='payment'?'Cash, card and UPI receipts can still be recorded in guest folios.':item.key==='email'||item.key==='whatsapp'?'Use Communications to save drafts until a delivery provider is connected.':'Provider credentials and integration configuration are required.'}</p></article>)}</div></>;
   async function ota() {
     try {
       const response = await apiFetch("/api/bookings/inbound", {

@@ -51,7 +51,9 @@ import * as route49 from './travel/discount-requests/[id]/decision/route';
 import * as route50 from './travel/follow-ups/route';
 import * as route51 from './travel/follow-ups/[id]/route';
 import * as route52 from './sync/mutations/route';
+import * as travelWorkflows from './travel/workflows/route';
 export const routes = [
+  { path: '/api/travel/workflows', handlers: travelWorkflows },
   { path: '/api/auth/me', handlers: route0 },
   { path: '/api/availability', handlers: route1 },
   { path: '/api/bookings/inbound', handlers: route2 },

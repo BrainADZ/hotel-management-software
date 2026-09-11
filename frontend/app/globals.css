@@ -6534,3 +6534,10 @@ select:disabled {
     padding-inline: 12px;
   }
 }
+/* Operational notification centre */
+.notification-container { position: relative; }
+.notification-panel { position: absolute; right: 0; top: calc(100% + 12px); width: min(390px, calc(100vw - 32px)); max-height: 70vh; overflow-y: auto; z-index: 80; background: var(--surface, #fff); color: var(--text, #253344); border: 1px solid var(--border, #d6dce4); border-radius: 16px; padding: 16px; box-shadow: 0 16px 45px #15243526; }
+.notification-item { width: 100%; display: grid; gap: 6px; text-align: left; background: transparent; color: inherit; border: 0; border-bottom: 1px solid #ddd5; padding: 14px 6px; cursor: pointer; }
+.notification-item small { font-size: 13px; }
+.notification-item.is-read { opacity: .65; }
+.notification-button .notification-count { width: auto; height: auto; min-width: 17px; padding: 2px 4px; font-size: 10px; color: white; border-radius: 12px; background: #c72b36; }

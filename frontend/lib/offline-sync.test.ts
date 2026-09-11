@@ -28,6 +28,19 @@ beforeEach(() => {
 });
 
 describe("production offline sync worker", () => {
+  it('never sends another user or property queue under the current session', async () => {
+    mocks.candidates.mockResolvedValue([{...item,userId:'another-user'},{...item,propertyId:'another-property'},{...item,organisationId:'another-org'}]);
+    const send=vi.fn();
+    expect((await runOfflineSync(scope,send)).attempted).toBe(0);
+    expect(send).not.toHaveBeenCalled();
+    expect(mocks.syncing).not.toHaveBeenCalled();
+  });
+  it('keeps unscoped legacy walk-ins for manual review instead of adopting them', async () => {
+    mocks.reservations.mockResolvedValue([{id:'legacy',syncStatus:'PENDING_SYNC'}]);
+    mocks.candidates.mockResolvedValue([]);
+    await runOfflineSync(scope,async()=>({results:[]}));
+    expect(mocks.enqueue).not.toHaveBeenCalled();
+  });
   it("marks an acknowledged item synced", async () => {
     expect(await runOfflineSync(scope, async () => ({ results: [{ clientMutationId: item.clientMutationId, status: "SYNCED", serverEntityId: "task-a" }] }))).toEqual({ attempted: 1, synced: 1, failed: 0, conflict: 0 });
     expect(mocks.synced).toHaveBeenCalledWith("queue-a", { serverEntityId: "task-a" });
@@ -61,7 +74,7 @@ describe("production offline sync worker", () => {
     expect(mocks.reset.mock.invocationCallOrder[0]).toBeLessThan(mocks.candidates.mock.invocationCallOrder[0]);
   });
   it("bridges an existing offline walk-in with a persisted mutation ID", async () => {
-    mocks.reservations.mockResolvedValue([{ id: "local-a", localReference: "OFF-1", guestName: "Guest", guestCount: 1, roomType: "Deluxe", arrivalDate: "2026-10-01", departureDate: "2026-10-02", mealPlan: [], syncStatus: "PENDING_SYNC" }]);
+    mocks.reservations.mockResolvedValue([{ id: "local-a", ...scope, createdById: scope.userId, localReference: "OFF-1", guestName: "Guest", guestCount: 1, roomType: "Deluxe", arrivalDate: "2026-10-01", departureDate: "2026-10-02", mealPlan: [], syncStatus: "PENDING_SYNC" }]);
     mocks.candidates.mockResolvedValue([]);
     await runOfflineSync(scope, async () => ({ results: [] }));
     expect(mocks.reservationUpdate).toHaveBeenCalledWith("local-a", expect.objectContaining({ clientMutationId: expect.any(String) }));

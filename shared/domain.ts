@@ -1,3 +1,4 @@
+import { operationalRoleCan, type OperationalPermission } from './operational-permissions';
 export const DEMO_DATE = '2026-08-24';
 // Demo/UAT identifiers only. Production callers must use authenticated AppActor context.
 export const DEMO_PROPERTY_ID = 'prop-meridian-grand';
@@ -37,6 +38,7 @@ export function resolveBusinessUnit(role: AppRole, requested?: string | null): B
 }
 
 export type Permission =
+  | OperationalPermission
   | 'dashboard.read'
   | 'reservation.read'
   | 'reservation.write'
@@ -71,6 +73,7 @@ export type Permission =
   | 'offline.reservation.create'
   | 'network.simulate'
   | 'operations.write'
+  | 'housekeeping.assign'
   | 'inventory.write'
   | 'restaurant.charge.post'
   | 'damage.read'
@@ -83,9 +86,9 @@ export type Permission =
   | 'reports.read';
 
 const rolePermissions: Record<AppRole, readonly Permission[]> = {
-  OWNER: ['dashboard.read', 'reservation.read', 'reservation.write', 'reservation.override', 'guest.read', 'guest.view', 'guest.create', 'guest.edit', 'guest.kyc.view', 'guest.kyc.verify', 'frontdesk.view', 'frontdesk.assign_room', 'frontdesk.checkin', 'frontdesk.room_move', 'frontdesk.override', 'frontdesk.late_checkout', 'folio.read', 'folio.write', 'billing.view', 'billing.post_charge', 'billing.take_payment', 'billing.discount', 'billing.refund', 'billing.reverse_payment', 'billing.invoice', 'billing.checkout', 'billing.override_checkout', 'offline.cached.read', 'offline.bill.create', 'offline.bill.print', 'offline.bill.verify', 'offline.reservation.create', 'network.simulate', 'operations.write', 'inventory.write', 'restaurant.charge.post', 'damage.read', 'damage.review', 'travel.read', 'travel.package.create', 'travel.pricing.manage', 'travel.discount.request', 'travel.discount.approve', 'reports.read'],
-  MANAGER: ['dashboard.read', 'reservation.read', 'reservation.write', 'reservation.override', 'guest.read', 'guest.view', 'guest.create', 'guest.edit', 'guest.kyc.view', 'guest.kyc.verify', 'frontdesk.view', 'frontdesk.assign_room', 'frontdesk.checkin', 'frontdesk.room_move', 'frontdesk.override', 'frontdesk.late_checkout', 'folio.read', 'folio.write', 'billing.view', 'billing.post_charge', 'billing.take_payment', 'billing.discount', 'billing.refund', 'billing.reverse_payment', 'billing.invoice', 'billing.checkout', 'billing.override_checkout', 'offline.cached.read', 'offline.bill.create', 'offline.bill.print', 'offline.bill.verify', 'offline.reservation.create', 'network.simulate', 'operations.write', 'inventory.write', 'restaurant.charge.post', 'damage.read', 'damage.review', 'travel.read', 'travel.package.create', 'travel.pricing.manage', 'travel.discount.request', 'travel.discount.approve', 'reports.read'],
-  RECEPTION: ['dashboard.read', 'reservation.read', 'reservation.write', 'guest.read', 'guest.view', 'guest.create', 'guest.edit', 'guest.kyc.view', 'guest.kyc.verify', 'frontdesk.view', 'frontdesk.assign_room', 'frontdesk.checkin', 'frontdesk.room_move', 'frontdesk.late_checkout', 'folio.read', 'folio.write', 'billing.view', 'billing.post_charge', 'billing.take_payment', 'billing.checkout', 'offline.cached.read', 'offline.bill.create', 'offline.bill.print', 'offline.reservation.create', 'restaurant.charge.post', 'damage.read'],
+  OWNER: ['dashboard.read', 'reservation.read', 'reservation.write', 'reservation.override', 'guest.read', 'guest.view', 'guest.create', 'guest.edit', 'guest.kyc.view', 'guest.kyc.verify', 'frontdesk.view', 'frontdesk.assign_room', 'frontdesk.checkin', 'frontdesk.room_move', 'frontdesk.override', 'frontdesk.late_checkout', 'folio.read', 'folio.write', 'billing.view', 'billing.post_charge', 'billing.take_payment', 'billing.discount', 'billing.refund', 'billing.reverse_payment', 'billing.invoice', 'billing.checkout', 'billing.override_checkout', 'offline.cached.read', 'offline.bill.create', 'offline.bill.print', 'offline.bill.verify', 'offline.reservation.create', 'network.simulate', 'operations.write', 'housekeeping.assign', 'inventory.write', 'restaurant.charge.post', 'damage.read', 'damage.review', 'travel.read', 'travel.package.create', 'travel.pricing.manage', 'travel.discount.request', 'travel.discount.approve', 'reports.read'],
+  MANAGER: ['dashboard.read', 'reservation.read', 'reservation.write', 'reservation.override', 'guest.read', 'guest.view', 'guest.create', 'guest.edit', 'guest.kyc.view', 'guest.kyc.verify', 'frontdesk.view', 'frontdesk.assign_room', 'frontdesk.checkin', 'frontdesk.room_move', 'frontdesk.override', 'frontdesk.late_checkout', 'folio.read', 'folio.write', 'billing.view', 'billing.post_charge', 'billing.take_payment', 'billing.discount', 'billing.refund', 'billing.reverse_payment', 'billing.invoice', 'billing.checkout', 'billing.override_checkout', 'offline.cached.read', 'offline.bill.create', 'offline.bill.print', 'offline.bill.verify', 'offline.reservation.create', 'network.simulate', 'operations.write', 'housekeeping.assign', 'inventory.write', 'restaurant.charge.post', 'damage.read', 'damage.review', 'travel.read', 'travel.package.create', 'travel.pricing.manage', 'travel.discount.request', 'travel.discount.approve', 'reports.read'],
+  RECEPTION: ['dashboard.read', 'reservation.read', 'reservation.write', 'guest.read', 'guest.view', 'guest.create', 'guest.edit', 'guest.kyc.view', 'guest.kyc.verify', 'frontdesk.view', 'frontdesk.assign_room', 'frontdesk.checkin', 'frontdesk.room_move', 'frontdesk.late_checkout', 'folio.read', 'folio.write', 'billing.view', 'billing.post_charge', 'billing.take_payment', 'billing.checkout', 'offline.cached.read', 'offline.bill.create', 'offline.bill.print', 'offline.reservation.create', 'housekeeping.assign', 'restaurant.charge.post', 'damage.read'],
   TRAVEL_AGENT: ['dashboard.read', 'travel.read', 'travel.package.create', 'travel.discount.request'],
   TOUR_MANAGER: ['dashboard.read', 'travel.read', 'travel.package.create', 'travel.pricing.manage', 'travel.discount.request', 'travel.discount.approve'],
   ACCOUNTS: ['dashboard.read', 'reservation.read', 'guest.read', 'folio.read', 'folio.write', 'billing.view', 'billing.post_charge', 'billing.take_payment', 'billing.discount', 'billing.refund', 'billing.reverse_payment', 'billing.invoice', 'billing.checkout', 'offline.bill.verify', 'damage.read', 'reports.read'],
@@ -95,6 +98,7 @@ const rolePermissions: Record<AppRole, readonly Permission[]> = {
 };
 
 export function roleCan(role: AppRole, permission: Permission): boolean {
+  if (['staff.manage','property.manage','rooms.manage','maintenance.manage','lostfound.manage','restaurant.manage'].includes(permission)) return operationalRoleCan(role, permission as OperationalPermission);
   return rolePermissions[role].includes(permission);
 }
 
@@ -209,3 +213,5 @@ export class DomainError extends Error {
     this.name = 'DomainError';
   }
 }
+
+export {operatingMetrics} from './operating-metrics';

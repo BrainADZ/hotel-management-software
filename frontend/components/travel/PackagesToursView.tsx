@@ -1,4 +1,5 @@
 "use client";
+import { TravelCatalog } from './TravelCatalog';
 /* eslint-disable @typescript-eslint/no-unused-vars */
 import { Check, Download, Pencil, Plus, Printer, X } from "lucide-react";
 import { useState, type FormEvent } from "react";
@@ -7,6 +8,7 @@ import { apiFetch } from "@/lib/api/client";
 import { AppGlyph, PageHeading, SandboxBadge, Status, dateTime, downloadBlob, money, type PlatformViewProps, type AppGlyphName, type Row } from "@/app/hotel-platform";
 export function PackagesToursView({
   view,
+  productionMode,
   state,
   role,
   command,
@@ -55,6 +57,7 @@ export function PackagesToursView({
           </button>
         }
       />
+      {productionMode && <TravelCatalog state={state} role={role} command={command} refresh={refresh} notify={notify}/>}
       <section className="pricing-policy-banner">
         <AppGlyph name="policy" size={27} />
         <span>

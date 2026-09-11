@@ -424,6 +424,7 @@ export const housekeepingTasks = pgTable('housekeeping_tasks', {
   roomId: text('room_id').notNull().references(() => rooms.id),
   reservationId: text('reservation_id').references(() => reservations.id),
   assignedTo: text('assigned_to'),
+  assignedUserId: text('assigned_user_id').references(() => appUsers.id, { onDelete: 'set null' }),
   taskType: text('task_type').notNull().default('STAY_SERVICE'),
   priority: text('priority').notNull(),
   status: text('status').notNull(),
@@ -436,8 +437,10 @@ export const housekeepingTasks = pgTable('housekeeping_tasks', {
   notes: text('notes'),
 }, (table) => [
   index('idx_housekeeping_property_status').on(table.propertyId, table.status),
+  index('idx_housekeeping_property_assignee_status').on(table.propertyId, table.assignedUserId, table.status),
   index('idx_housekeeping_reservation_type').on(table.reservationId, table.taskType),
   uniqueIndex('idx_housekeeping_unique_checkout_inspection').on(table.reservationId, table.taskType).where(sql`${table.taskType} = 'CHECKOUT_INSPECTION'`),
+  uniqueIndex('idx_housekeeping_unique_checkout_cleaning').on(table.reservationId, table.taskType).where(sql`${table.taskType} = 'CHECKOUT_CLEANING'`),
 ]);
 
 export const roomInspections = pgTable('room_inspections', {
@@ -498,6 +501,7 @@ export const damageReports = pgTable('damage_reports', {
 ]);
 
 export const maintenanceTickets = pgTable('maintenance_tickets', {
+  version: integer('version').notNull().default(1),
   id: text('id').primaryKey(),
   propertyId: text('property_id').notNull().references(() => properties.id),
   roomId: text('room_id').references(() => rooms.id),
@@ -523,6 +527,7 @@ export const inventoryItems = pgTable('inventory_items', {
 }, (table) => [index('idx_inventory_property_category').on(table.propertyId, table.category)]);
 
 export const restaurantOrders = pgTable('restaurant_orders', {
+  version: integer('version').notNull().default(1),
   id: text('id').primaryKey(),
   propertyId: text('property_id').notNull().references(() => properties.id),
   reservationId: text('reservation_id').references(() => reservations.id),

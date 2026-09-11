@@ -76,6 +76,7 @@ This map points to the current implementation after the feature-wise frontend re
 - `frontend/lib/offline-db.ts` — Dexie cache, offline queues, billing documents, readiness, and recovery.
 - `frontend/lib/offline-sync.ts` — single-flight reconnect/startup worker for the production offline mutation queue.
 - `frontend/lib/production-command-routing.ts` — explicit production command allowlist; Travel commands resolve only to `/api/travel/*`.
+- `frontend/lib/housekeeping-assignment.ts` — Housekeeping assignment labels, role visibility, staff option shaping, and command construction.
 
 ## Travel production API
 
@@ -98,6 +99,7 @@ This map points to the current implementation after the feature-wise frontend re
 - `backend/src/services/guests/` — guest profile, history, and identity documents.
 - `backend/src/modules/billing/` — folios, charges, payments, invoices, PDFs, and financial checkout.
 - `backend/src/modules/operations/service.ts` — housekeeping, inspections, maintenance, inventory, and restaurant operations.
+- `backend/src/modules/operations/housekeeping-assignment.ts` — assignment permission, task-state, version, and assignee eligibility guards.
 - `backend/src/services/auth/` and `backend/src/services/profile.ts` — authentication, sessions, access, and profiles.
 - `backend/src/db/schema.ts` — PostgreSQL schema; `backend/drizzle-postgres/` — production migrations.
 - `shared/domain.ts` — contracts shared by frontend and backend.

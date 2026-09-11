@@ -159,7 +159,9 @@ export const navigationGroups: NavigationGroup[] = [
 ];
 
 export const roleViewAccess: Partial<Record<AppRole, FeatureView[]>> = {
+  MANAGER: [...new Set(navigationGroups.flatMap(group => group.items.map(item => item.label)))].filter(view => view !== 'Users & Permissions'),
   RECEPTION: [
+    "Housekeeping",
     "Overview",
     "Reservations",
     "Front Desk",
@@ -169,12 +171,11 @@ export const roleViewAccess: Partial<Record<AppRole, FeatureView[]>> = {
     "Arrivals & Departures",
     "Guest Profiles",
     "Invoices",
-    "Inventory Movements",
     "Lost & Found",
     "Offline Billing",
     "Device Status",
   ],
-  HOUSEKEEPING: ["Overview"],
+  HOUSEKEEPING: ["Overview", "Housekeeping", "Device Status"],
   RESTAURANT: [
     "Overview",
     "Restaurant Orders",

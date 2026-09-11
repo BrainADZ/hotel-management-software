@@ -6,7 +6,7 @@ export const dynamic = 'force-dynamic';
 export async function GET(request: Request) {
   try {
     const context = await requireReservationContext(request);
-    const items = (await listRooms(context)).map(room => roleCan(context.actor.role,'reservation.read') ? room : { id:room.id, number:room.number, roomType:room.roomType, operationalStatus:room.operationalStatus });
+    const items = (await listRooms(context)).map(room => roleCan(context.actor.role,'reservation.read') ? room : { id:room.id, number:room.number, roomType:room.roomType, occupancyStatus:room.occupancyStatus, operationalStatus:room.operationalStatus });
     return apiJson({ items });
   } catch (error) { return apiError(error); }
 }

@@ -3,6 +3,7 @@ import { assertRoleCan, DomainError, roleCan } from '@hotel/shared/domain';
 import { auditLogs, customTravelPackageItems, customTravelPackages, inquiries, travelAssets, travelDiscountRequests, travelFollowUps, travelPackages } from '@/db/schema';
 import { getDb } from '@/db';
 import type { TravelContext } from './context';
+import {travelWorkflowSnapshot} from './workflows';
 import { createFollowUpSchema, createInquirySchema, createPackageSchema, discountDecisionSchema, packagePricingSchema, updateFollowUpSchema, updateInquirySchema } from './validation';
 
 type Db = ReturnType<typeof getDb>;
@@ -26,7 +27,7 @@ export class TravelService {
       db.select().from(inquiries).where(eq(inquiries.organisationId, organisationId)).orderBy(desc(inquiries.createdAt)).limit(500),
       db.select().from(travelFollowUps).where(eq(travelFollowUps.organisationId, organisationId)).orderBy(desc(travelFollowUps.dueAt)).limit(500),
     ]);
-    return { packages, travelAssets: assets, customPackages, customPackageItems: customItems, discountRequests: discountRows.map(row => ({ ...row.request, packageReference: row.packageReference, packageName: row.packageName, clientName: row.clientName })), inquiries: inquiryRows, followUps };
+    return { ...await travelWorkflowSnapshot(c), packages, travelAssets: assets, customPackages, customPackageItems: customItems, discountRequests: discountRows.map(row => ({ ...row.request, packageReference: row.packageReference, packageName: row.packageName, clientName: row.clientName })), inquiries: inquiryRows, followUps };
   }
 
   async createInquiry(c: TravelContext, raw: unknown) {
@@ -42,10 +43,11 @@ export class TravelService {
     assertRoleCan(c.actor.role, 'travel.read');
     const input = updateInquirySchema.parse(raw), db = getDb();
     return db.transaction(async tx => {
-      const previous = (await tx.select().from(inquiries).where(and(eq(inquiries.id, inquiryId), eq(inquiries.organisationId, c.organisation.id))).limit(1))[0];
+      const previous = (await tx.select().from(inquiries).where(and(eq(inquiries.id, inquiryId), eq(inquiries.organisationId, c.organisation.id))).limit(1).for('update'))[0];
       if (!previous) throw new DomainError('NOT_FOUND', 'Travel inquiry not found.', 404);
       if (input.expectedUpdatedAt && previous.updatedAt && input.expectedUpdatedAt !== previous.updatedAt) throw new DomainError('STALE_INQUIRY', 'This inquiry changed. Refresh and try again.', 409);
-      const { expectedUpdatedAt: _expected, ...changes } = input;
+      const changes = { ...input };
+      delete changes.expectedUpdatedAt;
       const updatedAt = now();
       const next = { ...changes, updatedBy: c.actor.id, updatedAt };
       await tx.update(inquiries).set(next).where(and(eq(inquiries.id, inquiryId), eq(inquiries.organisationId, c.organisation.id)));
@@ -116,7 +118,7 @@ export class TravelService {
 
   async createFollowUp(c: TravelContext, raw: unknown) {
     const input = createFollowUpSchema.parse(raw), db = getDb(), timestamp = now();
-    const inquiry = (await db.select({ id: inquiries.id }).from(inquiries).where(and(eq(inquiries.id, input.inquiryId), eq(inquiries.organisationId, c.organisation.id))).limit(1))[0];
+    const inquiry = (await db.select({ id: inquiries.id }).from(inquiries).where(and(eq(inquiries.id, input.inquiryId), eq(inquiries.organisationId, c.organisation.id))).limit(1).for('update'))[0];
     if (!inquiry) throw new DomainError('NOT_FOUND', 'Travel inquiry not found.', 404);
     const record = { id: id(), organisationId: c.organisation.id, ...input, notes: input.notes ?? null, assignedToId: input.assignedToId ?? null, status: 'PENDING', createdById: c.actor.id, completedById: null, completedAt: null, createdAt: timestamp, updatedAt: timestamp, version: 1 };
     await db.transaction(async tx => { await tx.insert(travelFollowUps).values(record); await audit(tx, c, 'TRAVEL_FOLLOW_UP_CREATED', 'TRAVEL_FOLLOW_UP', record.id, null, record); });

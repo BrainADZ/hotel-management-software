@@ -38,6 +38,14 @@ it('serves backend mode and dispatches dynamic action routes', async () => {
     }
   } finally { await app.close(); }
 });
+it('rejects unauthenticated housekeeping assignment', async () => {
+  vi.stubEnv('APP_MODE', 'production'); vi.stubEnv('AUTH_PROVIDER', 'disabled');
+  const app = await createApp();
+  try {
+    const response = await app.inject({ method: 'POST', url: '/api/operations', payload: { action: 'ASSIGN_HOUSEKEEPING_TASK', taskId: 'task-a', assigneeId: 'user-a', expectedVersion: 1 } });
+    expect(response.statusCode).toBe(401); expect(response.json().error.code).toBe('UNAUTHENTICATED');
+  } finally { await app.close(); }
+});
 it('exposes demo credential visibility only through the explicit flag', async () => {
   vi.stubEnv('SHOW_DEMO_CREDENTIALS', 'true');
   const app = await createApp();

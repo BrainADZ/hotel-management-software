@@ -14,7 +14,7 @@ const announceQueueUpdate = () => { if (typeof window !== "undefined") window.di
 
 async function bridgeWalkIns(scope: OfflineSyncScope) {
   for (const reservation of await getLocalOfflineReservations()) {
-    if (reservation.syncStatus === "SYNCED") continue;
+    if (reservation.syncStatus === "SYNCED" || reservation.organisationId !== scope.organisationId || reservation.propertyId !== scope.propertyId || reservation.createdById !== scope.userId) continue;
     let clientMutationId = (reservation as typeof reservation & { clientMutationId?: string }).clientMutationId;
     if (!clientMutationId) {
       clientMutationId = crypto.randomUUID();
@@ -36,7 +36,7 @@ export function runOfflineSync(scope: OfflineSyncScope, send: SendBatch = defaul
   activeWorker = (async () => {
     await resetStaleSyncingOfflineMutations();
     await bridgeWalkIns(scope);
-    const candidates = await getSyncableOfflineMutations(), unique = [...new Map(candidates.map(item => [item.clientMutationId, item])).values()];
+    const candidates = (await getSyncableOfflineMutations()).filter(item => item.organisationId === scope.organisationId && item.propertyId === scope.propertyId && item.userId === scope.userId), unique = [...new Map(candidates.map(item => [item.clientMutationId, item])).values()];
     const sending: OfflineMutation[] = [];
     for (const item of unique) { const locked = await markOfflineMutationSyncing(item.id); if (locked?.status === "SYNCING") sending.push(locked); }
     if (!sending.length) return { attempted: 0, synced: 0, failed: 0, conflict: 0 };

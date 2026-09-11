@@ -57,6 +57,20 @@
       "when": 1789097400000,
       "tag": "0007_production_offline_sync",
       "breakpoints": true
+    },
+    {
+      "idx": 8,
+      "version": "7",
+      "when": 1789126200000,
+      "tag": "0008_housekeeping_assignment",
+      "breakpoints": true
+    },
+    {
+      "idx": 9,
+      "version": "7",
+      "when": 1789130000000,
+      "tag": "0009_operational_workflows",
+      "breakpoints": true
     }
   ]
 }

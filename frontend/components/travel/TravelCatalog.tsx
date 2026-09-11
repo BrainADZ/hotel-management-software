@@ -1,0 +1,12 @@
+"use client";
+import {useState} from 'react';
+import {roleCan} from '@hotel/shared/domain';
+import {WorkflowForm} from '@/components/hotel/OperationalWorkspace';
+import {money,type PlatformViewProps,type Row} from '@/app/hotel-platform';
+export function TravelCatalog({state,role,command,refresh,notify}:Pick<PlatformViewProps,'state'|'role'|'command'|'refresh'|'notify'>){
+ const [editing,setEditing]=useState<{kind:'product'|'asset';row:Row}|null>(null);
+ if(!roleCan(role,'travel.pricing.manage'))return null;
+ const options=(values:string[])=>values.map(value=>({value,label:value.replaceAll('_',' ')}));
+ const fields=editing?.kind==='product'?[{key:'name',label:'Product name'},{key:'locations',label:'Destinations'},{key:'durationDays',label:'Duration (days)',type:'number' as const,min:1},{key:'capacity',label:'Capacity',type:'number' as const,min:1},{key:'sellingPricePaise',label:'Selling price (INR)',type:'number' as const,min:1}]:[{key:'name',label:'Asset name'},{key:'description',label:'Description'},{key:'category',label:'Category',options:options(['HOTEL','TRANSPORT','ACTIVITY','MEAL','GUIDE','OTHER'])},{key:'pricingUnit',label:'Pricing unit',options:options(['PER_PERSON','PER_NIGHT','PER_DAY','PER_TRIP'])},{key:'unitPricePaise',label:'Unit price (INR)',type:'number' as const},{key:'active',label:'Available for new quotes',type:'checkbox' as const}];
+ return <section className="glass-card"><div className="card-heading"><h2>Travel catalog</h2><div><button className="secondary-button" onClick={()=>setEditing({kind:'product',row:{}})}>Add tour product</button><button className="secondary-button" onClick={()=>setEditing({kind:'asset',row:{}})}>Add quote asset</button></div></div>{state.travelAssets.map(row=><div className="card-heading" key={String(row.id)}><span>{String(row.name)} / {money(row.unitPricePaise)} / {String(row.pricingUnit).replaceAll('_',' ')}</span><button className="text-button" onClick={()=>setEditing({kind:'asset',row})}>Edit asset</button></div>)}{editing&&<WorkflowForm title={editing.kind==='product'?'Add tour product':'Save quote asset'} fields={fields} initial={editing.row} onClose={()=>setEditing(null)} onSave={async values=>{await command({...values,id:editing.row.id,expectedUpdatedAt:editing.row.updatedAt,action:editing.kind==='product'?'CREATE_TRAVEL_PRODUCT':'SAVE_TRAVEL_ASSET'});await refresh();setEditing(null);notify('Travel catalog saved.');}}/>}</section>;
+}

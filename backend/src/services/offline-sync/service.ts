@@ -42,7 +42,7 @@ export class OfflineSyncService {
     if (!offlineSyncCommand.safeParse(mutation.command).success) return { clientMutationId: mutation.clientMutationId, status: 'FAILED', error: { code: 'OFFLINE_COMMAND_NOT_ALLOWED', message: 'This command requires an online connection.' } };
     const db = getDb(), payloadHash = hash({ command: mutation.command, entityType: mutation.entityType, entityId: mutation.entityId, payload: mutation.payload });
     const existing = (await db.select().from(offlineSyncMutations).where(and(eq(offlineSyncMutations.organisationId, context.actor.organisationId), eq(offlineSyncMutations.clientMutationId, mutation.clientMutationId))).limit(1))[0];
-    if (existing) return this.replay(existing, payloadHash, mutation.clientMutationId);
+    if (existing) return this.replay(existing, payloadHash, mutation.clientMutationId, context);
     const recordId = crypto.randomUUID(), timestamp = new Date().toISOString();
     try {
       await db.insert(offlineSyncMutations).values({ id: recordId, organisationId: context.actor.organisationId, propertyId: context.property.id, userId: context.actor.id, clientMutationId: mutation.clientMutationId, command: mutation.command, entityType: mutation.entityType, entityId: mutation.entityId ?? null, payloadHash, status: 'PROCESSING', createdAt: timestamp });
@@ -50,7 +50,7 @@ export class OfflineSyncService {
       if ((error as { cause?: { code?: string }; code?: string }).cause?.code !== '23505' && (error as { code?: string }).code !== '23505') throw error;
       const concurrent = (await db.select().from(offlineSyncMutations).where(and(eq(offlineSyncMutations.organisationId, context.actor.organisationId), eq(offlineSyncMutations.clientMutationId, mutation.clientMutationId))).limit(1))[0];
       if (!concurrent) throw error;
-      return this.replay(concurrent, payloadHash, mutation.clientMutationId);
+      return this.replay(concurrent, payloadHash, mutation.clientMutationId, context);
     }
     try {
       const applied = await this.execute(context, mutation), completedAt = new Date().toISOString();
@@ -66,7 +66,8 @@ export class OfflineSyncService {
     }
   }
 
-  private replay(existing: typeof offlineSyncMutations.$inferSelect, payloadHash: string, clientMutationId: string): SyncItemResult {
+  private replay(existing: typeof offlineSyncMutations.$inferSelect, payloadHash: string, clientMutationId: string, context: ReservationContext): SyncItemResult {
+    if(existing.propertyId!==context.property.id||existing.userId!==context.actor.id) return {clientMutationId,status:"FAILED",error:{code:"FORBIDDEN",message:"This mutation belongs to another session scope."}};
     if (existing.payloadHash !== payloadHash) return { clientMutationId, status: 'CONFLICT', conflict: { code: 'IDEMPOTENCY_KEY_REUSED', message: 'This client mutation ID was already used with different data.' } };
     if (existing.status === 'SYNCED') return parse<SyncItemResult>(existing.resultJson) ?? { clientMutationId, status: 'SYNCED' };
     if (existing.status === 'CONFLICT') return parse<SyncItemResult>(existing.errorJson) ?? { clientMutationId, status: 'CONFLICT', conflict: { code: 'SYNC_CONFLICT', message: 'This mutation needs review.' } };

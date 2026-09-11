@@ -93,6 +93,8 @@ export type LocalOfflineBill = {
 };
 
 export type LocalOfflineReservation = {
+  organisationId?: string;
+  propertyId?: string;
   id: string;
   localReference: string;
   guestId: string;
@@ -448,6 +450,8 @@ export async function getCachedStay(reservationId: string) {
 }
 
 export async function createLocalWalkInReservation(input: {
+  organisationId?: string;
+  propertyId?: string;
   guestName: string;
   email?: string;
   phone?: string;
@@ -485,6 +489,8 @@ export async function createLocalWalkInReservation(input: {
   const reservationId = `local-reservation-${crypto.randomUUID()}`;
   const guestId = `local-guest-${crypto.randomUUID()}`;
   const record: LocalOfflineReservation = {
+    organisationId: input.organisationId,
+    propertyId: input.propertyId,
     id: reservationId,
     localReference: createOfflineReservationReference(
       crypto.randomUUID().slice(0, 8),

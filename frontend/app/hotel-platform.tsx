@@ -5,6 +5,8 @@ import { routeProductionCommand } from "@/lib/production-command-routing";
 import { assertOfflineCommandQueueable, runOfflineSync } from "@/lib/offline-sync";
 import { Sidebar } from "@/components/layout/Sidebar";
 import { Topbar } from "@/components/layout/Topbar";
+import { NotificationBell } from '@/components/layout/NotificationBell';
+import { OperationalWorkspace } from "@/components/hotel/OperationalWorkspace";
 import { WorkspaceSwitcher } from "@/components/layout/WorkspaceSwitcher";
 import { OperatingSurfaceSwitcher } from "@/components/layout/OperatingSurfaceSwitcher";
 import { OverviewView, RestaurantOverviewView } from "@/components/hotel/OverviewView";
@@ -212,6 +214,7 @@ export type ReservationInspectionSummary = {
   folioStatus?: string | null;
 };
 export type DemoState = {
+  operationalData?: Row;
   organisationId?: string;
   actor: {
     id: string;
@@ -238,6 +241,7 @@ export type DemoState = {
   folioLines: Row[];
   offlineBills: Row[];
   housekeeping: Row[];
+  housekeepingStaff: Row[];
   maintenance: Row[];
   inventory: Row[];
   restaurantOrders: Row[];
@@ -571,6 +575,7 @@ function productionShell(
   };
   return {
     organisationId: String((context.organisation as Row)?.id ?? ""),
+    operationalData: operations,
     actor: user,
     businessUnit: "HOTEL",
     property: {
@@ -602,6 +607,7 @@ function productionShell(
     folioLines: [],
     offlineBills: [],
     housekeeping: (operations.housekeeping as Row[]) ?? [],
+    housekeepingStaff: (operations.housekeepingStaff as Row[]) ?? [],
     maintenance: (operations.maintenance as Row[]) ?? [],
     inventory: (operations.inventory as Row[]) ?? [],
     restaurantOrders: (operations.restaurantOrders as Row[]) ?? [],
@@ -1064,6 +1070,7 @@ export function HotelPlatform({
         if (sequence !== loadSequence.current) return;
         const normalizedBody = {
           ...body,
+          housekeepingStaff: body.housekeepingStaff ?? [],
           followUps: body.followUps ?? [],
           reservationInspectionSummaries:
             body.reservationInspectionSummaries ?? [],
@@ -1677,22 +1684,7 @@ export function HotelPlatform({
                 </section>
               )}
             </div>
-            <button
-              className="icon-button notification-button"
-              onClick={() =>
-                notify(
-                  role === "RESTAURANT"
-                    ? `${state?.metrics.lowStockCount ?? 0} restaurant stock alert${Number(state?.metrics.lowStockCount ?? 0) === 1 ? "" : "s"} require attention.`
-                    : role === "HOUSEKEEPING"
-                      ? `${state?.housekeeping.length ?? 0} room task${Number(state?.housekeeping.length ?? 0) === 1 ? "" : "s"} in your service queue.`
-                      : "Operational alerts are ready for review.",
-                )
-              }
-              aria-label="Notifications"
-            >
-              <Bell size={18} />
-              <span />
-            </button>
+            <NotificationBell state={state} onOpen={setView}/>
             {appMode === "demo" ? (
               <label className="role-select">
                 <span aria-hidden="true">
@@ -1937,6 +1929,7 @@ export type PlatformViewProps = {
 };
 
 function ViewRouter(props: PlatformViewProps) {
+  if (props.productionMode && ['Menu Management','Lost & Found','Maintenance','Inventory Movments','Inventory Movements','Room Types & Rates','Users & Permissions','Properties & Settings','Restaurant Orders','Room Service','Meal Service'].includes(props.view)) return <OperationalWorkspace {...props}/>;
   if (props.view === "Overview") {
     if (props.businessUnit === "TRAVEL") return <TravelOverviewView {...props} />;
     if (props.role === "HOUSEKEEPING") return <HousekeepingOverviewView {...props} />;

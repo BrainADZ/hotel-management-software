@@ -40,7 +40,7 @@ export function ReportsView({ state, notify, businessUnit }: PlatformViewProps) 
       ].join("\n");
       downloadBlob(
         new Blob([csv], { type: "text/csv;charset=utf-8" }),
-        "brainadz-travel-sales-report-2026-08-24.csv",
+        `brainadz-travel-sales-report-${new Date().toISOString().slice(0,10)}.csv`,
       );
       notify("Travel & Sales report exported to CSV.");
     }
@@ -113,7 +113,7 @@ export function ReportsView({ state, notify, businessUnit }: PlatformViewProps) 
     { metric: "Occupancy", value: `${state.metrics.occupancyPercent}%` },
     { metric: "ADR", value: money(state.metrics.adrPaise) },
     { metric: "RevPAR", value: money(state.metrics.revParPaise) },
-    { metric: "Hotel revenue", value: money(state.metrics.revenuePaise) },
+    { metric: "Folio charges (including tax)", value: money(state.metrics.revenuePaise) },
     { metric: "Arrivals", value: String(state.metrics.arrivalsToday) },
     { metric: "Departures", value: String(state.metrics.departuresToday) },
     { metric: "Low-stock items", value: String(state.metrics.lowStockCount) },
@@ -131,7 +131,7 @@ export function ReportsView({ state, notify, businessUnit }: PlatformViewProps) 
     const url = URL.createObjectURL(blob);
     const link = document.createElement("a");
     link.href = url;
-    link.download = "brainadz-hospitality-operational-report-2026-08-24.csv";
+    link.download = `brainadz-hospitality-operational-report-${new Date().toISOString().slice(0,10)}.csv`;
     link.click();
     URL.revokeObjectURL(url);
     notify("Calculated operational report exported to CSV.");

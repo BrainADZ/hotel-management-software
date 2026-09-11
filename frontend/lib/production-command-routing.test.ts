@@ -9,6 +9,7 @@ describe("production command routing", () => {
   ])("routes %s to Travel", (action, path) => expect(routeProductionCommand({ action, packageId: "pkg-1", requestId: "request-1" }).path).toBe(path));
   it("preserves reservation action routing", () => expect(routeProductionCommand({ action: "CANCEL", reservationId: "res-1", reason: "Changed" }).path).toBe("/api/reservations/res-1/actions"));
   it("preserves operations routing", () => expect(routeProductionCommand({ action: "UPSERT_INVENTORY" }).path).toBe("/api/operations"));
+  it("routes housekeeping assignment with its version and assignee", () => expect(routeProductionCommand({ action: "ASSIGN_HOUSEKEEPING_TASK", taskId: "task-1", assigneeId: "staff-1", expectedVersion: 2 })).toMatchObject({ path: "/api/operations", method: "POST" }));
   it("rejects unknown commands", () => expect(() => routeProductionCommand({ action: "UNKNOWN" })).toThrow("Unsupported production command"));
   it("never creates undefined URLs", () => expect(() => routeProductionCommand({ action: "CANCEL" })).toThrow("requires reservationId"));
 });

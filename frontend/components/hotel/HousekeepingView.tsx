@@ -3,18 +3,24 @@
 import { AlertTriangle, Check, Clock3, IndianRupee, Pencil, Plus, X } from "lucide-react";
 import { useState, type FormEvent } from "react";
 import type { AppRole } from "@hotel/shared/domain";
+import { assignmentLabel, assignmentState, canManageHousekeepingAssignment, eligibleHousekeepingStaff, submitHousekeepingAssignment } from "@/lib/housekeeping-assignment";
+import { CreateHousekeepingTask } from './OperationalWorkspace';
 import { AppGlyph, Metric, PageHeading, Status, dateTime, localDateTimeInputValue, money, type DamageSeverity, type PlatformViewProps, type ReservationInspectionSummary, type Row, type Surface } from "@/app/hotel-platform";
-export function HousekeepingOverviewView({
+export function HousekeepingOverviewView(props: PlatformViewProps) {
+ const {
   state,
   surface,
   command,
   refresh,
   updateState,
   notify,
-}: PlatformViewProps) {
+  propertyRestricted,
+ } = props;
   const [pending, setPending] = useState<Set<string>>(new Set());
   const [deferTask, setDeferTask] = useState<Row | null>(null);
   const [damageTask, setDamageTask] = useState<Row | null>(null);
+  const [assignmentTask, setAssignmentTask] = useState<Row | null>(null);
+  const canAssign = canManageHousekeepingAssignment(state.actor.role, propertyRestricted);
   const tasks = state.housekeeping.filter(
     (task) => !["COMPLETED", "CANCELLED"].includes(String(task.status)),
   );
@@ -119,6 +125,7 @@ export function HousekeepingOverviewView({
         description="Only rooms that need service or checkout inspection are shown here."
       />
       <section className="service-summary-grid">
+        <CreateHousekeepingTask {...props}/>
         <Metric
           label="Rooms needing service"
           value={serviceTasks.length - deferred.length}
@@ -171,13 +178,16 @@ export function HousekeepingOverviewView({
                     <Clock3 size={13} />{" "}
                     {dateTime(task.deferredUntil ?? task.scheduledAt)}
                   </span>
-                  {Boolean(task.assignedTo) && (
-                    <span>
-                      <AppGlyph name="staff" size={18} />{" "}
-                      {String(task.assignedTo)}
-                    </span>
-                  )}
+                  <span>
+                    <AppGlyph name="staff" size={18} />{" "}
+                    {assignmentState(task)}
+                  </span>
                 </div>
+                {canAssign && (
+                  <button className="secondary-button" onClick={() => setAssignmentTask(task)} disabled={pending.has(String(task.id))}>
+                    <Pencil size={14} /> {assignmentLabel(task)}
+                  </button>
+                )}
                 {isInspection ? (
                   <div className="service-actions">
                     <button
@@ -269,6 +279,17 @@ export function HousekeepingOverviewView({
           }}
         />
       )}
+      {assignmentTask && (
+        <HousekeepingAssignmentModal
+          task={assignmentTask}
+          staff={eligibleHousekeepingStaff(state.housekeepingStaff)}
+          onClose={() => setAssignmentTask(null)}
+          onSave={async (assigneeId) => {
+            const saved = await submitHousekeepingAssignment({ task: assignmentTask, assigneeId, surface, command, refresh, notify });
+            if (saved) setAssignmentTask(null);
+          }}
+        />
+      )}
       {damageTask && (
         <DamageInspectionModal
           task={damageTask}
@@ -292,6 +313,18 @@ export function HousekeepingOverviewView({
       )}
     </>
   );
+}
+
+export function HousekeepingAssignmentModal({ task, staff, onClose, onSave }: { task: Row; staff: Row[]; onClose: () => void; onSave: (assigneeId: string) => Promise<void> }) {
+  const [assigneeId, setAssigneeId] = useState(String(task.assignedUserId ?? ""));
+  const [busy, setBusy] = useState(false);
+  return <div className="modal-backdrop" role="presentation" onMouseDown={event => { if (event.target === event.currentTarget) onClose(); }}>
+    <form className="modal-card compact-modal" onSubmit={async event => { event.preventDefault(); if (!assigneeId) return; setBusy(true); try { await onSave(assigneeId); } finally { setBusy(false); } }}>
+      <div className="modal-heading"><div><p className="section-kicker">Room {String(task.roomNumber)}</p><h2>{task.assignedUserId ? "Reassign housekeeping" : "Assign housekeeping"}</h2><p>{String(task.taskType).replaceAll("_", " ")} · {String(task.priority)}</p></div><button type="button" className="icon-button" onClick={onClose}><X size={17} /></button></div>
+      {staff.length ? <div className="form-grid"><label className="wide"><span>Housekeeper</span><select required value={assigneeId} onChange={event => setAssigneeId(event.target.value)}><option value="">Select housekeeper</option>{staff.map(person => <option key={String(person.id)} value={String(person.id)}>{String(person.name)}</option>)}</select></label></div> : <div className="empty-state small"><AppGlyph name="staff" size={38} /><strong>No active housekeeping staff are available for this property.</strong></div>}
+      <div className="modal-actions"><button type="button" className="secondary-button" onClick={onClose}>Cancel</button><button type="submit" className="primary-button" disabled={busy || !assigneeId || !staff.length}>{busy ? "Assigning…" : "Assign Room"}</button></div>
+    </form>
+  </div>;
 }
 
 export function HousekeepingView(props: PlatformViewProps) {

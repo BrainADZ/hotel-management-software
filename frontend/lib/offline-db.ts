@@ -117,6 +117,45 @@ export type LocalOfflineReservation = {
   syncedReservationId?: string;
   syncedReference?: string;
   syncError?: string;
+  clientMutationId?: string;
+};
+
+export type OfflineMutationStatus =
+  | "PENDING"
+  | "SYNCING"
+  | "SYNCED"
+  | "FAILED"
+  | "CONFLICT";
+
+export type OfflineMutation = {
+  id: string;
+  clientMutationId: string;
+  organisationId: string;
+  propertyId: string;
+  userId: string;
+  command: string;
+  entityType: string;
+  entityId?: string | null;
+  payload: Record<string, unknown>;
+  status: OfflineMutationStatus;
+  retryCount: number;
+  lastError?: string;
+  serverEntityId?: string;
+  conflict?: Record<string, unknown>;
+  lastAttemptAt?: string;
+  createdAt: string;
+  updatedAt: string;
+};
+
+export type EnqueueOfflineMutationInput = {
+  organisationId: string;
+  propertyId: string;
+  userId: string;
+  command: string;
+  entityType: string;
+  entityId?: string | null;
+  payload?: Record<string, unknown>;
+  clientMutationId?: string;
 };
 
 type StoredDocument = {
@@ -148,6 +187,7 @@ class BrainadzHospitalityOfflineDb extends Dexie {
   syncMetadata!: EntityTable<KeyValue, "key">;
   recoveryJournal!: EntityTable<JournalEntry, "id">;
   offlineReservations!: EntityTable<LocalOfflineReservation, "id">;
+  offlineMutations!: EntityTable<OfflineMutation, "id">;
 
   constructor() {
     super("brainadz-hospitality-front-desk");
@@ -179,6 +219,33 @@ class BrainadzHospitalityOfflineDb extends Dexie {
       syncMetadata: "&key",
       recoveryJournal: "&id, operation, status, billId, createdAt",
       offlineReservations: "&id, &localReference, syncStatus, createdAt",
+    });
+    this.version(3).stores({
+      deviceMetadata: "&key",
+      preferences: "&key",
+      cachedGuests: "&id, fullName",
+      cachedBookings:
+        "&id, &reference, guestId, guestName, status, arrivalDate",
+      cachedFolios: "&id, &reservationId, status",
+      cachedFolioLines: "&id, folioId, category",
+      offlineBills:
+        "&id, &offlineReference, bookingReference, reservationId, guestId, status, generatedAt",
+      billDocuments: "&id, &billId, createdAt",
+      syncMetadata: "&key",
+      recoveryJournal: "&id, operation, status, billId, createdAt",
+      offlineReservations: "&id, &localReference, syncStatus, createdAt",
+      offlineMutations:
+        "&id, &clientMutationId, organisationId, propertyId, userId, command, entityType, entityId, status, createdAt, updatedAt",
+    });
+    this.version(4).stores({
+      deviceMetadata: "&key", preferences: "&key", cachedGuests: "&id, fullName",
+      cachedBookings: "&id, &reference, guestId, guestName, status, arrivalDate",
+      cachedFolios: "&id, &reservationId, status", cachedFolioLines: "&id, folioId, category",
+      offlineBills: "&id, &offlineReference, bookingReference, reservationId, guestId, status, generatedAt",
+      billDocuments: "&id, &billId, createdAt", syncMetadata: "&key",
+      recoveryJournal: "&id, operation, status, billId, createdAt",
+      offlineReservations: "&id, &localReference, syncStatus, createdAt",
+      offlineMutations: "&id, &clientMutationId, status, createdAt, [entityType+entityId], propertyId",
     });
   }
 }
@@ -515,6 +582,255 @@ export async function markOfflineReservationSyncFailed(
       updatedAt: new Date().toISOString(),
     });
   });
+}
+
+const OFFLINE_MUTATION_SECRET_KEY_PATTERN =
+  /^(authorization|accessToken|refreshToken|sessionToken|password|cookie)$/i;
+
+const OFFLINE_MUTATION_KYC_KEY_PATTERN =
+  /^(aadhaar|aadhar|aadhaarNumber|aadharNumber|passportNumber|passportNo|voterId|voterNumber|voterNo|drivingLicenseNumber|drivingLicenceNumber|drivingLicenseNo|drivingLicenceNo|documentNumber|kycNumber|fullKycNumber)$/i;
+
+export const OFFLINE_QUEUEABLE_COMMANDS = new Set([
+  "SYNC_OFFLINE_RESERVATION",
+  "RECORD_HOUSEKEEPING_OUTCOME",
+]);
+
+export function isOfflineQueueableCommand(command: string) {
+  return OFFLINE_QUEUEABLE_COMMANDS.has(command);
+}
+
+export function assertOfflinePayloadSafe(value: unknown, path: string[] = []) {
+  if (Array.isArray(value)) {
+    value.forEach((item, index) =>
+      assertOfflinePayloadSafe(item, [...path, String(index)]),
+    );
+    return;
+  }
+
+  if (!value || typeof value !== "object") return;
+
+  for (const [key, nestedValue] of Object.entries(
+    value as Record<string, unknown>,
+  )) {
+    if (OFFLINE_MUTATION_SECRET_KEY_PATTERN.test(key)) {
+      throw new Error(
+        `Offline mutation payload cannot store authentication secret "${key}".`,
+      );
+    }
+
+    const normalizedPath = [...path, key].join(".").toLowerCase();
+    const nestedUnderKyc =
+      normalizedPath.includes("kyc") &&
+      /^(number|fullNumber|value|documentNumber|documentValue)$/i.test(key);
+
+    if (OFFLINE_MUTATION_KYC_KEY_PATTERN.test(key) || nestedUnderKyc) {
+      throw new Error(
+        `Offline mutation payload cannot store raw KYC identifier "${key}".`,
+      );
+    }
+
+    assertOfflinePayloadSafe(nestedValue, [...path, key]);
+  }
+}
+
+function requiredOfflineMutationValue(value: string, label: string) {
+  const normalized = value.trim();
+  if (!normalized) {
+    throw new Error(`${label} is required for an offline mutation.`);
+  }
+  return normalized;
+}
+
+export async function enqueueOfflineMutation(
+  input: EnqueueOfflineMutationInput,
+) {
+  const organisationId = requiredOfflineMutationValue(
+    input.organisationId,
+    "Organisation",
+  );
+  const propertyId = requiredOfflineMutationValue(input.propertyId, "Property");
+  const userId = requiredOfflineMutationValue(input.userId, "User");
+  const command = requiredOfflineMutationValue(input.command, "Command");
+  if (!isOfflineQueueableCommand(command)) {
+    throw new Error("Requires an online connection.");
+  }
+  const entityType = requiredOfflineMutationValue(
+    input.entityType,
+    "Entity type",
+  );
+  const clientMutationId =
+    input.clientMutationId?.trim() || crypto.randomUUID();
+  const payload = input.payload ?? {};
+
+  assertOfflinePayloadSafe(payload);
+
+  const existing = await offlineDb.offlineMutations
+    .where("clientMutationId")
+    .equals(clientMutationId)
+    .first();
+
+  if (existing) return existing;
+
+  const now = new Date().toISOString();
+  const record: OfflineMutation = {
+    id: crypto.randomUUID(),
+    clientMutationId,
+    organisationId,
+    propertyId,
+    userId,
+    command,
+    entityType,
+    entityId: input.entityId?.trim() || null,
+    payload,
+    status: "PENDING",
+    retryCount: 0,
+    createdAt: now,
+    updatedAt: now,
+  };
+
+  await offlineDb.offlineMutations.add(record);
+  return record;
+}
+
+export async function getOfflineMutations(
+  statuses?: OfflineMutationStatus[],
+) {
+  if (!statuses?.length) {
+    return offlineDb.offlineMutations.orderBy("createdAt").reverse().toArray();
+  }
+
+  return offlineDb.offlineMutations
+    .where("status")
+    .anyOf(statuses)
+    .sortBy("createdAt");
+}
+
+export async function getSyncableOfflineMutations(maxRetries = 5) {
+  const records = await offlineDb.offlineMutations
+    .where("status")
+    .anyOf(["PENDING", "FAILED"])
+    .sortBy("createdAt");
+
+  return records.filter((record) => record.retryCount < maxRetries);
+}
+
+export async function markOfflineMutationSyncing(id: string) {
+  return offlineDb.transaction("rw", offlineDb.offlineMutations, async () => {
+    const current = await offlineDb.offlineMutations.get(id);
+    if (!current || current.status === "SYNCED" || current.status === "CONFLICT") {
+      return current ?? null;
+    }
+
+    await offlineDb.offlineMutations.update(id, {
+      status: "SYNCING",
+      lastError: undefined,
+      lastAttemptAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+    });
+
+    return offlineDb.offlineMutations.get(id);
+  });
+}
+
+export async function markOfflineMutationSynced(
+  id: string,
+  result?: { serverEntityId?: string },
+) {
+  await offlineDb.offlineMutations.update(id, {
+    status: "SYNCED",
+    serverEntityId: result?.serverEntityId,
+    lastError: undefined,
+    conflict: undefined,
+    updatedAt: new Date().toISOString(),
+  });
+}
+
+export async function markOfflineMutationFailed(id: string, message: string) {
+  await offlineDb.transaction("rw", offlineDb.offlineMutations, async () => {
+    const current = await offlineDb.offlineMutations.get(id);
+    if (!current || current.status === "SYNCED" || current.status === "CONFLICT") {
+      return;
+    }
+
+    await offlineDb.offlineMutations.update(id, {
+      status: "FAILED",
+      retryCount: current.retryCount + 1,
+      lastError: message.trim() || "Sync failed.",
+      updatedAt: new Date().toISOString(),
+    });
+  });
+}
+
+export async function markOfflineMutationConflict(
+  id: string,
+  message: string,
+  conflict?: Record<string, unknown>,
+) {
+  await offlineDb.offlineMutations.update(id, {
+    status: "CONFLICT",
+    lastError: message.trim() || "Needs review.",
+    conflict,
+    updatedAt: new Date().toISOString(),
+  });
+}
+
+export async function retryOfflineMutation(id: string) {
+  await offlineDb.transaction("rw", offlineDb.offlineMutations, async () => {
+    const current = await offlineDb.offlineMutations.get(id);
+    if (!current || current.status === "SYNCED") return;
+
+    await offlineDb.offlineMutations.update(id, {
+      status: "PENDING",
+      lastError: undefined,
+      conflict: undefined,
+      updatedAt: new Date().toISOString(),
+    });
+  });
+}
+
+export async function resetStaleSyncingOfflineMutations(
+  staleAfterMs = 2 * 60 * 1000,
+) {
+  const syncing = await offlineDb.offlineMutations
+    .where("status")
+    .equals("SYNCING")
+    .toArray();
+  const cutoff = Date.now() - staleAfterMs;
+  const staleIds = syncing
+    .filter((record) => new Date(record.updatedAt).getTime() < cutoff)
+    .map((record) => record.id);
+
+  if (!staleIds.length) return 0;
+
+  await offlineDb.transaction("rw", offlineDb.offlineMutations, async () => {
+    await Promise.all(
+      staleIds.map((id) =>
+        offlineDb.offlineMutations.update(id, {
+          status: "PENDING",
+          updatedAt: new Date().toISOString(),
+        }),
+      ),
+    );
+  });
+
+  return staleIds.length;
+}
+
+export async function getOfflineMutationSummary() {
+  const [pending, syncing, failed, conflict] = await Promise.all([
+    offlineDb.offlineMutations.where("status").equals("PENDING").count(),
+    offlineDb.offlineMutations.where("status").equals("SYNCING").count(),
+    offlineDb.offlineMutations.where("status").equals("FAILED").count(),
+    offlineDb.offlineMutations.where("status").equals("CONFLICT").count(),
+  ]);
+
+  return {
+    pending,
+    syncing,
+    failed,
+    conflict,
+    actionable: pending + failed + conflict,
+  };
 }
 
 export async function cacheApplicationSnapshot(key: string, value: unknown) {

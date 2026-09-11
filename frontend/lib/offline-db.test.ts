@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { createOnlineFolioPdf, normalizeUiStyle } from "./offline-db";
+import { assertOfflinePayloadSafe, createOnlineFolioPdf, isOfflineQueueableCommand, normalizeUiStyle } from "./offline-db";
 
 describe("interface style preference", () => {
   it("keeps the current Sage interface as the safe default", () => {
@@ -10,6 +10,13 @@ describe("interface style preference", () => {
   it("accepts the optional Classic Blue interface", () => {
     expect(normalizeUiStyle("classic-blue")).toBe("classic-blue");
   });
+});
+
+describe("production offline queue policy", () => {
+  it.each(["SYNC_OFFLINE_RESERVATION", "RECORD_HOUSEKEEPING_OUTCOME"])("allows %s", command => expect(isOfflineQueueableCommand(command)).toBe(true));
+  it.each(["CAPTURE_PAYMENT", "REFUND_PAYMENT", "UPLOAD_KYC", "CREATE_USER", "DELETE_RESERVATION"])("blocks %s", command => expect(isOfflineQueueableCommand(command)).toBe(false));
+  it.each(["password", "accessToken", "refreshToken", "cookie", "passportNumber", "aadhaarNumber"])("rejects sensitive nested field %s", field => expect(() => assertOfflinePayloadSafe({ nested: { [field]: "secret" } })).toThrow());
+  it("allows non-sensitive operational payloads", () => expect(() => assertOfflinePayloadSafe({ outcome: "CLEAN", version: 3 })).not.toThrow());
 });
 
 describe("folio PDF generation", () => {

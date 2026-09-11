@@ -5,8 +5,8 @@ it('preserves production authentication errors through HTTP and rejects browser 
   vi.stubEnv('APP_MODE', 'production'); vi.stubEnv('AUTH_PROVIDER', 'disabled');
   const app = await createApp();
   try {
-    for (const url of ['/api/context', '/api/auth/me', '/api/reservations', '/api/guests', '/api/front-desk', '/api/rooms', '/api/folios', '/api/folios/00000000-0000-4000-8000-000000000001']) {
-      const response = await app.inject({ url, headers: { 'x-demo-role': 'OWNER', 'oai-authenticated-user-id': 'forged' } });
+    for (const url of ['/api/context', '/api/auth/me', '/api/reservations', '/api/guests', '/api/front-desk', '/api/rooms', '/api/folios', '/api/folios/00000000-0000-4000-8000-000000000001', '/api/sync/mutations']) {
+      const response = await app.inject({ method: url === '/api/sync/mutations' ? 'POST' : 'GET', url, payload: url === '/api/sync/mutations' ? { mutations: [] } : undefined, headers: { 'x-demo-role': 'OWNER', 'oai-authenticated-user-id': 'forged' } });
       expect(response.statusCode).toBe(401);
       expect(response.json().error.code).toBe('UNAUTHENTICATED');
       expect(response.headers['cache-control']).toBe('no-store, private');

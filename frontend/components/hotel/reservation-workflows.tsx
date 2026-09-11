@@ -5,7 +5,7 @@ import { useEffect, useState, type FormEvent } from "react";
 import { calculateStayNights } from "@hotel/shared/domain";
 import type { MealService } from "@/lib/offline-db";
 import { ProductionReservationGuests } from "@/app/production-front-desk";
-import { DamageChargeModal } from "@/components/hotel/operations-views";
+import { DamageChargeModal } from "@/components/hotel/HousekeepingView";
 import {
   AppGlyph,
   InspectionStatusBadge,

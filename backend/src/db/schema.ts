@@ -398,6 +398,26 @@ export const offlineBills = pgTable('offline_bills', {
   index('idx_offline_bills_reservation_status').on(table.reservationId, table.status),
 ]);
 
+export const offlineSyncMutations = pgTable('offline_sync_mutations', {
+  id: text('id').primaryKey(),
+  organisationId: text('organisation_id').notNull().references(() => organisations.id),
+  propertyId: text('property_id').notNull().references(() => properties.id),
+  userId: text('user_id').notNull().references(() => appUsers.id),
+  clientMutationId: text('client_mutation_id').notNull(),
+  command: text('command').notNull(),
+  entityType: text('entity_type').notNull(),
+  entityId: text('entity_id'),
+  payloadHash: text('payload_hash').notNull(),
+  status: text('status').notNull(),
+  resultJson: text('result_json'),
+  errorJson: text('error_json'),
+  createdAt: text('created_at').notNull(),
+  completedAt: text('completed_at'),
+}, (table) => [
+  uniqueIndex('idx_offline_sync_org_client_mutation').on(table.organisationId, table.clientMutationId),
+  index('idx_offline_sync_property_status').on(table.propertyId, table.status, table.createdAt),
+]);
+
 export const housekeepingTasks = pgTable('housekeeping_tasks', {
   id: text('id').primaryKey(),
   propertyId: text('property_id').notNull().references(() => properties.id),
@@ -620,10 +640,34 @@ export const inquiries = pgTable('inquiries', {
   estimatedValuePaise: integer('estimated_value_paise').notNull(),
   status: text('status').notNull(),
   followUpAt: text('follow_up_at'),
+  notes: text('notes'),
+  updatedBy: text('updated_by'),
   createdAt: text('created_at').notNull(),
+  updatedAt: text('updated_at'),
 }, (table) => [
   uniqueIndex('idx_inquiries_org_reference').on(table.organisationId, table.reference),
   index('idx_inquiries_org_status').on(table.organisationId, table.status),
+]);
+
+export const travelFollowUps = pgTable('travel_follow_ups', {
+  id: text('id').primaryKey(),
+  organisationId: text('organisation_id').notNull().references(() => organisations.id),
+  inquiryId: text('inquiry_id').notNull().references(() => inquiries.id),
+  channel: text('channel').notNull(),
+  dueAt: text('due_at').notNull(),
+  status: text('status').notNull().default('PENDING'),
+  notes: text('notes'),
+  assignedToId: text('assigned_to_id'),
+  assignedToName: text('assigned_to_name').notNull(),
+  createdById: text('created_by_id').notNull(),
+  completedById: text('completed_by_id'),
+  completedAt: text('completed_at'),
+  createdAt: text('created_at').notNull(),
+  updatedAt: text('updated_at').notNull(),
+  version: integer('version').notNull().default(1),
+}, (table) => [
+  index('idx_travel_followups_org_status_due').on(table.organisationId, table.status, table.dueAt),
+  index('idx_travel_followups_inquiry').on(table.inquiryId),
 ]);
 
 export const integrationEvents = pgTable('integration_events', {

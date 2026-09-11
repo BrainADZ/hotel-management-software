@@ -42,6 +42,15 @@ import * as route40 from './auth/google/callback/route';
 import * as route41 from './profile/route';
 import * as route42 from './profile/avatar/route';
 import * as route43 from './profile/avatar/file/route';
+import * as route44 from './travel/route';
+import * as route45 from './travel/inquiries/route';
+import * as route46 from './travel/inquiries/[id]/route';
+import * as route47 from './travel/packages/route';
+import * as route48 from './travel/packages/[id]/pricing/route';
+import * as route49 from './travel/discount-requests/[id]/decision/route';
+import * as route50 from './travel/follow-ups/route';
+import * as route51 from './travel/follow-ups/[id]/route';
+import * as route52 from './sync/mutations/route';
 export const routes = [
   { path: '/api/auth/me', handlers: route0 },
   { path: '/api/availability', handlers: route1 },
@@ -87,4 +96,13 @@ export const routes = [
   { path: '/api/profile', handlers: route41 },
   { path: '/api/profile/avatar', handlers: route42 },
   { path: '/api/profile/avatar/file', handlers: route43 },
+  { path: '/api/travel', handlers: route44 },
+  { path: '/api/travel/inquiries', handlers: route45 },
+  { path: '/api/travel/inquiries/:id', handlers: route46 },
+  { path: '/api/travel/packages', handlers: route47 },
+  { path: '/api/travel/packages/:id/pricing', handlers: route48 },
+  { path: '/api/travel/discount-requests/:id/decision', handlers: route49 },
+  { path: '/api/travel/follow-ups', handlers: route50 },
+  { path: '/api/travel/follow-ups/:id', handlers: route51 },
+  { path: '/api/sync/mutations', handlers: route52 },
 ];

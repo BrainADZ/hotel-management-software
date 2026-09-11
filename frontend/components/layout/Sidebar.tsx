@@ -1,11 +1,11 @@
-"use client";
+﻿"use client";
 
 import Link from "next/link";
 import { ChevronLeft, ChevronRight } from "lucide-react";
 import type { ReactNode } from "react";
 import type { NavigationGroup } from "@/lib/navigation";
 
-type AppSidebarProps = {
+type SidebarProps = {
   collapsed: boolean;
   menuOpen: boolean;
   pathname: string;
@@ -19,7 +19,7 @@ type AppSidebarProps = {
   onNavigate: () => void;
 };
 
-export function AppSidebar({
+export function Sidebar({
   collapsed,
   menuOpen,
   pathname,
@@ -31,7 +31,7 @@ export function AppSidebar({
   onCollapse,
   onExpand,
   onNavigate,
-}: AppSidebarProps) {
+}: SidebarProps) {
   return (
     <aside
       className={`sidebar ${menuOpen ? "sidebar-open" : ""}`}
@@ -101,3 +101,4 @@ export function AppSidebar({
     </aside>
   );
 }
+

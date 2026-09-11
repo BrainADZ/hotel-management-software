@@ -43,6 +43,20 @@
       "when": 1788955200000,
       "tag": "0005_google_identity_user_profile",
       "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "7",
+      "when": 1789011000000,
+      "tag": "0006_travel_production",
+      "breakpoints": true
+    },
+    {
+      "idx": 7,
+      "version": "7",
+      "when": 1789097400000,
+      "tag": "0007_production_offline_sync",
+      "breakpoints": true
     }
   ]
 }

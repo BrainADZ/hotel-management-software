@@ -1,15 +1,56 @@
-"use client";
+﻿"use client";
 /* eslint-disable @next/next/no-img-element -- Runtime avatars and supplied local logos use direct image URLs. */
 import { apiFetch, apiUrl } from "@/lib/api/client";
-import { AppSidebar } from "@/components/layout/app-sidebar";
-import { OperationsView } from "@/components/hotel/operations-views";
-import { OfflineViews } from "@/components/hotel/offline-views";
-import { CoreHotelViews } from "@/components/hotel/core-views";
+import { routeProductionCommand } from "@/lib/production-command-routing";
+import { assertOfflineCommandQueueable, runOfflineSync } from "@/lib/offline-sync";
+import { Sidebar } from "@/components/layout/Sidebar";
+import { Topbar } from "@/components/layout/Topbar";
+import { WorkspaceSwitcher } from "@/components/layout/WorkspaceSwitcher";
+import { OperatingSurfaceSwitcher } from "@/components/layout/OperatingSurfaceSwitcher";
+import { OverviewView, RestaurantOverviewView } from "@/components/hotel/OverviewView";
+import { ReservationsView } from "@/components/hotel/ReservationsView";
+import { ConnectivityView } from "@/components/hotel/ConnectivityView";
+import { FrontDeskView } from "@/components/hotel/FrontDeskView";
+import { GuestsView } from "@/components/hotel/GuestsView";
+import { FoliosBillingView } from "@/components/hotel/FoliosBillingView";
+import { RoomCalendarView } from "@/components/hotel/RoomCalendarView";
+import { ArrivalsDeparturesView } from "@/components/hotel/ArrivalsDeparturesView";
+import { RoomTypesRatesView } from "@/components/hotel/RoomTypesRatesView";
+import { GuestProfilesView } from "@/components/hotel/GuestProfilesView";
+import { InvoicesView } from "@/components/hotel/InvoicesView";
+import { HousekeepingOverviewView, HousekeepingView } from "@/components/hotel/HousekeepingView";
+import { MaintenanceView } from "@/components/hotel/MaintenanceView";
+import { InventoryView } from "@/components/hotel/InventoryView";
+import { InventoryMovementsView } from "@/components/hotel/InventoryMovementsView";
+import { LostFoundView } from "@/components/hotel/LostFoundView";
+import { RestaurantOrdersView } from "@/components/hotel/RestaurantOrdersView";
+import { RoomServiceView } from "@/components/hotel/RoomServiceView";
+import { MealServiceView } from "@/components/hotel/MealServiceView";
+import { MenuManagementView } from "@/components/hotel/MenuManagementView";
+import { OfflineBillingView } from "@/components/hotel/OfflineBillingView";
+import { VerificationView } from "@/components/hotel/VerificationView";
+import { DeviceStatusView } from "@/components/hotel/DeviceStatusView";
+import { IntegrationsView } from "@/components/hotel/IntegrationsView";
+import { ReportsView } from "@/components/hotel/ReportsView";
+import { AuditLogsView } from "@/components/hotel/AuditLogsView";
+import { UsersPermissionsView } from "@/components/hotel/UsersPermissionsView";
+import { PropertiesSettingsView } from "@/components/hotel/PropertiesSettingsView";
+import { TravelOverviewView } from "@/components/travel/TravelOverviewView";
+import { PackagesToursView } from "@/components/travel/PackagesToursView";
+import { ToursView } from "@/components/travel/ToursView";
+import { ParticipantsView } from "@/components/travel/ParticipantsView";
+import { TourManagersView } from "@/components/travel/TourManagersView";
+import { InquiryCRMView } from "@/components/travel/InquiryCRMView";
+import { SalesPipelineView } from "@/components/travel/SalesPipelineView";
+import { FollowUpsView } from "@/components/travel/FollowUpsView";
+import { CommunicationsView } from "@/components/travel/CommunicationsView";
+import { TravelReportsView } from "@/components/travel/TravelReportsView";
+import { TravelAuditLogsView } from "@/components/travel/TravelAuditLogsView";
+import { ProductionFrontDesk, ProductionGuests } from "./production-front-desk";
 import {
   ReservationModal,
   StayDrawer,
 } from "@/components/hotel/reservation-workflows";
-import { TravelAdminViews } from "@/components/travel/travel-admin-views";
 import {
   hrefForView,
   navigationGroups,
@@ -41,6 +82,7 @@ import {
   useRef,
   useState,
   type Dispatch,
+  type ComponentType,
   type FormEvent,
   type ReactNode,
   type SetStateAction,
@@ -51,9 +93,9 @@ import {
   type AppRole,
   type BusinessUnit,
 } from "@hotel/shared/domain";
-import { ExtraFeatureView, isExtraFeatureView } from "./primary-extra-features";
 import {
   cacheApplicationSnapshot,
+  enqueueOfflineMutation,
   cacheCloudPayload,
   createLocalWalkInReservation,
   getBillBlob,
@@ -170,6 +212,7 @@ export type ReservationInspectionSummary = {
   folioStatus?: string | null;
 };
 export type DemoState = {
+  organisationId?: string;
   actor: {
     id: string;
     name: string;
@@ -204,6 +247,7 @@ export type DemoState = {
   damageReports: Row[];
   packages: Row[];
   inquiries: Row[];
+  followUps: Row[];
   travelAssets: Row[];
   customPackages: Row[];
   customPackageItems: Row[];
@@ -505,7 +549,7 @@ function productionShell(
   operations: Row,
 ): DemoState {
   const user = context.user as DemoState["actor"];
-  const property = context.property as Row;
+  const property = (context.property as Row | null) ?? {};
   const metrics: Metrics = {
     occupancyPercent: 0,
     totalRooms: roomItems.length,
@@ -526,11 +570,12 @@ function productionShell(
     overdueFollowUps: 0,
   };
   return {
+    organisationId: String((context.organisation as Row)?.id ?? ""),
     actor: user,
     businessUnit: "HOTEL",
     property: {
-      id: String(property.id),
-      name: String(property.name),
+      id: String(property.id ?? "travel-workspace"),
+      name: String(property.name ?? (context.organisation as Row)?.name ?? "Travel & Sales"),
       city: "",
       timezone: String(property.timezone),
       connectionStatus: "ONLINE",
@@ -566,6 +611,7 @@ function productionShell(
     damageReports: (operations.damageReports as Row[]) ?? [],
     packages: (operations.packages as Row[]) ?? [],
     inquiries: (operations.inquiries as Row[]) ?? [],
+    followUps: (operations.followUps as Row[]) ?? [],
     travelAssets: (operations.travelAssets as Row[]) ?? [],
     customPackages: (operations.customPackages as Row[]) ?? [],
     customPackageItems: (operations.customPackageItems as Row[]) ?? [],
@@ -835,7 +881,7 @@ function ProfileModal({
                 Remove photo
               </button>
             )}
-            <small>JPEG, PNG or WebP · maximum 5 MB</small>
+            <small>JPEG, PNG or WebP Â· maximum 5 MB</small>
           </span>
         </div>
         <div className="form-grid">
@@ -872,7 +918,7 @@ function ProfileModal({
             Cancel
           </button>
           <button className="primary-button" disabled={busy}>
-            {busy ? "Saving…" : "Save profile"}
+            {busy ? "Savingâ€¦" : "Save profile"}
           </button>
         </div>
       </form>
@@ -960,6 +1006,18 @@ export function HotelPlatform({
         if (appMode === "production") {
           const context = await productionApi("/api/context");
           const actualRole = String((context.user as Row).role) as AppRole;
+          const allowedUnits = businessUnitsForRole(actualRole);
+          const effectiveUnit = allowedUnits.includes(selectedUnit)
+            ? selectedUnit
+            : (allowedUnits[0] ?? "HOTEL");
+          if (effectiveUnit === "TRAVEL") {
+            const travel = await productionApi("/api/travel");
+            if (sequence !== loadSequence.current) return;
+            setRole(actualRole);
+            setState({ ...productionShell(context, [], [], [], travel), businessUnit: "TRAVEL" });
+            setLastRefreshedAt(new Date());
+            return;
+          }
           const [reservationPage, roomPage, folioPage, operations] =
             await Promise.all([
               roleCan(actualRole, "reservation.read")
@@ -972,11 +1030,6 @@ export function HotelPlatform({
               productionApi("/api/operations"),
             ]);
           if (sequence !== loadSequence.current) return;
-          const allowedUnits = businessUnitsForRole(actualRole);
-          const effectiveUnit = allowedUnits.includes(selectedUnit)
-            ? selectedUnit
-            : (allowedUnits[0] ?? "HOTEL");
-
           setRole(actualRole);
           setState({
             ...productionShell(
@@ -1011,6 +1064,7 @@ export function HotelPlatform({
         if (sequence !== loadSequence.current) return;
         const normalizedBody = {
           ...body,
+          followUps: body.followUps ?? [],
           reservationInspectionSummaries:
             body.reservationInspectionSummaries ?? [],
         };
@@ -1191,67 +1245,17 @@ export function HotelPlatform({
   async function command(payload: Record<string, unknown>) {
     if (appMode === "production") {
       const action = String(payload.action ?? "");
-      if (action === "CREATE_RESERVATION")
-        return productionApi("/api/reservations", {
-          method: "POST",
-          body: JSON.stringify({
-            guestName: payload.guestName,
-            email: payload.email,
-            phone: payload.phone,
-            roomId: payload.roomId,
-            roomType: payload.roomType,
-            arrivalDate: payload.arrivalDate,
-            departureDate: payload.departureDate,
-            adults: payload.guestCount ?? payload.adults ?? 1,
-            children: payload.children ?? 0,
-            status: "CONFIRMED",
-            source: payload.source ?? "DIRECT",
-            nightlyRatePaise: payload.nightlyRatePaise,
-            taxRateBps: payload.taxRateBps ?? 0,
-            specialRequests: payload.specialRequests,
-            internalNotes: payload.internalNotes,
-          }),
-        });
-      const reservationId = String(payload.reservationId);
-      if (action === "EDIT_RESERVATION")
-        return productionApi(`/api/reservations/${reservationId}`, {
-          method: "PATCH",
-          body: JSON.stringify(payload.changes),
-        });
-      if (action === "CHECK_IN")
-        return productionApi(`/api/reservations/${reservationId}/check-in`, {
-          method: "POST",
-          body: JSON.stringify({}),
-        });
-      if (action === "CHECK_OUT")
-        return productionApi(`/api/reservations/${reservationId}/check-out`, {
-          method: "POST",
-          body: JSON.stringify({}),
-        });
-      if (
-        [
-          "RECORD_HOUSEKEEPING_OUTCOME",
-          "SUBMIT_ROOM_INSPECTION",
-          "RESOLVE_DAMAGE_REPORT",
-          "UPSERT_INVENTORY",
-        ].includes(action)
-      ) {
-        return productionApi("/api/operations", {
-          method: "POST",
-          body: JSON.stringify(payload),
-        });
+      const offlineNow = !browserOnline || (surface === "PROPERTY" && state?.property.connectionStatus === "OFFLINE");
+      if (offlineNow) {
+        assertOfflineCommandQueueable(action);
+        if (!state?.organisationId || !state.property.id || !state.actor.id) throw new Error("Offline device context is unavailable. Reconnect once before queuing changes.");
+        const entityId = action === "RECORD_HOUSEKEEPING_OUTCOME" ? String(payload.taskId ?? "") : null;
+        const queued = await enqueueOfflineMutation({ organisationId: state.organisationId, propertyId: state.property.id, userId: state.actor.id, command: action, entityType: action === "RECORD_HOUSEKEEPING_OUTCOME" ? "HOUSEKEEPING_TASK" : "RESERVATION", entityId, payload });
+        notify("Change saved offline. It will sync when the connection returns.");
+        return { queued: true, clientMutationId: queued.clientMutationId };
       }
-      const type =
-        action === "CHECK_OUT" ? action : String(payload.type ?? action);
-      return productionApi(`/api/reservations/${reservationId}/actions`, {
-        method: "POST",
-        body: JSON.stringify({
-          ...payload,
-          action: undefined,
-          reservationId: undefined,
-          type,
-        }),
-      });
+      const route = routeProductionCommand(payload);
+      return productionApi(route.path, { method: route.method, body: JSON.stringify(route.body) });
     }
     return sendDemoCommand(role, businessUnit, payload);
   }
@@ -1367,6 +1371,15 @@ export function HotelPlatform({
   );
   const focusedOperationsRole =
     role === "HOUSEKEEPING" || role === "RESTAURANT";
+
+  useEffect(() => {
+    if (appMode !== "production" || !browserOnline || businessUnit !== "HOTEL" || !state?.organisationId || !state.property.id) return;
+    void runOfflineSync({ organisationId: state.organisationId, propertyId: state.property.id, userId: state.actor.id }).then(result => {
+      if (result.synced > 0) void loadState(role, businessUnit, true);
+      if (result.conflict > 0) notify(`${result.conflict} offline change${result.conflict === 1 ? " needs" : "s need"} review.`);
+      else if (result.failed > 0) notify("Offline sync failed. Open Device Status for details.");
+    });
+  }, [appMode, browserOnline, businessUnit, loadState, notify, role, state?.actor.id, state?.organisationId, state?.property.id]);
   const viewState = useMemo<DemoState | null>(() => {
     if (!state || businessUnit !== "HOTEL") return state;
     const pendingRows: Row[] = localReservations
@@ -1440,7 +1453,7 @@ export function HotelPlatform({
       className={`hotel-app platform-app${sidebarCollapsed ? " sidebar-collapsed" : ""}`}
       data-ui-style={uiStyle}
     >
-      <AppSidebar
+      <Sidebar
         collapsed={sidebarCollapsed}
         menuOpen={menuOpen}
         pathname={pathname}
@@ -1452,118 +1465,17 @@ export function HotelPlatform({
           />
         }
         workspaceSwitcher={
-          <div
-            ref={workspacePickerRef}
-            className="workspace-switcher-container"
-            style={{ position: "relative" }}
-          >
-            <button
-              type="button"
-              aria-label={
-                businessUnit === "HOTEL"
-                  ? "Hotel Operations workspace"
-                  : "Travel & Sales workspace"
-              }
-              aria-haspopup="menu"
-              aria-expanded={workspaceMenuOpen}
-              className="property-switcher property-switch-button workspace-switcher"
-              disabled={!canSwitchUnit}
-              onClick={() => setWorkspaceMenuOpen((open) => !open)}
-            >
-              <span className="property-icon">
-                <AppGlyph
-                  name={businessUnit === "HOTEL" ? "hotel" : "travel"}
-                  size={28}
-                />
-              </span>
-              <span>
-                <small>Business workspace</small>
-                <strong>
-                  {businessUnit === "HOTEL"
-                    ? "Hotel Operations"
-                    : "Travel & Sales"}
-                </strong>
-              </span>
-              {canSwitchUnit && <ChevronDown size={15} />}
-            </button>
-
-            {workspaceMenuOpen && canSwitchUnit && (
-              <section
-                role="menu"
-                aria-label="Choose business workspace"
-                className="workspace-switcher-menu"
-                style={{
-                  position: "absolute",
-                  top: "calc(100% + 8px)",
-                  left: 0,
-                  right: 0,
-                  zIndex: 80,
-                  padding: 8,
-                  borderRadius: 12,
-                  background: "var(--surface, #ffffff)",
-                  border: "1px solid var(--border, rgba(15, 23, 42, 0.12))",
-                  boxShadow: "0 14px 36px rgba(15, 23, 42, 0.18)",
-                }}
-              >
-                {availableBusinessUnits.map((unit) => {
-                  const selected = unit === businessUnit;
-                  const isHotel = unit === "HOTEL";
-
-                  return (
-                    <button
-                      key={unit}
-                      type="button"
-                      role="menuitemradio"
-                      aria-checked={selected}
-                      onClick={() => changeBusinessUnit(unit)}
-                      style={{
-                        width: "100%",
-                        display: "flex",
-                        alignItems: "center",
-                        gap: 10,
-                        padding: "10px 12px",
-                        border: 0,
-                        borderRadius: 9,
-                        background: selected
-                          ? "rgba(37, 99, 235, 0.10)"
-                          : "transparent",
-                        color: "inherit",
-                        cursor: "pointer",
-                        textAlign: "left",
-                      }}
-                    >
-                      <span className="property-icon">
-                        <AppGlyph
-                          name={isHotel ? "hotel" : "travel"}
-                          size={24}
-                        />
-                      </span>
-                      <span
-                        style={{
-                          minWidth: 0,
-                          flex: 1,
-                          display: "flex",
-                          flexDirection: "column",
-                        }}
-                      >
-                        <strong>
-                          {isHotel ? "Hotel Operations" : "Travel & Sales"}
-                        </strong>
-                        <small>
-                          {isHotel
-                            ? "Rooms, reservations and hotel operations"
-                            : "Tours, inquiries and sales operations"}
-                        </small>
-                      </span>
-                      {selected && <Check size={16} aria-hidden="true" />}
-                    </button>
-                  );
-                })}
-              </section>
-            )}
-          </div>
-        }
-        verificationCount={
+          <WorkspaceSwitcher
+            containerRef={workspacePickerRef}
+            businessUnit={businessUnit}
+            availableUnits={availableBusinessUnits}
+            open={workspaceMenuOpen}
+            canSwitch={canSwitchUnit}
+            renderIcon={(unit, size) => <AppGlyph name={unit === "HOTEL" ? "hotel" : "travel"} size={size} />}
+            onToggle={() => setWorkspaceMenuOpen((open) => !open)}
+            onChange={changeBusinessUnit}
+          />
+        }        verificationCount={
           state?.offlineBills.filter((bill) => bill.status !== "VERIFIED")
             .length ?? 0
         }
@@ -1579,7 +1491,7 @@ export function HotelPlatform({
         onNavigate={() => setMenuOpen(false)}
       />
       <div className="app-column">
-        <header className="topbar">
+        <Topbar>
           <button
             className="icon-button mobile-menu"
             onClick={() => setMenuOpen((value) => !value)}
@@ -1600,7 +1512,7 @@ export function HotelPlatform({
                     : "Search inquiries, packages, clients..."
                 }
               />
-              <kbd>⌘ K</kbd>
+              <kbd>Ctrl + K</kbd>
             </label>
             {searchResults.length > 0 && (
               <div className="search-results">
@@ -1626,9 +1538,9 @@ export function HotelPlatform({
                     </span>
                     <small>
                       {result.searchKind === "BOOKING"
-                        ? `${String(result.reference)} · Room ${String(result.roomNumber ?? "TBA")}`
+                        ? `${String(result.reference)} Â· Room ${String(result.roomNumber ?? "TBA")}`
                         : result.searchKind === "INQUIRY"
-                          ? `${String(result.reference)} · ${String(result.service)}`
+                          ? `${String(result.reference)} Â· ${String(result.service)}`
                           : String(result.locations)}
                     </small>
                   </button>
@@ -1659,23 +1571,11 @@ export function HotelPlatform({
                     />{" "}
                     Hotel {propertyOffline ? "offline" : "online"}
                   </span>
-                  <button
-                    className="surface-chip"
-                    onClick={() =>
-                      setSurface((current) =>
-                        current === "MASTER_HUB" ? "PROPERTY" : "MASTER_HUB",
-                      )
-                    }
-                  >
-                    <AppGlyph
-                      name={
-                        surface === "MASTER_HUB" ? "cloud-network" : "hotel"
-                      }
-                      size={19}
-                    />{" "}
-                    {surface === "MASTER_HUB" ? "Master Hub" : "Property"}
-                    <ChevronDown size={13} />
-                  </button>
+                  <OperatingSurfaceSwitcher
+                    surface={surface}
+                    renderIcon={(current) => <AppGlyph name={current === "MASTER_HUB" ? "cloud-network" : "hotel"} size={19} />}
+                    onToggle={() => setSurface((current) => current === "MASTER_HUB" ? "PROPERTY" : "MASTER_HUB")}
+                  />
                 </>
               )
             ) : (
@@ -1858,7 +1758,7 @@ export function HotelPlatform({
               )
             )}
           </div>
-        </header>
+        </Topbar>
 
         <main className="main-content platform-content">
           {propertyRestricted && !focusedOperationsRole && (
@@ -1907,7 +1807,7 @@ export function HotelPlatform({
               canCreateReservation={canCreateReservation}
               businessUnit={businessUnit}
               command={command}
-              refresh={() => loadState(role, businessUnit, true)}
+              refresh={() => propertyOffline && appMode === "production" ? Promise.resolve() : loadState(role, businessUnit, true)}
               updateState={setState}
               notify={notify}
               changeNetwork={changeNetwork}
@@ -2037,49 +1937,32 @@ export type PlatformViewProps = {
 };
 
 function ViewRouter(props: PlatformViewProps) {
-  if (
-    [
-      "Overview",
-      "Reservations",
-      "Connectivity",
-      "Front Desk",
-      "Guests",
-      "Guest Profiles",
-      "Folios & Billing",
-      "Invoices",
-    ].includes(props.view)
-  )
-    return <CoreHotelViews {...props} />;
-  if (
-    props.view === "Offline Billing" ||
-    props.view === "Verification" ||
-    props.view === "Device Status"
-  )
-    return <OfflineViews {...props} />;
-  if (
-    props.view === "Housekeeping" ||
-    props.view === "Maintenance" ||
-    props.view === "Inventory" ||
-    props.view === "Restaurant Orders"
-  )
-    return <OperationsView {...props} />;
-  if (
-    props.view === "Packages & Tours" ||
-    props.view === "Inquiry CRM" ||
-    props.view === "Integrations" ||
-    props.view === "Reports" ||
-    props.view === "Audit Logs"
-  )
-    return <TravelAdminViews {...props} />;
-  if (isExtraFeatureView(props.view))
-    return (
-      <ExtraFeatureView
-        view={props.view}
-        state={props.state}
-        notify={props.notify}
-      />
-    );
-  return <TravelAdminViews {...props} />;
+  if (props.view === "Overview") {
+    if (props.businessUnit === "TRAVEL") return <TravelOverviewView {...props} />;
+    if (props.role === "HOUSEKEEPING") return <HousekeepingOverviewView {...props} />;
+    if (props.role === "RESTAURANT") return <RestaurantOverviewView {...props} />;
+    return <OverviewView {...props} />;
+  }
+  if (props.view === "Reservations") return <ReservationsView {...props} />;
+  if (props.view === "Connectivity") return <ConnectivityView {...props} />;
+  if (props.view === "Front Desk") return props.productionMode ? <ProductionFrontDesk openReservation={props.openReservation} openStay={props.setSelectedReservation} notify={props.notify} refreshKey={props.state.reservations.map((item) => `${String(item.id)}:${String(item.version)}`).join("|")} /> : <FrontDeskView {...props} />;
+  if (props.view === "Guests") return props.productionMode ? <ProductionGuests notify={props.notify} role={props.role} /> : <GuestsView {...props} />;
+  const views: Partial<Record<ViewName, ComponentType<PlatformViewProps>>> = {
+    "Folios & Billing": FoliosBillingView, "Room Calendar": RoomCalendarView, "Arrivals & Departures": ArrivalsDeparturesView,
+    "Room Types & Rates": RoomTypesRatesView, "Guest Profiles": GuestProfilesView, Invoices: InvoicesView,
+    Housekeeping: HousekeepingView, Maintenance: MaintenanceView, Inventory: InventoryView,
+    "Inventory Movements": InventoryMovementsView, "Lost & Found": LostFoundView, "Restaurant Orders": RestaurantOrdersView,
+    "Room Service": RoomServiceView, "Meal Service": MealServiceView, "Menu Management": MenuManagementView,
+    "Offline Billing": OfflineBillingView, Verification: VerificationView, "Device Status": DeviceStatusView,
+    Integrations: IntegrationsView, Reports: props.businessUnit === "TRAVEL" ? TravelReportsView : ReportsView,
+    "Audit Logs": props.businessUnit === "TRAVEL" ? TravelAuditLogsView : AuditLogsView,
+    "Users & Permissions": UsersPermissionsView, "Properties & Settings": PropertiesSettingsView,
+    "Packages & Tours": PackagesToursView, Tours: ToursView, Participants: ParticipantsView,
+    "Tour Managers": TourManagersView, "Inquiry CRM": InquiryCRMView, "Sales Pipeline": SalesPipelineView,
+    "Follow-ups": FollowUpsView, Communications: CommunicationsView,
+  };
+  const ActiveView = views[props.view];
+  return ActiveView ? <ActiveView {...props} /> : null;
 }
 
 function headingGlyph(eyebrow: string, title: string): AppGlyphName {
@@ -2206,9 +2089,9 @@ function ReconnectBanner({
         <strong>Connection restored</strong>
         <p>
           {Number(summary.offlineWalkInsSynced ?? 0)} walk-in reservation
-          {Number(summary.offlineWalkInsSynced ?? 0) === 1 ? "" : "s"} synced ·{" "}
-          {Number(summary.offlineWalkInsPending ?? 0)} need review ·{" "}
-          {Number(summary.offlineBillsPending ?? 0)} bills uploaded ·{" "}
+          {Number(summary.offlineWalkInsSynced ?? 0) === 1 ? "" : "s"} synced Â·{" "}
+          {Number(summary.offlineWalkInsPending ?? 0)} need review Â·{" "}
+          {Number(summary.offlineBillsPending ?? 0)} bills uploaded Â·{" "}
           {Number(summary.offlineBillsDeferred ?? 0)} bills held on device
         </p>
       </div>
@@ -2256,16 +2139,61 @@ export function AvailabilityGrid({
   onNewBooking: () => void;
   restricted: boolean;
 }) {
-  const dates = [
-    "2026-08-24",
-    "2026-08-25",
-    "2026-08-26",
-    "2026-08-27",
-    "2026-08-28",
-    "2026-08-29",
-    "2026-08-30",
-  ];
+  const [todayKey, setTodayKey] = useState(() => {
+    const now = new Date();
+
+    const year = now.getFullYear();
+    const month = String(now.getMonth() + 1).padStart(2, "0");
+    const day = String(now.getDate()).padStart(2, "0");
+
+    return `${year}-${month}-${day}`;
+  });
+
+  useEffect(() => {
+    const updateCurrentDate = () => {
+      const now = new Date();
+
+      const year = now.getFullYear();
+      const month = String(now.getMonth() + 1).padStart(2, "0");
+      const day = String(now.getDate()).padStart(2, "0");
+
+      const nextTodayKey = `${year}-${month}-${day}`;
+
+      setTodayKey((current) =>
+        current === nextTodayKey ? current : nextTodayKey,
+      );
+    };
+
+    updateCurrentDate();
+
+    const intervalId = window.setInterval(
+      updateCurrentDate,
+      60_000,
+    );
+
+    return () => {
+      window.clearInterval(intervalId);
+    };
+  }, []);
+
+  const dates = Array.from({ length: 7 }, (_, index) => {
+    const [year, month, day] = todayKey.split("-").map(Number);
+
+    const date = new Date(
+      year,
+      month - 1,
+      day + index,
+    );
+
+    const dateYear = date.getFullYear();
+    const dateMonth = String(date.getMonth() + 1).padStart(2, "0");
+    const dateDay = String(date.getDate()).padStart(2, "0");
+
+    return `${dateYear}-${dateMonth}-${dateDay}`;
+  });
+
   const roomTypes = ["Standard", "Deluxe", "Premium", "Suite"];
+
   return (
     <section className="availability-card">
       <div className="availability-header">
@@ -2273,8 +2201,8 @@ export function AvailabilityGrid({
           <p className="section-kicker">Live room inventory</p>
           <h2>Room availability grid</h2>
         </div>
+
         <div>
-          <span className="availability-range">24–30 Aug</span>
           <button
             className="compact-button"
             disabled={restricted}
@@ -2284,6 +2212,7 @@ export function AvailabilityGrid({
           </button>
         </div>
       </div>
+
       <div
         className="availability-grid"
         role="table"
@@ -2295,30 +2224,60 @@ export function AvailabilityGrid({
         >
           Room type
         </div>
-        {dates.map((date) => (
-          <div
-            className="availability-label date-label"
-            role="columnheader"
-            key={date}
-          >
-            <strong>
-              {new Intl.DateTimeFormat("en-IN", { weekday: "short" }).format(
-                new Date(`${date}T00:00:00Z`),
-              )}
-            </strong>
-            <span>{shortDate(date)}</span>
-          </div>
-        ))}
+
+        {dates.map((date) => {
+          const [year, month, day] = date.split("-").map(Number);
+
+          const displayDate = new Date(
+            year,
+            month - 1,
+            day,
+          );
+
+          return (
+            <div
+              className="availability-label date-label"
+              role="columnheader"
+              key={date}
+            >
+              <strong>
+                {new Intl.DateTimeFormat("en-IN", {
+                  weekday: "short",
+                }).format(displayDate)}
+              </strong>
+
+              <span>
+                {new Intl.DateTimeFormat("en-IN", {
+                  day: "2-digit",
+                  month: "short",
+                }).format(displayDate)}
+              </span>
+            </div>
+          );
+        })}
+
         {roomTypes.map((roomType) => {
           const total = state.rooms.filter(
             (room) => room.roomType === roomType,
           ).length;
+
           return (
-            <div className="availability-row" role="row" key={roomType}>
-              <div className="availability-label room-label" role="rowheader">
+            <div
+              className="availability-row"
+              role="row"
+              key={roomType}
+            >
+              <div
+                className="availability-label room-label"
+                role="rowheader"
+              >
                 <strong>{roomType}</strong>
-                <span>{total} rooms</span>
+
+                <span>
+                  {total} {total === 1 ? "room" : "rooms"}
+                </span>
               </div>
+
               {dates.map((date) => {
                 const occupied = state.reservations.filter(
                   (reservation) =>
@@ -2329,13 +2288,19 @@ export function AvailabilityGrid({
                     String(reservation.arrivalDate) <= date &&
                     String(reservation.departureDate) > date,
                 ).length;
-                const available = Math.max(0, total - occupied);
+
+                const available = Math.max(
+                  0,
+                  total - occupied,
+                );
+
                 const tone =
                   available <= 1
                     ? "low"
                     : available <= Math.max(2, Math.round(total / 2))
                       ? "medium"
                       : "high";
+
                 return (
                   <button
                     type="button"
@@ -2344,11 +2309,12 @@ export function AvailabilityGrid({
                     key={date}
                     onClick={onNewBooking}
                     disabled={restricted}
-                    aria-label={`${roomType}, ${shortDate(date)}: ${available} of ${total} available`}
+                    aria-label={`${roomType}, ${date}: ${available} of ${total} available`}
                   >
                     <strong>
                       {available}/{total}
                     </strong>
+
                     <span>available</span>
                   </button>
                 );
@@ -2389,7 +2355,7 @@ export function MoneyInput({
     <label>
       <span>{label}</span>
       <div className="money-input">
-        <b>₹</b>
+        <b>â‚¹</b>
         <input
           type="number"
           min="0"
@@ -2437,7 +2403,7 @@ export function inspectionPresentation(
     summary.inspectionStatus === "DAMAGE_CHARGED"
   )
     return {
-      label: `Damage charged · ${money(summary.chargeAmountPaise)}`,
+      label: `Damage charged Â· ${money(summary.chargeAmountPaise)}`,
       tone: "charged",
       glyph: "charge-receipt" as AppGlyphName,
     };
@@ -2446,7 +2412,7 @@ export function inspectionPresentation(
     summary.inspectionStatus === "DAMAGE_WAIVED"
   )
     return {
-      label: "Damage reviewed · no charge",
+      label: "Damage reviewed Â· no charge",
       tone: "waived",
       glyph: "waived-charge" as AppGlyphName,
     };
@@ -2456,7 +2422,7 @@ export function inspectionPresentation(
   ) {
     const severity = String(summary.severity ?? "LOW").toLowerCase();
     return {
-      label: `Damage · ${severity[0].toUpperCase()}${severity.slice(1)}`,
+      label: `Damage Â· ${severity[0].toUpperCase()}${severity.slice(1)}`,
       tone: severity,
       glyph: "damage-alert" as AppGlyphName,
     };
@@ -2537,7 +2503,7 @@ export function ReservationCompact({ reservation }: { reservation: Row }) {
       <div className="guest-details">
         <strong>{String(reservation.guestName)}</strong>
         <small>
-          {String(reservation.reference)} · {String(reservation.roomType)}
+          {String(reservation.reference)} Â· {String(reservation.roomType)}
         </small>
       </div>
       <div className="room-detail">

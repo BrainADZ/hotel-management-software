@@ -256,19 +256,23 @@ export function ReservationModal({
                 </select>
               </label>
               <label>
-                <span>Nightly rate (paise)</span>
-                <input
-                  type="number"
-                  min="0"
-                  value={form.nightlyRatePaise}
-                  onChange={(event) =>
-                    setForm({
-                      ...form,
-                      nightlyRatePaise: Number(event.target.value),
-                    })
-                  }
-                />
-              </label>
+  <span>Nightly rate (₹)</span>
+
+  <input
+    type="number"
+    min="0"
+    step="1"
+    value={Number(form.nightlyRatePaise ?? 0) / 100}
+    onChange={(event) => {
+      const rupees = Number(event.target.value || 0);
+
+      setForm({
+        ...form,
+        nightlyRatePaise: Math.round(rupees * 100),
+      });
+    }}
+  />
+</label>
               <label>
                 <span>Source</span>
                 <select

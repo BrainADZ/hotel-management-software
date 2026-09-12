@@ -6541,3 +6541,1344 @@ select:disabled {
 .notification-item small { font-size: 13px; }
 .notification-item.is-read { opacity: .65; }
 .notification-button .notification-count { width: auto; height: auto; min-width: 17px; padding: 2px 4px; font-size: 10px; color: white; border-radius: 12px; background: #c72b36; }
+
+/* ============================================================
+   PREMIUM FINANCIAL FOLIO
+   Scoped to FoliosBillingView so existing app styling remains
+   unchanged.
+============================================================ */
+
+.financial-folio-modal {
+  width: min(980px, calc(100vw - 32px));
+  height: min(900px, calc(100vh - 32px));
+  max-height: calc(100vh - 32px);
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  border: 1px solid rgba(63, 82, 65, 0.14);
+  border-radius: 22px;
+  background: #f7f8f5;
+  box-shadow:
+    0 34px 90px rgba(26, 38, 29, 0.24),
+    0 4px 16px rgba(26, 38, 29, 0.08);
+}
+
+.folio-modal-header {
+  flex: 0 0 auto;
+  min-height: 102px;
+  padding: 20px 24px 18px;
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 18px;
+  border-bottom: 1px solid var(--line);
+  background: rgba(255, 255, 255, 0.94);
+}
+
+.folio-modal-header > div:first-child {
+  min-width: 0;
+}
+
+.folio-heading-line {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.folio-heading-line .section-kicker {
+  margin: 0;
+  color: #526d57;
+}
+
+.folio-modal-header h2 {
+  margin: 6px 0 0;
+  color: #202820;
+  font-size: 25px;
+  font-weight: 760;
+  letter-spacing: -0.035em;
+}
+
+.folio-modal-header p:last-child {
+  margin: 7px 0 0;
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 7px;
+  color: var(--muted);
+  font-size: 13px;
+}
+
+.folio-state-pill {
+  min-height: 23px;
+  padding: 0 8px;
+  display: inline-flex;
+  align-items: center;
+  border-radius: 999px;
+  color: #73571f;
+  background: #f7ecd8;
+  font-size: 10px;
+  font-weight: 850;
+  letter-spacing: 0.07em;
+  text-transform: uppercase;
+}
+
+.folio-state-pill.settled,
+.folio-state-pill.closed {
+  color: #3f694b;
+  background: #deebdf;
+}
+
+.folio-state-pill.open {
+  color: #805c24;
+  background: #fbf3e7;
+}
+
+.folio-close-button {
+  width: 42px;
+  height: 42px;
+  flex: 0 0 auto;
+  display: grid;
+  place-items: center;
+  border: 1px solid var(--line-strong);
+  border-radius: 12px;
+  color: #667168;
+  background: #fff;
+  transition: 150ms ease;
+}
+
+.folio-close-button:not(:disabled):hover {
+  color: var(--primary-deep);
+  background: var(--primary-soft);
+  transform: translateY(-1px);
+}
+
+.folio-scroll-area {
+  flex: 1 1 auto;
+  min-height: 0;
+  padding: 18px 22px 26px;
+  overflow-y: auto;
+  scrollbar-width: thin;
+  scrollbar-color: rgba(85, 110, 88, 0.34) transparent;
+}
+
+.folio-summary-strip {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  overflow: hidden;
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  background: #fff;
+  box-shadow: 0 6px 20px rgba(32, 47, 34, 0.04);
+}
+
+.folio-summary-strip > div {
+  min-width: 0;
+  padding: 14px 15px;
+  display: flex;
+  flex-direction: column;
+  border-right: 1px solid var(--line);
+}
+
+.folio-summary-strip > div:last-child {
+  border-right: 0;
+}
+
+.folio-summary-strip span {
+  color: var(--muted);
+  font-size: 11px;
+  font-weight: 750;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.folio-summary-strip strong {
+  margin-top: 5px;
+  overflow: hidden;
+  color: #252d26;
+  font-size: 17px;
+  font-weight: 760;
+  letter-spacing: -0.025em;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.folio-summary-strip > div.attention {
+  background: #fff8ed;
+}
+
+.folio-summary-strip > div.attention strong {
+  color: #9b5f20;
+}
+
+.folio-summary-strip > div.credit {
+  background: #f4f1fb;
+}
+
+.folio-summary-strip > div.credit strong {
+  color: #66528d;
+}
+
+.folio-summary-strip > div.settled {
+  background: #eef7ef;
+}
+
+.folio-summary-strip > div.settled strong {
+  color: #3f6c4d;
+}
+
+.folio-section {
+  margin-top: 16px;
+  padding: 17px;
+  border: 1px solid var(--line);
+  border-radius: 15px;
+  background: #fff;
+  box-shadow: 0 5px 18px rgba(31, 46, 33, 0.035);
+}
+
+.folio-section-heading {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.folio-section-heading > div:first-child {
+  min-width: 0;
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+}
+
+.folio-section-index {
+  width: 27px;
+  height: 27px;
+  flex: 0 0 auto;
+  display: grid;
+  place-items: center;
+  border-radius: 8px;
+  color: #526f57;
+  background: #edf3eb;
+  font-size: 10px;
+  font-weight: 850;
+}
+
+.folio-section-heading h3 {
+  margin: 0;
+  color: #222b23;
+  font-size: 15px;
+  font-weight: 760;
+  letter-spacing: -0.02em;
+}
+
+.folio-section-heading p {
+  margin: 4px 0 0;
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.4;
+}
+
+.folio-tax-copy {
+  flex: 0 0 auto;
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.folio-charge-table {
+  margin-top: 14px;
+  overflow: hidden;
+  border: 1px solid var(--line);
+  border-radius: 11px;
+}
+
+.folio-charge-table table {
+  width: 100%;
+  min-width: 0;
+  table-layout: fixed;
+  border-collapse: collapse;
+}
+
+.folio-charge-table th {
+  height: 35px;
+  padding: 0 12px;
+  color: #6a756c;
+  background: #f5f7f3;
+  border-bottom: 1px solid var(--line);
+  font-size: 10px;
+  font-weight: 850;
+  letter-spacing: 0.065em;
+  text-align: left;
+  text-transform: uppercase;
+}
+
+.folio-charge-table th:nth-child(1) {
+  width: 15%;
+}
+
+.folio-charge-table th:nth-child(2) {
+  width: 38%;
+}
+
+.folio-charge-table th:nth-child(3),
+.folio-charge-table th:nth-child(4),
+.folio-charge-table th:nth-child(5) {
+  width: 15.66%;
+  text-align: right;
+}
+
+.folio-charge-table td {
+  min-height: 52px;
+  padding: 11px 12px;
+  border-bottom: 1px solid var(--line);
+  color: #303932;
+  font-size: 12px;
+  vertical-align: middle;
+}
+
+.folio-charge-table tbody tr:last-child td {
+  border-bottom: 0;
+}
+
+.folio-charge-table td:nth-child(3),
+.folio-charge-table td:nth-child(4),
+.folio-charge-table td:nth-child(5) {
+  text-align: right;
+  white-space: nowrap;
+}
+
+.folio-charge-table td:nth-child(2) strong,
+.folio-charge-table td:nth-child(2) small {
+  display: block;
+}
+
+.folio-charge-table td:nth-child(2) strong {
+  font-size: 12px;
+  font-weight: 720;
+}
+
+.folio-charge-table td:nth-child(2) small {
+  margin-top: 4px;
+  color: var(--muted);
+  font-size: 10px;
+  font-weight: 760;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.folio-charge-table tr.negative {
+  background: #faf8fc;
+}
+
+.folio-charge-table tr.negative td:last-child strong {
+  color: #71558b;
+}
+
+.folio-empty-row {
+  padding: 16px;
+  color: var(--muted);
+  text-align: center;
+}
+
+.folio-tax-breakup {
+  margin-top: 10px;
+  padding: 10px 12px;
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 15px;
+  border-radius: 9px;
+  color: var(--muted);
+  background: #f8f9f7;
+  font-size: 11px;
+}
+
+.folio-tax-breakup strong {
+  margin-left: 4px;
+  color: #39423b;
+}
+
+.folio-net-total {
+  margin-left: auto;
+  color: #556058;
+}
+
+.folio-net-total strong {
+  color: #243027;
+  font-size: 13px;
+}
+
+.folio-net-received {
+  flex: 0 0 auto;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+}
+
+.folio-net-received span {
+  color: var(--muted);
+  font-size: 10px;
+  font-weight: 750;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.folio-net-received strong {
+  margin-top: 3px;
+  font-size: 16px;
+}
+
+.folio-credit-banner {
+  margin-top: 13px;
+  padding: 10px 11px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  border: 1px solid #ded7ef;
+  border-radius: 10px;
+  color: #604f7f;
+  background: #f7f4fc;
+}
+
+.folio-credit-banner > div {
+  min-width: 0;
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+}
+
+.folio-credit-banner > div > span {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.folio-credit-banner strong {
+  font-size: 12px;
+}
+
+.folio-credit-banner small {
+  margin-top: 2px;
+  color: #7a6c93;
+  font-size: 11px;
+}
+
+.folio-payment-list {
+  margin-top: 13px;
+  display: grid;
+  gap: 8px;
+}
+
+.folio-payment-row {
+  min-height: 73px;
+  padding: 10px 11px;
+  display: grid;
+  grid-template-columns: 38px minmax(0, 1fr) auto auto;
+  align-items: center;
+  gap: 11px;
+  border: 1px solid var(--line);
+  border-radius: 11px;
+  background: #fff;
+  transition: 150ms ease;
+}
+
+.folio-payment-row:hover {
+  border-color: var(--line-strong);
+  box-shadow: 0 4px 12px rgba(35, 52, 38, 0.04);
+}
+
+.folio-payment-row.reversed {
+  opacity: 0.72;
+  background: #f7f7f5;
+}
+
+.folio-payment-row.refund {
+  background: #fffaf5;
+}
+
+.folio-payment-icon {
+  width: 36px;
+  height: 36px;
+  display: grid;
+  place-items: center;
+  border-radius: 10px;
+  color: #456b50;
+  background: #e8f1e6;
+}
+
+.folio-payment-row.reversed .folio-payment-icon {
+  color: #707773;
+  background: #eceeeb;
+}
+
+.folio-payment-row.refund .folio-payment-icon {
+  color: #8a642f;
+  background: #fbf0dd;
+}
+
+.folio-payment-copy {
+  min-width: 0;
+}
+
+.folio-payment-copy > div {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 7px;
+}
+
+.folio-payment-copy > div > strong {
+  font-size: 12px;
+  font-weight: 760;
+}
+
+.folio-payment-copy > span {
+  margin-top: 3px;
+  display: block;
+  overflow: hidden;
+  color: #404940;
+  font-size: 11px;
+  font-weight: 700;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.folio-payment-copy > small {
+  margin-top: 3px;
+  display: block;
+  color: var(--muted);
+  font-size: 10px;
+}
+
+.payment-state {
+  min-height: 19px;
+  padding: 0 6px;
+  display: inline-flex;
+  align-items: center;
+  border-radius: 999px;
+  color: #41694d;
+  background: #e1eee2;
+  font-size: 9px;
+  font-weight: 850;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.payment-state.reversed {
+  color: #69716b;
+  background: #e9ece8;
+}
+
+.payment-state.refunded {
+  color: #805d2a;
+  background: #f9ead0;
+}
+
+.folio-payment-amount {
+  min-width: 86px;
+  color: #263027;
+  font-size: 13px;
+  text-align: right;
+  white-space: nowrap;
+}
+
+.folio-payment-amount.refund-amount {
+  color: #91672e;
+}
+
+.folio-payment-actions {
+  min-width: 150px;
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 5px;
+}
+
+.folio-action-link {
+  min-height: 28px;
+  padding: 0 8px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid var(--line);
+  border-radius: 7px;
+  color: #4b6350;
+  background: #fff;
+  font-size: 10px;
+  font-weight: 800;
+  text-decoration: none;
+  white-space: nowrap;
+}
+
+button.folio-action-link {
+  cursor: pointer;
+}
+
+.folio-action-link:hover {
+  border-color: var(--line-strong);
+  background: var(--panel-soft);
+}
+
+.folio-action-link.danger {
+  color: #9b4b4d;
+}
+
+.folio-empty-payment {
+  padding: 16px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  border: 1px dashed var(--line-strong);
+  border-radius: 10px;
+  color: var(--muted);
+}
+
+.folio-empty-payment > div {
+  display: flex;
+  flex-direction: column;
+}
+
+.folio-empty-payment strong {
+  color: #3a453c;
+  font-size: 12px;
+}
+
+.folio-empty-payment span {
+  margin-top: 2px;
+  font-size: 11px;
+}
+
+.folio-settlement-grid {
+  margin-top: 13px;
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.folio-settlement-card {
+  min-height: 76px;
+  padding: 11px;
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  border: 1px solid var(--line);
+  border-radius: 11px;
+  color: #2c362e;
+  background: #fff;
+  text-align: left;
+  transition: 150ms ease;
+}
+
+.folio-settlement-card:not(:disabled):hover {
+  border-color: var(--line-strong);
+  background: #f8faf7;
+  transform: translateY(-1px);
+}
+
+.folio-settlement-card.primary {
+  color: #f9fbf7;
+  border-color: var(--primary);
+  background: var(--primary);
+  box-shadow: 0 7px 18px rgba(71, 104, 76, 0.16);
+}
+
+.folio-settlement-card.primary:not(:disabled):hover {
+  color: #fff;
+  background: var(--primary-deep);
+}
+
+.folio-settlement-icon {
+  width: 34px;
+  height: 34px;
+  flex: 0 0 auto;
+  display: grid;
+  place-items: center;
+  border-radius: 9px;
+  color: #526c57;
+  background: #edf2eb;
+  font-size: 17px;
+  font-weight: 850;
+}
+
+.folio-settlement-card.primary .folio-settlement-icon {
+  color: #fff;
+  background: rgba(255, 255, 255, 0.13);
+}
+
+.folio-settlement-card > span:last-child {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.folio-settlement-card strong {
+  font-size: 11px;
+  font-weight: 800;
+}
+
+.folio-settlement-card small {
+  margin-top: 3px;
+  color: var(--muted);
+  font-size: 9px;
+  line-height: 1.35;
+}
+
+.folio-settlement-card.primary small {
+  color: rgba(255, 255, 255, 0.76);
+}
+
+.folio-final-actions {
+  margin-top: 13px;
+  padding-top: 13px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+  border-top: 1px solid var(--line);
+}
+
+.folio-final-actions > div:first-child {
+  display: flex;
+  flex-direction: column;
+}
+
+.folio-balance-label {
+  color: var(--muted);
+  font-size: 10px;
+  font-weight: 750;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.folio-final-actions > div:first-child strong {
+  margin-top: 3px;
+  font-size: 16px;
+}
+
+.folio-balance-due {
+  color: #996026;
+}
+
+.folio-balance-credit {
+  color: #66528d;
+}
+
+.folio-balance-settled {
+  color: #426d4e;
+}
+
+.folio-final-buttons {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  flex-wrap: wrap;
+  gap: 7px;
+}
+
+.folio-checkout-button {
+  min-width: 132px;
+}
+
+.folio-invoice-history {
+  margin-top: 12px;
+  padding: 9px 10px;
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+  border-radius: 8px;
+  background: #f7f8f5;
+}
+
+.folio-invoice-history > span {
+  color: var(--muted);
+  font-size: 10px;
+  font-weight: 800;
+  text-transform: uppercase;
+}
+
+.folio-invoice-history > div {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 7px;
+}
+
+.folio-invoice-history a {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  color: var(--primary-deep);
+  font-size: 10px;
+  font-weight: 800;
+  text-decoration: none;
+}
+
+/* ----------------------------
+   Nested action modal
+----------------------------- */
+
+.folio-submodal-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 150;
+  padding: 20px;
+  display: grid;
+  place-items: center;
+  background: rgba(24, 33, 26, 0.48);
+  backdrop-filter: blur(6px);
+}
+
+.folio-submodal {
+  width: min(520px, 100%);
+  max-height: calc(100vh - 40px);
+  overflow-y: auto;
+  border: 1px solid rgba(65, 87, 68, 0.16);
+  border-radius: 18px;
+  background: #fff;
+  box-shadow: 0 28px 80px rgba(25, 36, 27, 0.28);
+}
+
+.folio-submodal > header {
+  min-height: 78px;
+  padding: 17px 18px 15px;
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+  border-bottom: 1px solid var(--line);
+}
+
+.folio-submodal > header > div {
+  min-width: 0;
+}
+
+.folio-submodal > header span {
+  color: var(--primary-deep);
+  font-size: 9px;
+  font-weight: 850;
+  letter-spacing: 0.11em;
+}
+
+.folio-submodal > header h3 {
+  margin: 5px 0 0;
+  color: #202920;
+  font-size: 20px;
+  font-weight: 760;
+  letter-spacing: -0.03em;
+}
+
+.folio-submodal-close {
+  width: 34px;
+  height: 34px;
+  display: grid;
+  place-items: center;
+  border: 1px solid var(--line);
+  border-radius: 9px;
+  color: var(--muted);
+  background: #fff;
+}
+
+.folio-form-body {
+  padding: 17px 18px 18px;
+}
+
+.folio-form-error {
+  margin: 14px 18px 0;
+  padding: 9px 10px;
+  display: flex;
+  align-items: flex-start;
+  gap: 7px;
+  border: 1px solid #efc9ca;
+  border-radius: 9px;
+  color: #934548;
+  background: #fff1f1;
+  font-size: 11px;
+  line-height: 1.4;
+}
+
+.folio-field-label {
+  display: block;
+  margin-bottom: 7px;
+  color: #576259;
+  font-size: 11px;
+  font-weight: 800;
+}
+
+.folio-payment-methods {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 7px;
+}
+
+.folio-payment-methods > button {
+  min-height: 62px;
+  padding: 8px 9px;
+  position: relative;
+  display: grid;
+  grid-template-columns: 31px minmax(0, 1fr) 17px;
+  align-items: center;
+  gap: 7px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  color: #334036;
+  background: #fff;
+  text-align: left;
+  transition: 150ms ease;
+}
+
+.folio-payment-methods > button:hover {
+  border-color: var(--line-strong);
+  background: #f9faf8;
+}
+
+.folio-payment-methods > button.selected {
+  border-color: var(--primary);
+  background: var(--primary-soft);
+  box-shadow: 0 0 0 2px rgba(111, 128, 103, 0.08);
+}
+
+.folio-payment-methods > button > span:first-child {
+  width: 31px;
+  height: 31px;
+  display: grid;
+  place-items: center;
+  border-radius: 8px;
+  color: var(--primary-deep);
+  background: #eef3ec;
+}
+
+.folio-payment-methods > button > span:nth-child(2) {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.folio-payment-methods strong {
+  font-size: 11px;
+}
+
+.folio-payment-methods small {
+  margin-top: 2px;
+  color: var(--muted);
+  font-size: 9px;
+}
+
+.folio-payment-methods > button > svg {
+  color: var(--primary);
+}
+
+.folio-form-field {
+  margin-top: 13px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.folio-form-field > span {
+  color: #4f5d52;
+  font-size: 11px;
+  font-weight: 800;
+}
+
+.folio-form-field > small {
+  color: var(--muted);
+  font-size: 10px;
+  line-height: 1.4;
+}
+
+.folio-form-field > input,
+.folio-form-field > select,
+.folio-form-field > textarea,
+.folio-money-input {
+  width: 100%;
+  border: 1px solid var(--line-strong);
+  border-radius: 9px;
+  color: #273129;
+  background: #fff;
+  transition: 150ms ease;
+}
+
+.folio-form-field > input,
+.folio-form-field > select {
+  height: 39px;
+  padding: 0 10px;
+}
+
+.folio-form-field > textarea {
+  padding: 9px 10px;
+  resize: vertical;
+}
+
+.folio-form-field > input:focus,
+.folio-form-field > select:focus,
+.folio-form-field > textarea:focus,
+.folio-money-input:focus-within {
+  outline: 0;
+  border-color: var(--primary);
+  box-shadow: 0 0 0 3px rgba(111, 128, 103, 0.1);
+}
+
+.folio-money-input {
+  height: 44px;
+  display: grid;
+  grid-template-columns: 38px minmax(0, 1fr);
+  align-items: center;
+  overflow: hidden;
+}
+
+.folio-money-input > span {
+  height: 100%;
+  display: grid;
+  place-items: center;
+  border-right: 1px solid var(--line);
+  color: var(--primary-deep);
+  background: #f6f8f4;
+  font-size: 14px;
+  font-weight: 850;
+}
+
+.folio-money-input input {
+  width: 100%;
+  height: 100%;
+  padding: 0 11px;
+  border: 0;
+  outline: 0;
+  color: #243026;
+  background: transparent;
+  font-size: 15px;
+  font-weight: 700;
+}
+
+.folio-segmented-control {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  padding: 3px;
+  border: 1px solid var(--line);
+  border-radius: 9px;
+  background: #f4f6f2;
+}
+
+.folio-segmented-control button {
+  min-height: 34px;
+  border: 0;
+  border-radius: 7px;
+  color: var(--muted);
+  background: transparent;
+  font-size: 11px;
+  font-weight: 800;
+}
+
+.folio-segmented-control button.selected {
+  color: var(--primary-deep);
+  background: #fff;
+  box-shadow: 0 2px 7px rgba(35, 51, 38, 0.08);
+}
+
+.folio-operation-summary {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  overflow: hidden;
+  border: 1px solid var(--line);
+  border-radius: 9px;
+}
+
+.folio-operation-summary > span {
+  min-width: 0;
+  padding: 9px;
+  display: flex;
+  flex-direction: column;
+  border-right: 1px solid var(--line);
+}
+
+.folio-operation-summary > span:last-child {
+  border-right: 0;
+}
+
+.folio-operation-summary small {
+  color: var(--muted);
+  font-size: 9px;
+  text-transform: uppercase;
+}
+
+.folio-operation-summary strong {
+  margin-top: 3px;
+  overflow: hidden;
+  font-size: 11px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.folio-warning-panel,
+.folio-success-panel {
+  padding: 10px;
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  border: 1px solid #ecd2a7;
+  border-radius: 10px;
+  color: #805c24;
+  background: #fff8eb;
+}
+
+.folio-warning-panel.credit {
+  color: #65517f;
+  border-color: #ddd2ec;
+  background: #f7f3fb;
+}
+
+.folio-success-panel {
+  color: #41684c;
+  border-color: #cadecc;
+  background: #eff7ef;
+}
+
+.folio-warning-panel > div,
+.folio-success-panel > div {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.folio-warning-panel strong,
+.folio-success-panel strong {
+  font-size: 11px;
+}
+
+.folio-warning-panel span,
+.folio-success-panel span {
+  margin-top: 3px;
+  font-size: 10px;
+  line-height: 1.45;
+}
+
+.folio-checkout-summary {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  overflow: hidden;
+  border: 1px solid var(--line);
+  border-radius: 9px;
+}
+
+.folio-checkout-summary > div {
+  padding: 10px;
+  display: flex;
+  flex-direction: column;
+  border-right: 1px solid var(--line);
+}
+
+.folio-checkout-summary > div:last-child {
+  border-right: 0;
+}
+
+.folio-checkout-summary span {
+  color: var(--muted);
+  font-size: 9px;
+  text-transform: uppercase;
+}
+
+.folio-checkout-summary strong {
+  margin-top: 4px;
+  font-size: 13px;
+}
+
+.folio-checkout-summary > div.due {
+  background: #fff7eb;
+}
+
+.folio-checkout-summary > div.due strong {
+  color: #966024;
+}
+
+.folio-checkout-summary > div.credit {
+  background: #f7f3fb;
+}
+
+.folio-checkout-summary > div.credit strong {
+  color: #66528d;
+}
+
+.folio-checkout-summary > div.settled {
+  background: #eef7ef;
+}
+
+.folio-success-panel,
+.folio-warning-panel {
+  margin-top: 12px;
+}
+
+.folio-checkout-blocked {
+  margin-top: 12px;
+  padding: 9px 10px;
+  border-radius: 8px;
+  color: #92464a;
+  background: #fff0f0;
+  font-size: 10px;
+  line-height: 1.45;
+}
+
+.folio-form-actions {
+  margin-top: 17px;
+  padding-top: 13px;
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  flex-wrap: wrap;
+  gap: 7px;
+  border-top: 1px solid var(--line);
+}
+
+.folio-danger-button {
+  min-height: 35px;
+  padding: 0 12px;
+  border: 1px solid #c96a6d;
+  border-radius: 8px;
+  color: #fff;
+  background: #b94c53;
+  font-size: 11px;
+  font-weight: 800;
+}
+
+.folio-danger-button:not(:disabled):hover {
+  background: #a84249;
+}
+
+/* ----------------------------
+   Responsive
+----------------------------- */
+
+@media (max-width: 820px) {
+  .financial-folio-modal {
+    width: calc(100vw - 18px);
+    height: calc(100vh - 18px);
+    max-height: calc(100vh - 18px);
+    border-radius: 17px;
+  }
+
+  .folio-modal-header {
+    padding: 16px;
+  }
+
+  .folio-scroll-area {
+    padding: 13px;
+  }
+
+  .folio-summary-strip {
+    grid-template-columns: repeat(2, 1fr);
+  }
+
+  .folio-summary-strip > div {
+    border-bottom: 1px solid var(--line);
+  }
+
+  .folio-summary-strip > div:nth-child(2n) {
+    border-right: 0;
+  }
+
+  .folio-summary-strip > div:last-child {
+    grid-column: 1 / -1;
+    border-bottom: 0;
+  }
+
+  .folio-charge-table {
+    overflow-x: auto;
+  }
+
+  .folio-charge-table table {
+    min-width: 640px;
+  }
+
+  .folio-payment-row {
+    grid-template-columns: 36px minmax(0, 1fr) auto;
+  }
+
+  .folio-payment-actions {
+    grid-column: 2 / -1;
+    min-width: 0;
+    justify-content: flex-start;
+  }
+
+  .folio-settlement-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .folio-final-actions {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .folio-final-buttons {
+    justify-content: flex-start;
+  }
+}
+
+@media (max-width: 560px) {
+  .folio-modal-header h2 {
+    font-size: 21px;
+  }
+
+  .folio-section {
+    padding: 13px;
+  }
+
+  .folio-section-heading {
+    flex-direction: column;
+  }
+
+  .folio-tax-copy,
+  .folio-net-received {
+    align-items: flex-start;
+  }
+
+  .folio-tax-breakup {
+    gap: 9px;
+  }
+
+  .folio-net-total {
+    width: 100%;
+    margin-left: 0;
+  }
+
+  .folio-payment-row {
+    grid-template-columns: 34px minmax(0, 1fr);
+  }
+
+  .folio-payment-amount {
+    grid-column: 2;
+    text-align: left;
+  }
+
+  .folio-payment-actions {
+    grid-column: 2;
+  }
+
+  .folio-settlement-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .folio-payment-methods {
+    grid-template-columns: 1fr;
+  }
+
+  .folio-operation-summary,
+  .folio-checkout-summary {
+    grid-template-columns: 1fr;
+  }
+
+  .folio-operation-summary > span,
+  .folio-checkout-summary > div {
+    border-right: 0;
+    border-bottom: 1px solid var(--line);
+  }
+
+  .folio-operation-summary > span:last-child,
+  .folio-checkout-summary > div:last-child {
+    border-bottom: 0;
+  }
+
+  .folio-form-actions > button,
+  .folio-form-actions > a {
+    flex: 1 1 auto;
+  }
+}

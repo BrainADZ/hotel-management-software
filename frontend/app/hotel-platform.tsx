@@ -183,6 +183,7 @@ export type ReservationInspectionSummary = {
   taskStatus: string;
   taskOutcome?: string | null;
   taskVersion: number;
+  assignedTo?: string | null;
   inspectionId?: string | null;
   inspectionStatus:
     | "PENDING"
@@ -613,7 +614,9 @@ function productionShell(
     restaurantOrders: (operations.restaurantOrders as Row[]) ?? [],
     restaurantMealBookings: (operations.restaurantMealBookings as Row[]) ?? [],
     restaurantArrivals: [],
-    reservationInspectionSummaries: [],
+    reservationInspectionSummaries:
+  (operations.reservationInspectionSummaries as ReservationInspectionSummary[]) ??
+  [],
     damageReports: (operations.damageReports as Row[]) ?? [],
     packages: (operations.packages as Row[]) ?? [],
     inquiries: (operations.inquiries as Row[]) ?? [],
@@ -2379,10 +2382,10 @@ export function inspectionPresentation(
   summary: ReservationInspectionSummary | undefined,
   reservationStatus: string,
 ) {
-  if (!summary)
+  if (!summary) {
     return reservationStatus === "CHECKED_OUT"
       ? {
-          label: "Awaiting housekeeping",
+          label: "Cleaning task missing",
           tone: "pending",
           glyph: "housekeeping" as AppGlyphName,
         }
@@ -2391,41 +2394,136 @@ export function inspectionPresentation(
           tone: "neutral",
           glyph: "room-ready" as AppGlyphName,
         };
+  }
+
   if (
     summary.damageStatus === "CHARGED" ||
     summary.inspectionStatus === "DAMAGE_CHARGED"
-  )
+  ) {
     return {
-      label: `Damage charged Â· ${money(summary.chargeAmountPaise)}`,
+      label: `Damage charged · ${money(summary.chargeAmountPaise)}`,
       tone: "charged",
       glyph: "charge-receipt" as AppGlyphName,
     };
+  }
+
   if (
     summary.damageStatus === "WAIVED" ||
     summary.inspectionStatus === "DAMAGE_WAIVED"
-  )
+  ) {
     return {
-      label: "Damage reviewed Â· no charge",
+      label: "Damage reviewed · no charge",
       tone: "waived",
       glyph: "waived-charge" as AppGlyphName,
     };
+  }
+
   if (
     summary.result === "DAMAGE_FOUND" ||
-    ["DAMAGE_REVIEW", "DAMAGE_REPORTED"].includes(summary.inspectionStatus)
+    ["DAMAGE_REVIEW", "DAMAGE_REPORTED"].includes(
+      summary.inspectionStatus,
+    )
   ) {
-    const severity = String(summary.severity ?? "LOW").toLowerCase();
+    const severity = String(
+      summary.severity ?? "LOW",
+    ).toLowerCase();
+
     return {
-      label: `Damage Â· ${severity[0].toUpperCase()}${severity.slice(1)}`,
+      label: `Damage · ${severity[0].toUpperCase()}${severity.slice(1)}`,
       tone: severity,
       glyph: "damage-alert" as AppGlyphName,
     };
   }
-  if (summary.result === "NO_DAMAGE" || summary.inspectionStatus === "CLEARED")
+
+  const taskStatus = String(
+    summary.taskStatus ?? "",
+  ).toUpperCase();
+
+  const outcome = String(
+    summary.taskOutcome ?? "",
+  ).toUpperCase();
+
+  if (taskStatus === "UNASSIGNED") {
+    return {
+      label: "Housekeeping unassigned",
+      tone: "pending",
+      glyph: "housekeeping" as AppGlyphName,
+    };
+  }
+
+  if (
+    taskStatus === "ASSIGNED" ||
+    taskStatus === "PENDING"
+  ) {
+    return {
+      label: summary.assignedTo
+        ? `Assigned · ${summary.assignedTo}`
+        : "Housekeeping assigned",
+      tone: "pending",
+      glyph: "housekeeping" as AppGlyphName,
+    };
+  }
+
+  if (taskStatus === "DEFERRED") {
+    return {
+      label: "Housekeeping · come later",
+      tone: "pending",
+      glyph: "housekeeping" as AppGlyphName,
+    };
+  }
+
+  if (taskStatus === "NEEDS_INSPECTION") {
+    return {
+      label: "Inspection pending",
+      tone: "pending",
+      glyph: "damage-alert" as AppGlyphName,
+    };
+  }
+
+  if (
+    taskStatus === "COMPLETED" &&
+    outcome === "DONE"
+  ) {
+    return {
+      label: "Housekeeping complete",
+      tone: "cleared",
+      glyph: "room-ready" as AppGlyphName,
+    };
+  }
+
+  if (
+    taskStatus === "COMPLETED" &&
+    outcome === "NO_DAMAGE"
+  ) {
+    return {
+      label: "Inspection cleared",
+      tone: "cleared",
+      glyph: "room-ready" as AppGlyphName,
+    };
+  }
+
+  if (
+    taskStatus === "COMPLETED" &&
+    outcome === "GUEST_REFUSED"
+  ) {
+    return {
+      label: "Guest refused housekeeping",
+      tone: "neutral",
+      glyph: "housekeeping" as AppGlyphName,
+    };
+  }
+
+  if (
+    summary.result === "NO_DAMAGE" ||
+    summary.inspectionStatus === "CLEARED"
+  ) {
     return {
       label: "Housekeeping cleared",
       tone: "cleared",
       glyph: "room-ready" as AppGlyphName,
     };
+  }
+
   return {
     label: "Awaiting housekeeping",
     tone: "pending",

@@ -694,332 +694,805 @@ function ProductionReservationActions({
   reservation: Row;
   rooms: Row[];
   canRestore: boolean;
-  onCommand: (payload: Row, message: string) => Promise<void>;
+  onCommand: (
+    payload: Row,
+    message: string,
+  ) => Promise<void>;
 }) {
-  const status = String(reservation.status);
-  const [dialog, setDialog] = useState<
-    | "EDIT"
-    | "DATES"
-    | "EXTEND_STAY"
-    | "SHORTEN_STAY"
-    | "CHANGE_ROOM"
-    | "UPGRADE_ROOM"
-    | "CANCEL"
-    | null
-  >(null);
-  const [form, setForm] = useState<Row>({});
-  const run = (type: string, details: Row = {}) =>
+  const status = String(
+    reservation.status,
+  );
+
+  const [dialog, setDialog] =
+    useState<
+      | "EDIT"
+      | "DATES"
+      | "EXTEND_STAY"
+      | "SHORTEN_STAY"
+      | "CHANGE_ROOM"
+      | "MOVE_ROOM"
+      | "UPGRADE_ROOM"
+      | "CANCEL"
+      | null
+    >(null);
+
+  const [form, setForm] =
+    useState<Row>({});
+
+  const run = (
+    type: string,
+    details: Row = {},
+  ) =>
     onCommand(
-      { action: type, type, reservationId: reservation.id, ...details },
-      `${String(reservation.reference)} updated.`,
+      {
+        action: type,
+        type,
+        reservationId:
+          reservation.id,
+        ...details,
+      },
+      `${String(
+        reservation.reference,
+      )} updated.`,
     );
-  const open = (next: NonNullable<typeof dialog>) => {
+
+  const open = (
+    next: NonNullable<
+      typeof dialog
+    >,
+  ) => {
+    const firstAlternativeRoom =
+      rooms.find(
+        (room) =>
+          String(room.id) !==
+          String(
+            reservation.roomId,
+          ),
+      );
+
+    const roomAction =
+      next === "CHANGE_ROOM" ||
+      next === "MOVE_ROOM" ||
+      next === "UPGRADE_ROOM";
+
     setForm({
-      adults: reservation.adults ?? 1,
-      children: reservation.children ?? 0,
-      specialRequests: reservation.specialRequests ?? "",
-      internalNotes: reservation.internalNotes ?? "",
-      arrivalDate: reservation.arrivalDate,
-      departureDate: reservation.departureDate,
-      roomId: reservation.roomId ?? "",
+      adults:
+        reservation.adults ?? 1,
+
+      children:
+        reservation.children ?? 0,
+
+      specialRequests:
+        reservation.specialRequests ??
+        "",
+
+      internalNotes:
+        reservation.internalNotes ??
+        "",
+
+      arrivalDate:
+        reservation.arrivalDate,
+
+      departureDate:
+        reservation.departureDate,
+
+      roomId: roomAction
+        ? firstAlternativeRoom?.id ??
+          ""
+        : reservation.roomId ??
+          "",
+
       reason: "",
     });
+
     setDialog(next);
   };
-  async function submit(event: FormEvent) {
+
+  async function submit(
+    event: FormEvent,
+  ) {
     event.preventDefault();
-    if (!dialog) return;
-    if (dialog === "EDIT")
+
+    if (!dialog) {
+      return;
+    }
+
+    if (dialog === "EDIT") {
       await onCommand(
         {
-          action: "EDIT_RESERVATION",
-          reservationId: reservation.id,
+          action:
+            "EDIT_RESERVATION",
+
+          reservationId:
+            reservation.id,
+
           changes: {
-            adults: Number(form.adults),
-            children: Number(form.children),
-            specialRequests: form.specialRequests,
-            internalNotes: form.internalNotes,
+            adults: Number(
+              form.adults,
+            ),
+
+            children: Number(
+              form.children,
+            ),
+
+            specialRequests:
+              form.specialRequests,
+
+            internalNotes:
+              form.internalNotes,
           },
         },
         "Reservation details updated.",
       );
-    else if (dialog === "DATES")
-      await run("CHANGE_DATES", {
-        arrivalDate: form.arrivalDate,
-        departureDate: form.departureDate,
-      });
-    else if (dialog === "EXTEND_STAY" || dialog === "SHORTEN_STAY")
-      await run(dialog, { departureDate: form.departureDate });
-    else if (dialog === "CHANGE_ROOM" || dialog === "UPGRADE_ROOM") {
-      const room = rooms.find(
-        (item) => String(item.id) === String(form.roomId),
+    } else if (
+      dialog === "DATES"
+    ) {
+      await run(
+        "CHANGE_DATES",
+        {
+          arrivalDate:
+            form.arrivalDate,
+
+          departureDate:
+            form.departureDate,
+        },
       );
-      if (room) await run(dialog, { roomId: room.id, roomType: room.roomType });
-    } else if (dialog === "CANCEL")
-      await run("CANCEL", { reason: form.reason });
+    } else if (
+      dialog ===
+        "EXTEND_STAY" ||
+      dialog ===
+        "SHORTEN_STAY"
+    ) {
+      await run(dialog, {
+        departureDate:
+          form.departureDate,
+      });
+    } else if (
+      dialog === "MOVE_ROOM"
+    ) {
+      const room = rooms.find(
+        (item) =>
+          String(item.id) ===
+          String(form.roomId),
+      );
+
+      if (!room) {
+        return;
+      }
+
+      await run("MOVE_ROOM", {
+        roomId: room.id,
+
+        reason: String(
+          form.reason ?? "",
+        ).trim(),
+      });
+    } else if (
+      dialog ===
+        "CHANGE_ROOM" ||
+      dialog ===
+        "UPGRADE_ROOM"
+    ) {
+      const room = rooms.find(
+        (item) =>
+          String(item.id) ===
+          String(form.roomId),
+      );
+
+      if (!room) {
+        return;
+      }
+
+      await run(dialog, {
+        roomId: room.id,
+        roomType:
+          room.roomType,
+      });
+    } else if (
+      dialog === "CANCEL"
+    ) {
+      await run("CANCEL", {
+        reason: form.reason,
+      });
+    }
+
+    setDialog(null);
   }
+
+  const destinationRooms =
+    rooms.filter(
+      (room) =>
+        String(room.id) !==
+        String(
+          reservation.roomId,
+        ),
+    );
+
   return (
     <>
       <div className="drawer-actions">
-        {["PENDING", "HOLD", "CONFIRMED", "CHECKED_IN"].includes(status) && (
-          <button className="secondary-button" onClick={() => open("EDIT")}>
-            {status === "CHECKED_IN"
+        {[
+          "PENDING",
+          "HOLD",
+          "CONFIRMED",
+          "CHECKED_IN",
+        ].includes(status) && (
+          <button
+            className="secondary-button"
+            onClick={() =>
+              open("EDIT")
+            }
+          >
+            {status ===
+            "CHECKED_IN"
               ? "Edit guest count / notes"
               : "Edit reservation"}
           </button>
         )}
-        {["PENDING", "CONFIRMED"].includes(status) && (
-          <button className="secondary-button" onClick={() => open("DATES")}>
+
+        {[
+          "PENDING",
+          "CONFIRMED",
+        ].includes(status) && (
+          <button
+            className="secondary-button"
+            onClick={() =>
+              open("DATES")
+            }
+          >
             Change dates
           </button>
         )}
-        {["PENDING", "CONFIRMED", "CHECKED_IN"].includes(status) && (
+
+        {[
+          "PENDING",
+          "CONFIRMED",
+        ].includes(status) && (
           <button
             className="secondary-button"
-            onClick={() => open("CHANGE_ROOM")}
+            onClick={() =>
+              open("CHANGE_ROOM")
+            }
           >
             Change room
           </button>
         )}
-        {["PENDING", "CONFIRMED", "CHECKED_IN"].includes(status) && (
+
+        {status ===
+          "CHECKED_IN" && (
           <button
             className="secondary-button"
-            onClick={() => open("UPGRADE_ROOM")}
+            onClick={() =>
+              open("MOVE_ROOM")
+            }
+          >
+            Move room
+          </button>
+        )}
+
+        {[
+          "PENDING",
+          "CONFIRMED",
+        ].includes(status) && (
+          <button
+            className="secondary-button"
+            onClick={() =>
+              open("UPGRADE_ROOM")
+            }
           >
             Upgrade
           </button>
         )}
-        {status === "CHECKED_IN" && (
+
+        {status ===
+          "CHECKED_IN" && (
           <>
             <button
               className="secondary-button"
-              onClick={() => open("EXTEND_STAY")}
+              onClick={() =>
+                open(
+                  "EXTEND_STAY",
+                )
+              }
             >
               Extend stay
             </button>
+
             <button
               className="secondary-button"
-              onClick={() => open("SHORTEN_STAY")}
+              onClick={() =>
+                open(
+                  "SHORTEN_STAY",
+                )
+              }
             >
               Shorten stay
             </button>
           </>
         )}
-        {["PENDING", "CONFIRMED"].includes(status) && (
+
+        {[
+          "PENDING",
+          "CONFIRMED",
+        ].includes(status) && (
           <button
             className="secondary-button"
-            onClick={() => void run("PLACE_HOLD")}
+            onClick={() =>
+              void run(
+                "PLACE_HOLD",
+              )
+            }
           >
             Place hold
           </button>
         )}
+
         {status === "HOLD" && (
           <button
             className="primary-button"
-            onClick={() => void run("RELEASE_HOLD")}
+            onClick={() =>
+              void run(
+                "RELEASE_HOLD",
+              )
+            }
           >
             Release hold
           </button>
         )}
-        {["PENDING", "HOLD", "CONFIRMED"].includes(status) && (
-          <button className="secondary-button" onClick={() => open("CANCEL")}>
+
+        {[
+          "PENDING",
+          "HOLD",
+          "CONFIRMED",
+        ].includes(status) && (
+          <button
+            className="secondary-button"
+            onClick={() =>
+              open("CANCEL")
+            }
+          >
             Cancel
           </button>
         )}
-        {status === "CONFIRMED" && (
+
+        {status ===
+          "CONFIRMED" && (
           <>
             <button
               className="secondary-button"
-              onClick={() => void run("MARK_NO_SHOW")}
+              onClick={() =>
+                void run(
+                  "MARK_NO_SHOW",
+                )
+              }
             >
               Mark no-show
             </button>
+
             <button
               className="primary-button"
-              onClick={() => void run("CHECK_IN")}
+              onClick={() =>
+                void run(
+                  "CHECK_IN",
+                )
+              }
             >
               Check in
             </button>
           </>
         )}
-        {status === "CHECKED_IN" && (
+
+        {status ===
+          "CHECKED_IN" && (
           <button
             className="primary-button"
-            onClick={() => void run("CHECK_OUT")}
+            onClick={() =>
+              void run(
+                "CHECK_OUT",
+              )
+            }
           >
             Check out
           </button>
         )}
-        {canRestore && ["CANCELLED", "NO_SHOW"].includes(status) && (
-          <button
-            className="primary-button"
-            onClick={() => void run("RESTORE")}
-          >
-            Restore
-          </button>
-        )}
+
+        {canRestore &&
+          [
+            "CANCELLED",
+            "NO_SHOW",
+          ].includes(status) && (
+            <button
+              className="primary-button"
+              onClick={() =>
+                void run(
+                  "RESTORE",
+                )
+              }
+            >
+              Restore
+            </button>
+          )}
       </div>
+
       {dialog && (
         <div
           className="modal-backdrop"
           role="presentation"
-          onMouseDown={(event) => {
-            if (event.target === event.currentTarget) setDialog(null);
+          onMouseDown={(
+            event,
+          ) => {
+            if (
+              event.target ===
+              event.currentTarget
+            ) {
+              setDialog(null);
+            }
           }}
         >
           <form
             className="modal-card compact-modal"
-            onSubmit={(event) => void submit(event)}
+            onSubmit={(
+              event,
+            ) =>
+              void submit(event)
+            }
           >
             <div className="modal-heading">
               <div>
                 <p className="section-kicker">
-                  {String(reservation.reference)}
+                  {String(
+                    reservation.reference,
+                  )}
                 </p>
-                <h2>{dialog.replaceAll("_", " ")}</h2>
+
+                <h2>
+                  {dialog.replaceAll(
+                    "_",
+                    " ",
+                  )}
+                </h2>
               </div>
+
               <button
                 type="button"
                 className="icon-button"
-                onClick={() => setDialog(null)}
+                onClick={() =>
+                  setDialog(null)
+                }
               >
                 <X size={17} />
               </button>
             </div>
+
             <div className="form-grid">
-              {dialog === "EDIT" && (
+              {dialog ===
+                "EDIT" && (
                 <>
                   <label>
-                    <span>Adults</span>
+                    <span>
+                      Adults
+                    </span>
+
                     <input
                       required
                       type="number"
                       min="1"
                       max="20"
-                      value={String(form.adults)}
-                      onChange={(event) =>
-                        setForm({ ...form, adults: event.target.value })
+                      value={String(
+                        form.adults,
+                      )}
+                      onChange={(
+                        event,
+                      ) =>
+                        setForm({
+                          ...form,
+                          adults:
+                            event
+                              .target
+                              .value,
+                        })
                       }
                     />
                   </label>
+
                   <label>
-                    <span>Children</span>
+                    <span>
+                      Children
+                    </span>
+
                     <input
                       required
                       type="number"
                       min="0"
                       max="20"
-                      value={String(form.children)}
-                      onChange={(event) =>
-                        setForm({ ...form, children: event.target.value })
-                      }
-                    />
-                  </label>
-                  <label className="wide">
-                    <span>Special requests</span>
-                    <textarea
-                      value={String(form.specialRequests)}
-                      onChange={(event) =>
+                      value={String(
+                        form.children,
+                      )}
+                      onChange={(
+                        event,
+                      ) =>
                         setForm({
                           ...form,
-                          specialRequests: event.target.value,
+                          children:
+                            event
+                              .target
+                              .value,
                         })
                       }
                     />
                   </label>
+
                   <label className="wide">
-                    <span>Internal notes</span>
+                    <span>
+                      Special
+                      requests
+                    </span>
+
                     <textarea
-                      value={String(form.internalNotes)}
-                      onChange={(event) =>
-                        setForm({ ...form, internalNotes: event.target.value })
+                      value={String(
+                        form.specialRequests,
+                      )}
+                      onChange={(
+                        event,
+                      ) =>
+                        setForm({
+                          ...form,
+                          specialRequests:
+                            event
+                              .target
+                              .value,
+                        })
+                      }
+                    />
+                  </label>
+
+                  <label className="wide">
+                    <span>
+                      Internal
+                      notes
+                    </span>
+
+                    <textarea
+                      value={String(
+                        form.internalNotes,
+                      )}
+                      onChange={(
+                        event,
+                      ) =>
+                        setForm({
+                          ...form,
+                          internalNotes:
+                            event
+                              .target
+                              .value,
+                        })
                       }
                     />
                   </label>
                 </>
               )}
-              {dialog === "DATES" && (
+
+              {dialog ===
+                "DATES" && (
                 <>
                   <label>
-                    <span>Check-in</span>
+                    <span>
+                      Check-in
+                    </span>
+
                     <input
                       required
                       type="date"
-                      value={String(form.arrivalDate)}
-                      onChange={(event) =>
-                        setForm({ ...form, arrivalDate: event.target.value })
+                      value={String(
+                        form.arrivalDate,
+                      )}
+                      onChange={(
+                        event,
+                      ) =>
+                        setForm({
+                          ...form,
+                          arrivalDate:
+                            event
+                              .target
+                              .value,
+                        })
                       }
                     />
                   </label>
+
                   <label>
-                    <span>Check-out</span>
+                    <span>
+                      Check-out
+                    </span>
+
                     <input
                       required
                       type="date"
-                      value={String(form.departureDate)}
-                      onChange={(event) =>
-                        setForm({ ...form, departureDate: event.target.value })
+                      value={String(
+                        form.departureDate,
+                      )}
+                      onChange={(
+                        event,
+                      ) =>
+                        setForm({
+                          ...form,
+                          departureDate:
+                            event
+                              .target
+                              .value,
+                        })
                       }
                     />
                   </label>
                 </>
               )}
-              {(dialog === "EXTEND_STAY" || dialog === "SHORTEN_STAY") && (
+
+              {(dialog ===
+                "EXTEND_STAY" ||
+                dialog ===
+                  "SHORTEN_STAY") && (
                 <label>
-                  <span>New check-out</span>
+                  <span>
+                    New check-out
+                  </span>
+
                   <input
                     required
                     type="date"
-                    value={String(form.departureDate)}
-                    onChange={(event) =>
-                      setForm({ ...form, departureDate: event.target.value })
+                    value={String(
+                      form.departureDate,
+                    )}
+                    onChange={(
+                      event,
+                    ) =>
+                      setForm({
+                        ...form,
+                        departureDate:
+                          event
+                            .target
+                            .value,
+                      })
                     }
                   />
                 </label>
               )}
-              {(dialog === "CHANGE_ROOM" || dialog === "UPGRADE_ROOM") && (
+
+              {(dialog ===
+                "CHANGE_ROOM" ||
+                dialog ===
+                  "MOVE_ROOM" ||
+                dialog ===
+                  "UPGRADE_ROOM") && (
                 <label className="wide">
-                  <span>Destination room</span>
+                  <span>
+                    Destination
+                    room
+                  </span>
+
                   <select
                     required
-                    value={String(form.roomId)}
-                    onChange={(event) =>
-                      setForm({ ...form, roomId: event.target.value })
+                    value={String(
+                      form.roomId ??
+                        "",
+                    )}
+                    onChange={(
+                      event,
+                    ) =>
+                      setForm({
+                        ...form,
+                        roomId:
+                          event
+                            .target
+                            .value,
+                      })
                     }
                   >
-                    {rooms.map((room) => (
-                      <option key={String(room.id)} value={String(room.id)}>
-                        Room {String(room.number)} · {String(room.roomType)}
-                      </option>
-                    ))}
+                    {destinationRooms.map(
+                      (room) => (
+                        <option
+                          key={String(
+                            room.id,
+                          )}
+                          value={String(
+                            room.id,
+                          )}
+                        >
+                          Room{" "}
+                          {String(
+                            room.number,
+                          )}{" "}
+                          ·{" "}
+                          {String(
+                            room.roomType,
+                          )}
+                        </option>
+                      ),
+                    )}
                   </select>
                 </label>
               )}
-              {dialog === "CANCEL" && (
+
+              {dialog ===
+                "MOVE_ROOM" && (
                 <label className="wide">
-                  <span>Cancellation reason</span>
+                  <span>
+                    Room move reason
+                  </span>
+
                   <textarea
                     required
                     minLength={3}
                     maxLength={500}
-                    value={String(form.reason)}
-                    onChange={(event) =>
-                      setForm({ ...form, reason: event.target.value })
+                    placeholder="Example: Guest requested quieter room"
+                    value={String(
+                      form.reason ??
+                        "",
+                    )}
+                    onChange={(
+                      event,
+                    ) =>
+                      setForm({
+                        ...form,
+                        reason:
+                          event
+                            .target
+                            .value,
+                      })
+                    }
+                  />
+                </label>
+              )}
+
+              {dialog ===
+                "CANCEL" && (
+                <label className="wide">
+                  <span>
+                    Cancellation
+                    reason
+                  </span>
+
+                  <textarea
+                    required
+                    minLength={3}
+                    maxLength={500}
+                    value={String(
+                      form.reason,
+                    )}
+                    onChange={(
+                      event,
+                    ) =>
+                      setForm({
+                        ...form,
+                        reason:
+                          event
+                            .target
+                            .value,
+                      })
                     }
                   />
                 </label>
               )}
             </div>
+
             <div className="modal-actions">
               <button
                 type="button"
                 className="secondary-button"
-                onClick={() => setDialog(null)}
+                onClick={() =>
+                  setDialog(null)
+                }
               >
                 Back
               </button>
-              <button type="submit" className="primary-button">
-                Save change
+
+              <button
+                type="submit"
+                className="primary-button"
+              >
+                {dialog ===
+                "MOVE_ROOM"
+                  ? "Move room"
+                  : "Save change"}
               </button>
             </div>
           </form>

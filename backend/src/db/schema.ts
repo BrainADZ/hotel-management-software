@@ -536,10 +536,41 @@ export const restaurantOrders = pgTable('restaurant_orders', {
   roomNumber: text('room_number'),
   orderType: text('order_type').notNull(),
   status: text('status').notNull(),
+  kotStatus: text('kot_status').notNull().default('NEW'),
+  itemCount: integer('item_count').notNull().default(1),
+  specialInstructions: text('special_instructions'),
   totalPaise: integer('total_paise').notNull(),
   paymentStatus: text('payment_status').notNull(),
   createdAt: text('created_at').notNull(),
-}, (table) => [index('idx_restaurant_property_status').on(table.propertyId, table.status)]);
+}, (table) => [
+  index('idx_restaurant_property_status').on(table.propertyId, table.status),
+  index('idx_restaurant_property_kot').on(table.propertyId, table.kotStatus),
+]);
+
+export const restaurantOrderItems = pgTable('restaurant_order_items', {
+  id: text('id').primaryKey(),
+  propertyId: text('property_id').notNull().references(() => properties.id),
+  orderId: text('order_id')
+    .notNull()
+    .references(() => restaurantOrders.id, { onDelete: 'cascade' }),
+  menuItemId: text('menu_item_id').notNull(),
+  itemName: text('item_name').notNull(),
+  category: text('category').notNull(),
+  quantity: integer('quantity').notNull(),
+  unitPricePaise: integer('unit_price_paise').notNull(),
+  taxRateBps: integer('tax_rate_bps').notNull(),
+  subtotalPaise: integer('subtotal_paise').notNull(),
+  taxableAmountPaise: integer('taxable_amount_paise').notNull(),
+  taxPaise: integer('tax_paise').notNull(),
+  cgstPaise: integer('cgst_paise').notNull().default(0),
+  sgstPaise: integer('sgst_paise').notNull().default(0),
+  igstPaise: integer('igst_paise').notNull().default(0),
+  totalPaise: integer('total_paise').notNull(),
+  createdAt: text('created_at').notNull(),
+}, (table) => [
+  index('idx_restaurant_order_items_order').on(table.orderId),
+  index('idx_restaurant_order_items_property').on(table.propertyId, table.createdAt),
+]);
 
 export const restaurantMealBookings = pgTable('restaurant_meal_bookings', {
   id: text('id').primaryKey(),

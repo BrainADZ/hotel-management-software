@@ -71,6 +71,13 @@
       "when": 1789130000000,
       "tag": "0009_operational_workflows",
       "breakpoints": true
+    },
+    {
+      "idx": 10,
+      "version": "7",
+      "when": 1789372617094,
+      "tag": "0010_yummy_komodo",
+      "breakpoints": true
     }
   ]
 }

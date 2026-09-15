@@ -2,6 +2,7 @@
 
 import {
   auditLogs,
+  damageReports,
   financialSequences,
   folioLines,
   folios,
@@ -61,6 +62,18 @@ type Tx =
 
 const now = () =>
   new Date().toISOString();
+
+function propertyDocumentCode(
+  value: string | null | undefined,
+) {
+  const clean = String(value ?? '')
+    .trim()
+    .toUpperCase()
+    .replace(/[^A-Z0-9]+/g, '-')
+    .replace(/^-+|-+$/g, '');
+
+  return clean || 'HTL';
+}
 
 function scope(
   c: ReservationContext,
@@ -125,12 +138,8 @@ async function audit(
 
   if (
     entity === 'RESERVATION' &&
-    (
-      action ===
-        'FINANCIAL_CHECKOUT' ||
-      action ===
-        'CHECKOUT_OVERRIDE'
-    )
+    action ===
+      'CHECKOUT_INSPECTION_REQUESTED'
   ) {
     await tx
       .insert(
@@ -240,14 +249,31 @@ async function ensureOpen(
   },
 ) {
   if (
-    folio.status ===
-      'CLOSED' ||
-    folio.status ===
-      'VOID'
+    [
+      'CLOSED',
+      'VOID',
+      'PENDING_INSPECTION',
+      'PENDING_DAMAGE_REVIEW',
+      'CHECKOUT_READY',
+    ].includes(folio.status)
   ) {
     throw new DomainError(
-      'FOLIO_CLOSED',
-      'Financial posting is unavailable for this folio.',
+      'FOLIO_CHARGES_LOCKED',
+      'Charges, discounts and room rent are locked once checkout inspection begins.',
+      409,
+    );
+  }
+}
+
+function ensureSettlementAllowed(
+  folio: {
+    status: string;
+  },
+) {
+  if (folio.status === 'VOID') {
+    throw new DomainError(
+      'FOLIO_VOID',
+      'Settlement is unavailable for a void folio.',
       409,
     );
   }
@@ -258,6 +284,7 @@ async function nextNumber(
   propertyId: string,
   date: Date,
   type:
+    | 'FOLIO'
     | 'INVOICE'
     | 'RECEIPT',
   prefix: string,
@@ -437,11 +464,18 @@ async function recalculate(
         ),
     );
 
+  const lifecycleStatuses = [
+    'CLOSED',
+    'VOID',
+    'PENDING_INSPECTION',
+    'PENDING_DAMAGE_REVIEW',
+    'CHECKOUT_READY',
+  ];
+
   const nextStatus =
-    current.status ===
-      'CLOSED' ||
-    current.status ===
-      'VOID'
+    lifecycleStatuses.includes(
+      current.status,
+    )
       ? current.status
       : totals.outstandingPaise <=
           0
@@ -524,12 +558,36 @@ export class BillingService {
           `folio:${reservationId}`,
         );
 
+        const [existingFolio] =
+          await tx
+            .select()
+            .from(folios)
+            .where(
+              and(
+                eq(
+                  folios.reservationId,
+                  reservationId,
+                ),
+                eq(
+                  folios.organisationId,
+                  c.actor.organisationId,
+                ),
+                eq(
+                  folios.propertyId,
+                  c.property.id,
+                ),
+              ),
+            )
+            .limit(1);
+
+        if (existingFolio) {
+          return existingFolio;
+        }
+
         const [reservation] =
           await tx
             .select()
-            .from(
-              reservations,
-            )
+            .from(reservations)
             .where(
               and(
                 eq(
@@ -578,92 +636,122 @@ export class BillingService {
             )
             .limit(1);
 
-        await tx
-          .insert(folios)
-          .values({
-            id:
-              crypto.randomUUID(),
+        const profile =
+          await propertyProfile(
+            tx,
+            c,
+          );
 
-            organisationId:
-              c.actor
-                .organisationId,
+        const issued =
+          await nextNumber(
+            tx,
+            c.property.id,
+            new Date(),
+            'FOLIO',
+            `${propertyDocumentCode(profile.code)}-FOL`,
+          );
 
-            propertyId:
-              c.property.id,
-
-            reservationId,
-
-            guestId:
-              reservation.guestId,
-
-            stayId:
-              stay?.id,
-
-            status:
-              'OPEN',
-
-            subtotalPaise:
-              0,
-
-            taxPaise:
-              0,
-
-            totalPaise:
-              0,
-
-            discountPaise:
-              0,
-
-            taxableAmountPaise:
-              0,
-
-            cgstPaise:
-              0,
-
-            sgstPaise:
-              0,
-
-            igstPaise:
-              0,
-
-            paidPaise:
-              0,
-
-            refundedPaise:
-              0,
-
-            outstandingPaise:
-              0,
-
-            updatedAt:
-              now(),
-          })
-          .onConflictDoNothing({
-            target:
-              folios.reservationId,
-          });
-
-        const [folio] =
+        const [createdFolio] =
           await tx
-            .select()
-            .from(folios)
-            .where(
-              and(
-                eq(
-                  folios.reservationId,
-                  reservationId,
+            .insert(folios)
+            .values({
+              id:
+                crypto.randomUUID(),
+
+              organisationId:
+                c.actor.organisationId,
+
+              propertyId:
+                c.property.id,
+
+              folioNumber:
+                issued.number,
+
+              reservationId,
+
+              guestId:
+                reservation.guestId,
+
+              stayId:
+                stay?.id,
+
+              status:
+                'OPEN',
+
+              subtotalPaise:
+                0,
+
+              taxPaise:
+                0,
+
+              totalPaise:
+                0,
+
+              discountPaise:
+                0,
+
+              taxableAmountPaise:
+                0,
+
+              cgstPaise:
+                0,
+
+              sgstPaise:
+                0,
+
+              igstPaise:
+                0,
+
+              paidPaise:
+                0,
+
+              refundedPaise:
+                0,
+
+              outstandingPaise:
+                0,
+
+              updatedAt:
+                now(),
+            })
+            .onConflictDoNothing({
+              target:
+                folios.reservationId,
+            })
+            .returning();
+
+        const folio =
+          createdFolio ??
+          (
+            await tx
+              .select()
+              .from(folios)
+              .where(
+                and(
+                  eq(
+                    folios.reservationId,
+                    reservationId,
+                  ),
+                  eq(
+                    folios.organisationId,
+                    c.actor.organisationId,
+                  ),
+                  eq(
+                    folios.propertyId,
+                    c.property.id,
+                  ),
                 ),
-                eq(
-                  folios.organisationId,
-                  c.actor.organisationId,
-                ),
-                eq(
-                  folios.propertyId,
-                  c.property.id,
-                ),
-              ),
-            )
-            .limit(1);
+              )
+              .limit(1)
+          )[0];
+
+        if (!folio) {
+          throw new DomainError(
+            'FOLIO_CREATE_FAILED',
+            'Financial folio could not be created.',
+            500,
+          );
+        }
 
         await audit(
           tx,
@@ -673,6 +761,8 @@ export class BillingService {
           folio.id,
           {
             reservationId,
+            folioNumber:
+              folio.folioNumber,
           },
         );
 
@@ -681,32 +771,33 @@ export class BillingService {
     );
   }
 
-  async list(
-    c: ReservationContext,
-  ) {
-    scope(c);
+  async list(c: ReservationContext) {
+  scope(c);
 
-    assertRoleCan(
-      c.actor.role,
-      'billing.view',
-    );
+  assertRoleCan(
+    c.actor.role,
+    'billing.view',
+  );
 
-    return getDb()
-      .select()
-      .from(folios)
-      .where(
-        and(
-          eq(
-            folios.organisationId,
-            c.actor.organisationId,
-          ),
-          eq(
-            folios.propertyId,
-            c.property.id,
-          ),
+  return getDb()
+    .select()
+    .from(folios)
+    .where(
+      and(
+        eq(
+          folios.organisationId,
+          c.actor.organisationId,
         ),
-      );
-  }
+        eq(
+          folios.propertyId,
+          c.property.id,
+        ),
+      ),
+    )
+    .orderBy(
+      asc(folios.folioNumber),
+    );
+}
 
   async get(
     c: ReservationContext,
@@ -1357,7 +1448,7 @@ export class BillingService {
             folioId,
           );
 
-        await ensureOpen(
+        ensureSettlementAllowed(
           folio,
         );
 
@@ -2341,10 +2432,52 @@ export class BillingService {
         reservationId,
       );
 
-    await this.postRoomCharges(
-      c,
-      folio.id,
-    );
+    const [reservationBeforeCheckout] =
+      await getDb()
+        .select({
+          status:
+            reservations.status,
+        })
+        .from(reservations)
+        .where(
+          and(
+            eq(
+              reservations.id,
+              reservationId,
+            ),
+            eq(
+              reservations.organisationId,
+              c.actor.organisationId,
+            ),
+            eq(
+              reservations.propertyId,
+              c.property.id,
+            ),
+          ),
+        )
+        .limit(1);
+
+    if (!reservationBeforeCheckout) {
+      throw new DomainError(
+        'RESERVATION_NOT_FOUND',
+        'Reservation was not found.',
+        404,
+      );
+    }
+
+    /*
+     * The first checkout action posts all due room-night rent.
+     * Once the checkout inspection starts, normal charge posting is locked.
+     */
+    if (
+      reservationBeforeCheckout.status ===
+      'CHECKED_IN'
+    ) {
+      await this.postRoomCharges(
+        c,
+        folio.id,
+      );
+    }
 
     return getDb().transaction(
       async (tx) => {
@@ -2360,24 +2493,10 @@ export class BillingService {
             folio.id,
           );
 
-        if (
-          current.outstandingPaise >
-            0 &&
-          !input.allowOutstanding
-        ) {
-          throw new DomainError(
-            'OUTSTANDING_BALANCE',
-            `Checkout is blocked with ${current.outstandingPaise} paise outstanding.`,
-            409,
-          );
-        }
-
         const [reservation] =
           await tx
             .select()
-            .from(
-              reservations,
-            )
+            .from(reservations)
             .where(
               and(
                 eq(
@@ -2394,234 +2513,528 @@ export class BillingService {
                 ),
               ),
             )
-            .limit(1);
+            .limit(1)
+            .for('update');
 
+        if (!reservation) {
+          throw new DomainError(
+            'RESERVATION_NOT_FOUND',
+            'Reservation was not found.',
+            404,
+          );
+        }
+
+        /*
+         * Stage 1:
+         * Operational checkout.
+         *
+         * Guest leaves the room, but the financial folio is NOT closed yet.
+         * Housekeeping must inspect the room before the final bill can close.
+         */
         if (
-          !reservation ||
+          reservation.status ===
+          'CHECKED_IN'
+        ) {
+          if (
+            current.status ===
+              'CLOSED' ||
+            current.status ===
+              'VOID'
+          ) {
+            throw new DomainError(
+              'FOLIO_CLOSED',
+              'This folio cannot enter checkout inspection.',
+              409,
+            );
+          }
+
+          if (!reservation.roomId) {
+            throw new DomainError(
+              'ROOM_NOT_ASSIGNED',
+              'The checked-in reservation has no assigned room.',
+              409,
+            );
+          }
+
+          const [stay] =
+            await tx
+              .select()
+              .from(stays)
+              .where(
+                and(
+                  eq(
+                    stays.reservationId,
+                    reservationId,
+                  ),
+                  eq(
+                    stays.organisationId,
+                    c.actor.organisationId,
+                  ),
+                  eq(
+                    stays.propertyId,
+                    c.property.id,
+                  ),
+                  eq(
+                    stays.status,
+                    'IN_HOUSE',
+                  ),
+                ),
+              )
+              .limit(1)
+              .for('update');
+
+          const [room] =
+            await tx
+              .select()
+              .from(rooms)
+              .where(
+                and(
+                  eq(
+                    rooms.id,
+                    reservation.roomId,
+                  ),
+                  eq(
+                    rooms.propertyId,
+                    c.property.id,
+                  ),
+                ),
+              )
+              .limit(1)
+              .for('update');
+
+          if (
+            !stay ||
+            !room
+          ) {
+            throw new DomainError(
+              'STAY_NOT_FOUND',
+              'Active stay was not found.',
+              404,
+            );
+          }
+
+          const timestamp =
+            now();
+
+          const reservationUpdate =
+            await tx
+              .update(reservations)
+              .set({
+                status:
+                  'CHECKED_OUT',
+                updatedBy:
+                  c.actor.id,
+                updatedAt:
+                  timestamp,
+                version:
+                  reservation.version +
+                  1,
+              })
+              .where(
+                and(
+                  eq(
+                    reservations.id,
+                    reservation.id,
+                  ),
+                  eq(
+                    reservations.version,
+                    reservation.version,
+                  ),
+                ),
+              )
+              .returning({
+                id:
+                  reservations.id,
+              });
+
+          if (
+            !reservationUpdate.length
+          ) {
+            throw new DomainError(
+              'RESERVATION_STATE_CHANGED',
+              'Reservation changed before checkout could begin.',
+              409,
+            );
+          }
+
+          const stayUpdate =
+            await tx
+              .update(stays)
+              .set({
+                status:
+                  'CHECKED_OUT',
+                actualCheckOutAt:
+                  timestamp,
+                checkedOutBy:
+                  c.actor.id,
+                updatedAt:
+                  timestamp,
+                version:
+                  stay.version + 1,
+              })
+              .where(
+                and(
+                  eq(
+                    stays.id,
+                    stay.id,
+                  ),
+                  eq(
+                    stays.version,
+                    stay.version,
+                  ),
+                ),
+              )
+              .returning({
+                id:
+                  stays.id,
+              });
+
+          if (
+            !stayUpdate.length
+          ) {
+            throw new DomainError(
+              'STAY_STATE_CHANGED',
+              'Stay changed before checkout could begin.',
+              409,
+            );
+          }
+
+          const roomUpdate =
+            await tx
+              .update(rooms)
+              .set({
+                occupancyStatus:
+                  'VACANT',
+                operationalStatus:
+                  'VACANT_DIRTY',
+                updatedAt:
+                  timestamp,
+                version:
+                  room.version + 1,
+              })
+              .where(
+                and(
+                  eq(
+                    rooms.id,
+                    room.id,
+                  ),
+                  eq(
+                    rooms.version,
+                    room.version,
+                  ),
+                ),
+              )
+              .returning({
+                id:
+                  rooms.id,
+              });
+
+          if (
+            !roomUpdate.length
+          ) {
+            throw new DomainError(
+              'ROOM_STATE_CHANGED',
+              'Room status changed before checkout could begin.',
+              409,
+            );
+          }
+
+          await tx
+            .insert(
+              housekeepingTasks,
+            )
+            .values({
+              id:
+                crypto.randomUUID(),
+              propertyId:
+                c.property.id,
+              roomId:
+                room.id,
+              reservationId:
+                reservation.id,
+              taskType:
+                'CHECKOUT_INSPECTION',
+              priority:
+                'HIGH',
+              status:
+                'NEEDS_INSPECTION',
+              scheduledAt:
+                timestamp,
+              updatedAt:
+                timestamp,
+              version:
+                1,
+              notes:
+                'Inspect room condition, missing items, minibar/linen usage and damage before final folio closure.',
+            })
+            .onConflictDoNothing();
+
+          const folioUpdate =
+            await tx
+              .update(folios)
+              .set({
+                status:
+                  'PENDING_INSPECTION',
+                closedAt:
+                  null,
+                closedBy:
+                  null,
+                updatedAt:
+                  timestamp,
+                version:
+                  current.version +
+                  1,
+              })
+              .where(
+                and(
+                  eq(
+                    folios.id,
+                    current.id,
+                  ),
+                  eq(
+                    folios.version,
+                    current.version,
+                  ),
+                ),
+              )
+              .returning({
+                id:
+                  folios.id,
+              });
+
+          if (
+            !folioUpdate.length
+          ) {
+            throw new DomainError(
+              'FOLIO_STATE_CHANGED',
+              'Folio changed before checkout inspection could begin.',
+              409,
+            );
+          }
+
+          await audit(
+            tx,
+            c,
+            'CHECKOUT_INSPECTION_REQUESTED',
+            'RESERVATION',
+            reservationId,
+            {
+              folioId:
+                current.id,
+              roomId:
+                room.id,
+              outstandingPaise:
+                current.outstandingPaise,
+              folioStatus:
+                'PENDING_INSPECTION',
+            },
+          );
+
+          return {
+            reservationId,
+            stayId:
+              stay.id,
+            folioId:
+              current.id,
+            status:
+              'PENDING_INSPECTION',
+            outstandingPaise:
+              current.outstandingPaise,
+          };
+        }
+
+        /*
+         * Stage 2:
+         * Final financial closure after housekeeping inspection and
+         * manager damage review.
+         */
+        if (
           reservation.status !==
-            'CHECKED_IN' ||
-          !reservation.roomId
+          'CHECKED_OUT'
         ) {
           throw new DomainError(
             'INVALID_CHECKOUT_STATUS',
-            'Reservation is not checked in.',
+            'Reservation is not eligible for checkout.',
             409,
           );
         }
 
-        const [stay] =
+        if (
+          current.status ===
+          'CLOSED'
+        ) {
+          return {
+            reservationId,
+            folioId:
+              current.id,
+            status:
+              'CLOSED',
+            outstandingPaise:
+              current.outstandingPaise,
+          };
+        }
+
+        if (
+          current.status ===
+          'VOID'
+        ) {
+          throw new DomainError(
+            'FOLIO_VOID',
+            'A void folio cannot be closed through checkout.',
+            409,
+          );
+        }
+
+        const [inspection] =
           await tx
-            .select()
-            .from(stays)
+            .select({
+              id:
+                housekeepingTasks.id,
+              status:
+                housekeepingTasks.status,
+              outcome:
+                housekeepingTasks.outcome,
+            })
+            .from(
+              housekeepingTasks,
+            )
             .where(
               and(
                 eq(
-                  stays.reservationId,
+                  housekeepingTasks.propertyId,
+                  c.property.id,
+                ),
+                eq(
+                  housekeepingTasks.reservationId,
                   reservationId,
                 ),
                 eq(
-                  stays.status,
-                  'IN_HOUSE',
-                ),
-              ),
-            )
-            .limit(1);
-
-        const [room] =
-          await tx
-            .select()
-            .from(rooms)
-            .where(
-              and(
-                eq(
-                  rooms.id,
-                  reservation.roomId,
-                ),
-                eq(
-                  rooms.propertyId,
-                  c.property.id,
+                  housekeepingTasks.taskType,
+                  'CHECKOUT_INSPECTION',
                 ),
               ),
             )
             .limit(1);
 
         if (
-          !stay ||
-          !room
+          !inspection ||
+          inspection.status !==
+            'COMPLETED'
         ) {
           throw new DomainError(
-            'STAY_NOT_FOUND',
-            'Active stay was not found.',
-            404,
+            'CHECKOUT_INSPECTION_PENDING',
+            'Housekeeping must complete the checkout inspection before final folio closure.',
+            409,
+          );
+        }
+
+        const [pendingDamage] =
+          await tx
+            .select({
+              id:
+                damageReports.id,
+            })
+            .from(
+              damageReports,
+            )
+            .where(
+              and(
+                eq(
+                  damageReports.propertyId,
+                  c.property.id,
+                ),
+                eq(
+                  damageReports.reservationId,
+                  reservationId,
+                ),
+                eq(
+                  damageReports.status,
+                  'PENDING_REVIEW',
+                ),
+              ),
+            )
+            .limit(1);
+
+        if (
+          pendingDamage ||
+          current.status ===
+            'PENDING_DAMAGE_REVIEW'
+        ) {
+          throw new DomainError(
+            'DAMAGE_REVIEW_PENDING',
+            'Manager damage review must be completed before final folio closure.',
+            409,
+          );
+        }
+
+        if (
+          current.status ===
+          'PENDING_INSPECTION'
+        ) {
+          throw new DomainError(
+            'CHECKOUT_INSPECTION_PENDING',
+            'Housekeeping inspection is still pending.',
+            409,
+          );
+        }
+
+        if (
+          current.outstandingPaise >
+            0 &&
+          !input.allowOutstanding
+        ) {
+          throw new DomainError(
+            'OUTSTANDING_BALANCE',
+            `Final checkout is blocked with ${current.outstandingPaise} paise outstanding.`,
+            409,
           );
         }
 
         const timestamp =
           now();
 
-        await tx
-          .update(
-            reservations,
-          )
-          .set({
-            status:
-              'CHECKED_OUT',
-
-            updatedBy:
-              c.actor.id,
-
-            updatedAt:
-              timestamp,
-
-            version:
-              reservation.version +
-              1,
-          })
-          .where(
-            and(
-              eq(
-                reservations.id,
-                reservation.id,
+        const closed =
+          await tx
+            .update(folios)
+            .set({
+              status:
+                'CLOSED',
+              closedAt:
+                timestamp,
+              closedBy:
+                c.actor.id,
+              updatedAt:
+                timestamp,
+              version:
+                current.version +
+                1,
+            })
+            .where(
+              and(
+                eq(
+                  folios.id,
+                  current.id,
+                ),
+                eq(
+                  folios.version,
+                  current.version,
+                ),
               ),
-              eq(
-                reservations.version,
-                reservation.version,
-              ),
-            ),
-          );
-
-        await tx
-          .update(stays)
-          .set({
-            status:
-              'CHECKED_OUT',
-
-            actualCheckOutAt:
-              timestamp,
-
-            checkedOutBy:
-              c.actor.id,
-
-            updatedAt:
-              timestamp,
-
-            version:
-              stay.version +
-              1,
-          })
-          .where(
-            and(
-              eq(
-                stays.id,
-                stay.id,
-              ),
-              eq(
-                stays.version,
-                stay.version,
-              ),
-            ),
-          );
-
-        await tx
-          .update(rooms)
-          .set({
-            occupancyStatus:
-              'VACANT',
-
-            operationalStatus:
-              'VACANT_DIRTY',
-
-            updatedAt:
-              timestamp,
-
-            version:
-              room.version +
-              1,
-          })
-          .where(
-            and(
-              eq(
-                rooms.id,
-                room.id,
-              ),
-              eq(
-                rooms.version,
-                room.version,
-              ),
-            ),
-          );
-
-        await tx
-          .insert(
-            housekeepingTasks,
-          )
-          .values({
-            id:
-              crypto.randomUUID(),
-
-            propertyId:
-              c.property.id,
-
-            roomId:
-              room.id,
-
-            reservationId:
-              reservation.id,
-
-            taskType:
-              'CHECKOUT_CLEANING',
-
-            priority:
-              'HIGH',
-
-            status:
-              'UNASSIGNED',
-
-            scheduledAt:
-              timestamp,
-
-            updatedAt:
-              timestamp,
-
-            version:
-              1,
-
-            notes:
-              'Post-checkout cleaning',
-          })
-          .onConflictDoNothing();
-
-        await tx
-          .update(folios)
-          .set({
-            status:
-              'CLOSED',
-
-            closedAt:
-              timestamp,
-
-            closedBy:
-              c.actor.id,
-
-            updatedAt:
-              timestamp,
-
-            version:
-              current.version +
-              1,
-          })
-          .where(
-            and(
-              eq(
+            )
+            .returning({
+              id:
                 folios.id,
-                current.id,
-              ),
-              eq(
-                folios.version,
-                current.version,
-              ),
-            ),
+            });
+
+        if (
+          !closed.length
+        ) {
+          throw new DomainError(
+            'FOLIO_STATE_CHANGED',
+            'Folio changed before final checkout could be completed.',
+            409,
           );
+        }
 
         await audit(
           tx,
@@ -2629,12 +3042,16 @@ export class BillingService {
           input.allowOutstanding
             ? 'CHECKOUT_OVERRIDE'
             : 'FINANCIAL_CHECKOUT',
-          'RESERVATION',
-          reservationId,
+          'FOLIO',
+          current.id,
           {
+            reservationId,
+            inspectionId:
+              inspection.id,
+            inspectionOutcome:
+              inspection.outcome,
             outstandingPaise:
               current.outstandingPaise,
-
             reason:
               input.overrideReason ??
               null,
@@ -2643,16 +3060,10 @@ export class BillingService {
 
         return {
           reservationId,
-
-          stayId:
-            stay.id,
-
           folioId:
-            folio.id,
-
+            current.id,
           status:
-            'CHECKED_OUT',
-
+            'CLOSED',
           outstandingPaise:
             current.outstandingPaise,
         };

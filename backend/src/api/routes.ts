@@ -59,6 +59,12 @@ import * as route52 from './sync/mutations/route';
  */
 import * as route53 from './reservations/[id]/move-room/route';
 
+/*
+ * Invoice lifecycle correction route.
+ * ISSUED invoice -> CANCELLED -> new invoice can be issued.
+ */
+import * as route54 from './invoices/[id]/cancel/route';
+
 import * as travelWorkflows from './travel/workflows/route';
 
 export const routes = [
@@ -250,6 +256,11 @@ export const routes = [
   {
     path: '/api/invoices/:id/pdf',
     handlers: route34,
+  },
+
+  {
+    path: '/api/invoices/:id/cancel',
+    handlers: route54,
   },
 
   {

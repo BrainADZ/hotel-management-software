@@ -37,6 +37,7 @@ next-env.d.ts
 /.wrangler/
 /outputs/
 /work/
+/.tmp/
 *.tsbuildinfo
 
 # Workspace outputs and backend demo storage

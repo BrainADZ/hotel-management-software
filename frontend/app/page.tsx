@@ -5,6 +5,7 @@
 import { useEffect, useState, type FormEvent } from "react";
 import { usePathname, useRouter } from "next/navigation";
 
+import {readProductionOffline,clearProductionOffline} from '@/lib/production-offline';
 import { HotelPlatform } from "./hotel-platform";
 import { apiFetch, apiUrl } from "@/lib/api/client";
 
@@ -33,6 +34,8 @@ export default function Home() {
   });
 
   async function loadRuntime(): Promise<Runtime> {
+    if(!navigator.onLine){const cached=await readProductionOffline();if(cached)return {mode:'production',authenticated:true,googleConfigured:false};throw new Error('Connect to the hotel server and sign in before using this device offline.');}
+
     const response = await apiFetch("/api/runtime");
 
     if (!response.ok) {
@@ -95,7 +98,12 @@ export default function Home() {
     }
   }, [authenticated, mode, pathname, router]);
 
+  useEffect(()=>{const expired=()=>{setAuthenticated(false);void clearProductionOffline();};window.addEventListener('hotel-auth-expired',expired);return()=>window.removeEventListener('hotel-auth-expired',expired);},[]);
+
   async function logout() {
+    await clearProductionOffline();
+    setAuthenticated(false);
+    if(!navigator.onLine)return;
     await apiFetch("/api/auth/logout", {
       method: "POST",
     });

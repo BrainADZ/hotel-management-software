@@ -20,7 +20,6 @@ import { apiUrl } from "@/lib/api/client";
 import {
   PageHeading,
   Status,
-  money,
   productionApi,
   shortDate,
   type PlatformViewProps,
@@ -34,6 +33,7 @@ type DialogState =
   | { type: "REFUND"; payment: Row }
   | { type: "REVERSE"; payment: Row }
   | { type: "CHECKOUT" }
+  | { type: "CANCEL_INVOICE"; invoice: Row }
   | null;
 
 type PaymentMethod = "CASH" | "UPI" | "CARD" | "BANK_TRANSFER";
@@ -92,6 +92,19 @@ function toPaise(value: string) {
   return Math.round(amount * 100);
 }
 
+function moneyExact(paise: unknown) {
+  const value = Number(paise ?? 0) / 100;
+
+  if (!Number.isFinite(value)) {
+    return "₹0.00";
+  }
+
+  return `₹${new Intl.NumberFormat("en-IN", {
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  }).format(value)}`;
+}
+
 export function FoliosBillingView({
   state,
   setSelectedReservation,
@@ -132,6 +145,7 @@ export function FoliosBillingView({
 
   const [reverseReason, setReverseReason] = useState("");
   const [checkoutOverrideReason, setCheckoutOverrideReason] = useState("");
+  const [invoiceCancelReason, setInvoiceCancelReason] = useState("");
 
   const reservationMap = useMemo(
     () =>
@@ -165,9 +179,63 @@ export function FoliosBillingView({
     [payments],
   );
 
-  const latestInvoice = invoices.length
-    ? invoices[invoices.length - 1]
+  const activeInvoice = useMemo(
+  () =>
+    invoices.find(
+      (invoice) => String(invoice.status ?? "").toUpperCase() === "ISSUED",
+    ),
+  [invoices],
+);
+
+  const folioStatus = String(detail?.status ?? "").toUpperCase();
+  const isClosedFolio = folioStatus === "CLOSED";
+  const isVoidFolio = folioStatus === "VOID";
+  const isMutableFolio = !["CLOSED", "VOID"].includes(folioStatus);
+
+  const currentReservation = detail
+    ? reservationMap.get(String(detail.reservationId))
     : undefined;
+
+  const reservationStatus = String(
+    currentReservation?.status ?? "",
+  ).toUpperCase();
+
+  const isOperationallyCheckedOut =
+    reservationStatus === "CHECKED_OUT";
+
+  const isCheckoutInspectionPending =
+    folioStatus === "PENDING_INSPECTION";
+
+  const isDamageReviewPending =
+    folioStatus === "PENDING_DAMAGE_REVIEW";
+
+  const isCheckoutReady =
+    folioStatus === "CHECKOUT_READY";
+
+  const canPostCharges =
+    isMutableFolio &&
+    !isOperationallyCheckedOut &&
+    !isCheckoutInspectionPending &&
+    !isDamageReviewPending &&
+    !isCheckoutReady;
+
+  const canTakePayment =
+    !isVoidFolio && roleCan(role, "billing.take_payment");
+
+  const canStartCheckout =
+    canPostCharges && roleCan(role, "billing.checkout");
+
+  const canFinalizeCheckout =
+    isOperationallyCheckedOut &&
+    isMutableFolio &&
+    !isCheckoutInspectionPending &&
+    !isDamageReviewPending &&
+    roleCan(role, "billing.checkout");
+
+  const canGenerateInvoice =
+    isClosedFolio &&
+    !activeInvoice &&
+    roleCan(role, "billing.invoice");
 
   async function open(folio: Row) {
     if (!productionMode) {
@@ -192,12 +260,14 @@ export function FoliosBillingView({
   }
 
   function closeDialog() {
-    if (busy) return;
-    setDialog(null);
-    setFormError("");
-    setReverseReason("");
-    setCheckoutOverrideReason("");
-  }
+  if (busy) return;
+
+  setDialog(null);
+  setFormError("");
+  setReverseReason("");
+  setCheckoutOverrideReason("");
+  setInvoiceCancelReason("");
+}
 
   async function reloadSelected(folioId: string) {
     setSelected(await productionApi(`/api/folios/${folioId}`));
@@ -320,6 +390,15 @@ export function FoliosBillingView({
     setFormError("");
     setCheckoutOverrideReason("");
     setDialog({ type: "CHECKOUT" });
+  }
+
+  function openInvoiceCancelDialog(invoice: Row) {
+  setFormError("");
+  setInvoiceCancelReason("");
+  setDialog({
+    type: "CANCEL_INVOICE",
+    invoice,
+  });
   }
 
   async function submitPayment() {
@@ -456,19 +535,62 @@ export function FoliosBillingView({
     );
   }
 
+  async function submitInvoiceCancellation(invoice: Row) {
+    const reason = invoiceCancelReason.trim();
+
+    if (reason.length < 3) {
+      setFormError("Enter a reason for cancelling this invoice.");
+      return;
+    }
+
+    await postAction(
+      `/api/invoices/${String(invoice.id)}/cancel`,
+      {
+        reason,
+      },
+      {
+        success: "Invoice cancelled. You can now issue a corrected invoice.",
+      },
+    );
+  }
+
   async function submitCheckout() {
     if (!detail) return;
 
+    /*
+     * Stage 1 only requests housekeeping inspection.
+     * The folio is intentionally left open so approved room damage can still
+     * be posted before the final bill is closed.
+     */
+    if (!isOperationallyCheckedOut) {
+      await postAction(
+        `/api/reservations/${String(detail.reservationId)}/financial-checkout`,
+        { allowOutstanding: false },
+        {
+          success:
+            "Checkout inspection requested. Housekeeping must review the room before final folio closure.",
+          closeLedger: true,
+        },
+      );
+
+      return;
+    }
+
+    /*
+     * Stage 2 is the actual financial close after inspection/damage review.
+     */
     if (duePaise > 0) {
       if (!roleCan(role, "billing.override_checkout")) {
         setFormError(
-          "Checkout is blocked until the outstanding balance is settled.",
+          "Final checkout is blocked until the outstanding balance is settled.",
         );
         return;
       }
 
       if (checkoutOverrideReason.trim().length < 3) {
-        setFormError("Enter a reason for checkout with an outstanding balance.");
+        setFormError(
+          "Enter a reason for final checkout with an outstanding balance.",
+        );
         return;
       }
 
@@ -479,7 +601,7 @@ export function FoliosBillingView({
           overrideReason: checkoutOverrideReason.trim(),
         },
         {
-          success: "Guest checked out with approved balance override.",
+          success: "Final checkout completed with approved balance override.",
           closeLedger: true,
         },
       );
@@ -491,7 +613,7 @@ export function FoliosBillingView({
       `/api/reservations/${String(detail.reservationId)}/financial-checkout`,
       { allowOutstanding: false },
       {
-        success: "Checkout completed successfully.",
+        success: "Final checkout completed successfully.",
         closeLedger: true,
       },
     );
@@ -530,8 +652,13 @@ export function FoliosBillingView({
               return (
                 <tr key={String(folio.id)}>
                   <td>
-                    <strong>{String(folio.id).slice(0, 16)}</strong>
-                    <small>Version {Number(folio.version)}</small>
+                    <strong>
+                      {String(
+                        folio.folioNumber ??
+                          "Folio pending",
+                      )}
+                    </strong>
+                    <small>Financial folio</small>
                   </td>
 
                   <td>
@@ -539,14 +666,14 @@ export function FoliosBillingView({
                     <small>{String(currentReservation?.reference ?? "")}</small>
                   </td>
 
-                  <td>{money(folio.subtotalPaise)}</td>
-                  <td>{money(folio.discountPaise ?? 0)}</td>
-                  <td>{money(folio.taxPaise)}</td>
-                  <td>{money(folio.paidPaise ?? 0)}</td>
+                  <td>{moneyExact(folio.subtotalPaise)}</td>
+                  <td>{moneyExact(folio.discountPaise ?? 0)}</td>
+                  <td>{moneyExact(folio.taxPaise)}</td>
+                  <td>{moneyExact(folio.paidPaise ?? 0)}</td>
 
                   <td>
                     <strong>
-                      {money(folio.outstandingPaise ?? folio.totalPaise)}
+                      {moneyExact(folio.outstandingPaise ?? folio.totalPaise)}
                     </strong>
                   </td>
 
@@ -585,7 +712,10 @@ export function FoliosBillingView({
               <div>
                 <div className="folio-heading-line">
                   <p className="section-kicker">
-                    {String(reservation?.reference ?? "Financial folio")}
+                    {String(
+                      detail.folioNumber ??
+                        "Financial folio",
+                    )}
                   </p>
                   <span
                     className={`folio-state-pill ${String(
@@ -602,6 +732,8 @@ export function FoliosBillingView({
                   {String(guest?.fullName ?? "Guest")}
                   <span>•</span>
                   Room {String(room?.number ?? "TBA")}
+                  <span>•</span>
+                  Booking {String(reservation?.reference ?? "Pending")}
                 </p>
               </div>
 
@@ -620,22 +752,22 @@ export function FoliosBillingView({
               <section className="folio-summary-strip">
                 <div>
                   <span>Gross</span>
-                  <strong>{money(detail.subtotalPaise)}</strong>
+                  <strong>{moneyExact(detail.subtotalPaise)}</strong>
                 </div>
 
                 <div>
                   <span>Discount</span>
-                  <strong>{money(detail.discountPaise ?? 0)}</strong>
+                  <strong>{moneyExact(detail.discountPaise ?? 0)}</strong>
                 </div>
 
                 <div>
                   <span>Tax</span>
-                  <strong>{money(detail.taxPaise ?? 0)}</strong>
+                  <strong>{moneyExact(detail.taxPaise ?? 0)}</strong>
                 </div>
 
                 <div>
                   <span>Paid</span>
-                  <strong>{money(detail.paidPaise ?? 0)}</strong>
+                  <strong>{moneyExact(detail.paidPaise ?? 0)}</strong>
                 </div>
 
                 <div
@@ -656,7 +788,7 @@ export function FoliosBillingView({
                   </span>
 
                   <strong>
-                    {money(
+                    {moneyExact(
                       duePaise > 0
                         ? duePaise
                         : creditPaise > 0
@@ -678,7 +810,7 @@ export function FoliosBillingView({
                   </div>
 
                   <span className="folio-tax-copy">
-                    Taxable {money(detail.taxableAmountPaise ?? 0)}
+                    Taxable {moneyExact(detail.taxableAmountPaise ?? 0)}
                   </span>
                 </div>
 
@@ -714,10 +846,10 @@ export function FoliosBillingView({
                               <small>{humanize(line.category)}</small>
                             </td>
 
-                            <td>{money(line.taxableAmountPaise ?? 0)}</td>
-                            <td>{money(line.taxPaise ?? 0)}</td>
+                            <td>{moneyExact(line.taxableAmountPaise ?? 0)}</td>
+                            <td>{moneyExact(line.taxPaise ?? 0)}</td>
                             <td>
-                              <strong>{money(line.lineTotalPaise ?? 0)}</strong>
+                              <strong>{moneyExact(line.lineTotalPaise ?? 0)}</strong>
                             </td>
                           </tr>
                         ))
@@ -736,16 +868,16 @@ export function FoliosBillingView({
 
                 <div className="folio-tax-breakup">
                   <span>
-                    CGST <strong>{money(detail.cgstPaise ?? 0)}</strong>
+                    CGST <strong>{moneyExact(detail.cgstPaise ?? 0)}</strong>
                   </span>
                   <span>
-                    SGST <strong>{money(detail.sgstPaise ?? 0)}</strong>
+                    SGST <strong>{moneyExact(detail.sgstPaise ?? 0)}</strong>
                   </span>
                   <span>
-                    IGST <strong>{money(detail.igstPaise ?? 0)}</strong>
+                    IGST <strong>{moneyExact(detail.igstPaise ?? 0)}</strong>
                   </span>
                   <span className="folio-net-total">
-                    Net charges <strong>{money(detail.totalPaise ?? 0)}</strong>
+                    Net charges <strong>{moneyExact(detail.totalPaise ?? 0)}</strong>
                   </span>
                 </div>
               </section>
@@ -764,7 +896,7 @@ export function FoliosBillingView({
 
                   <div className="folio-net-received">
                     <span>Net received</span>
-                    <strong>{money(detail.paidPaise ?? 0)}</strong>
+                    <strong>{moneyExact(detail.paidPaise ?? 0)}</strong>
                   </div>
                 </div>
 
@@ -775,7 +907,7 @@ export function FoliosBillingView({
                       <span>
                         <strong>Guest has an advance / credit.</strong>
                         <small>
-                          {money(creditPaise)} can be refunded before checkout
+                          {moneyExact(creditPaise)} can be refunded before checkout
                           if required.
                         </small>
                       </span>
@@ -845,7 +977,7 @@ export function FoliosBillingView({
                           </div>
 
                           <strong className="folio-payment-amount">
-                            {money(payment.amountPaise)}
+                            {moneyExact(payment.amountPaise)}
                           </strong>
 
                           <div className="folio-payment-actions">
@@ -926,7 +1058,7 @@ export function FoliosBillingView({
                       </div>
 
                       <strong className="folio-payment-amount refund-amount">
-                        -{money(refund.amountPaise)}
+                        -{moneyExact(refund.amountPaise)}
                       </strong>
                     </article>
                   ))}
@@ -947,7 +1079,7 @@ export function FoliosBillingView({
                 </div>
 
                 <div className="folio-settlement-grid">
-                  {roleCan(role, "billing.take_payment") && (
+                  {canTakePayment && (
                     <button
                       type="button"
                       className="folio-settlement-card primary"
@@ -961,68 +1093,132 @@ export function FoliosBillingView({
                       <span>
                         <strong>Add payment</strong>
                         <small>
-                          Cash, UPI, card or bank transfer
+                          {isClosedFolio
+                            ? "Record post-checkout settlement"
+                            : "Cash, UPI, card or bank transfer"}
                         </small>
                       </span>
                     </button>
                   )}
 
-                  {roleCan(role, "billing.discount") && (
+                  {canPostCharges &&
+                    roleCan(role, "billing.discount") && (
+                      <button
+                        type="button"
+                        className="folio-settlement-card"
+                        disabled={busy}
+                        onClick={openDiscountDialog}
+                      >
+                        <span className="folio-settlement-icon">%</span>
+
+                        <span>
+                          <strong>Apply discount</strong>
+                          <small>Fixed amount or percentage</small>
+                        </span>
+                      </button>
+                    )}
+
+                  {canPostCharges &&
+                    roleCan(role, "billing.post_charge") && (
+                      <button
+                        type="button"
+                        className="folio-settlement-card"
+                        disabled={busy}
+                        onClick={openChargeDialog}
+                      >
+                        <span className="folio-settlement-icon">
+                          <Plus size={18} />
+                        </span>
+
+                        <span>
+                          <strong>Add charge</strong>
+                          <small>Add an extra service or adjustment</small>
+                        </span>
+                      </button>
+                    )}
+
+                  {canPostCharges && (
                     <button
                       type="button"
                       className="folio-settlement-card"
                       disabled={busy}
-                      onClick={openDiscountDialog}
-                    >
-                      <span className="folio-settlement-icon">%</span>
-
-                      <span>
-                        <strong>Apply discount</strong>
-                        <small>Fixed amount or percentage</small>
-                      </span>
-                    </button>
-                  )}
-
-                  {roleCan(role, "billing.post_charge") && (
-                    <button
-                      type="button"
-                      className="folio-settlement-card"
-                      disabled={busy}
-                      onClick={openChargeDialog}
+                      onClick={() =>
+                        void postAction(
+                          `/api/folios/${String(detail.id)}/room-charges`,
+                          {},
+                          { success: "Due room rent posted." },
+                        )
+                      }
                     >
                       <span className="folio-settlement-icon">
-                        <Plus size={18} />
+                        <ReceiptText size={18} />
                       </span>
 
                       <span>
-                        <strong>Add charge</strong>
-                        <small>Add an extra service or adjustment</small>
+                        <strong>Post room rent</strong>
+                        <small>Post any due room-night rent</small>
                       </span>
                     </button>
                   )}
-
-                  <button
-                    type="button"
-                    className="folio-settlement-card"
-                    disabled={busy}
-                    onClick={() =>
-                      void postAction(
-                        `/api/folios/${String(detail.id)}/room-charges`,
-                        {},
-                        { success: "Due room charges posted." },
-                      )
-                    }
-                  >
-                    <span className="folio-settlement-icon">
-                      <ReceiptText size={18} />
-                    </span>
-
-                    <span>
-                      <strong>Post room charges</strong>
-                      <small>Post any due room-night charges</small>
-                    </span>
-                  </button>
                 </div>
+
+                {isCheckoutInspectionPending && (
+                  <div className="folio-warning-panel">
+                    <AlertTriangle size={18} />
+
+                    <div>
+                      <strong>Waiting for housekeeping inspection.</strong>
+                      <span>
+                        The room has been operationally checked out. Housekeeping
+                        must record No damage or Damage found before the final
+                        folio can close.
+                      </span>
+                    </div>
+                  </div>
+                )}
+
+                {isDamageReviewPending && (
+                  <div className="folio-warning-panel">
+                    <AlertTriangle size={18} />
+
+                    <div>
+                      <strong>Room damage is awaiting manager review.</strong>
+                      <span>
+                        The manager must post the approved guest charge or waive
+                        it before final checkout.
+                      </span>
+                    </div>
+                  </div>
+                )}
+
+                {isCheckoutReady && (
+                  <div className="folio-success-panel">
+                    <CheckCircle2 size={18} />
+
+                    <div>
+                      <strong>Housekeeping review is complete.</strong>
+                      <span>
+                        Settle the final balance, then finalize checkout to close
+                        the folio and enable the final invoice.
+                      </span>
+                    </div>
+                  </div>
+                )}
+
+                {isClosedFolio && (
+                  <div className="folio-success-panel">
+                    <CheckCircle2 size={18} />
+
+                    <div>
+                      <strong>This folio is closed.</strong>
+                      <span>
+                        Charges, discounts and room postings are locked.
+                        Post-checkout payments, refunds and reversals remain
+                        available when permitted.
+                      </span>
+                    </div>
+                  </div>
+                )}
 
                 <div className="folio-final-actions">
                   <div>
@@ -1032,7 +1228,7 @@ export function FoliosBillingView({
                           Outstanding balance
                         </span>
                         <strong className="folio-balance-due">
-                          {money(duePaise)}
+                          {moneyExact(duePaise)}
                         </strong>
                       </>
                     ) : creditPaise > 0 ? (
@@ -1041,7 +1237,7 @@ export function FoliosBillingView({
                           Guest credit
                         </span>
                         <strong className="folio-balance-credit">
-                          {money(creditPaise)}
+                          {moneyExact(creditPaise)}
                         </strong>
                       </>
                     ) : (
@@ -1055,71 +1251,133 @@ export function FoliosBillingView({
                   </div>
 
                   <div className="folio-final-buttons">
-                    {latestInvoice ? (
-                      <a
-                        className="secondary-button"
-                        href={apiUrl(
-                          `/api/invoices/${String(latestInvoice.id)}/pdf`,
-                        )}
-                        target="_blank"
-                        rel="noreferrer"
-                      >
-                        <Download size={16} />
-                        Download invoice
-                      </a>
-                    ) : (
-                      roleCan(role, "billing.invoice") && (
-                        <button
-                          type="button"
-                          className="secondary-button"
-                          disabled={busy}
-                          onClick={() =>
-                            void postAction(
-                              `/api/folios/${String(detail.id)}/invoice`,
-                              {},
-                              { success: "Tax invoice generated." },
-                            )
-                          }
-                        >
-                          <ReceiptText size={16} />
-                          Generate invoice
-                        </button>
-                      )
-                    )}
+  {activeInvoice ? (
+    <>
+      <a
+        className="secondary-button"
+        href={apiUrl(
+          `/api/invoices/${String(activeInvoice.id)}/pdf`,
+        )}
+        target="_blank"
+        rel="noreferrer"
+      >
+        <Download size={16} />
+        Download invoice
+      </a>
 
-                    {roleCan(role, "billing.checkout") && (
-                      <button
-                        type="button"
-                        className="primary-button folio-checkout-button"
-                        disabled={busy}
-                        onClick={openCheckoutDialog}
-                      >
-                        Checkout guest
-                      </button>
-                    )}
-                  </div>
+      {roleCan(role, "billing.invoice") && (
+        <button
+          type="button"
+          className="folio-danger-button"
+          disabled={busy}
+          onClick={() =>
+            openInvoiceCancelDialog(activeInvoice)
+          }
+        >
+          <X size={16} />
+          Cancel invoice
+        </button>
+      )}
+    </>
+  ) : canGenerateInvoice ? (
+    <button
+      type="button"
+      className="secondary-button"
+      disabled={busy}
+      onClick={() =>
+        void postAction(
+          `/api/folios/${String(detail.id)}/invoice`,
+          {},
+          {
+            success:
+              invoices.length > 0
+                ? "Corrected tax invoice issued."
+                : "Tax invoice generated.",
+          },
+        )
+      }
+    >
+      <ReceiptText size={16} />
+
+      {invoices.length > 0
+        ? "Reissue invoice"
+        : "Generate invoice"}
+    </button>
+  ) : null}
+
+  {canStartCheckout && (
+    <button
+      type="button"
+      className="primary-button folio-checkout-button"
+      disabled={busy}
+      onClick={openCheckoutDialog}
+    >
+      Start checkout inspection
+    </button>
+  )}
+
+  {canFinalizeCheckout && (
+    <button
+      type="button"
+      className="primary-button folio-checkout-button"
+      disabled={busy}
+      onClick={openCheckoutDialog}
+    >
+      Finalize checkout
+    </button>
+  )}
+</div>
                 </div>
 
-                {invoices.length > 1 && (
-                  <div className="folio-invoice-history">
-                    <span>Invoice history</span>
-                    <div>
-                      {invoices.map((invoice) => (
-                        <a
-                          key={String(invoice.id)}
-                          href={apiUrl(
-                            `/api/invoices/${String(invoice.id)}/pdf`,
-                          )}
-                          target="_blank"
-                          rel="noreferrer"
-                        >
-                          <Download size={13} />
-                          {String(invoice.invoiceNumber)}
-                        </a>
-                      ))}
-                    </div>
-                  </div>
-                )}
+                {invoices.length > 0 && (
+  <div className="folio-invoice-history">
+    <span>Invoice history</span>
+
+    <div>
+      {invoices.map((invoice) => {
+        const invoiceStatus = String(
+          invoice.status ?? "ISSUED",
+        ).toUpperCase();
+
+        const isCancelled =
+          invoiceStatus === "CANCELLED";
+        
+        const cancelReason = String(
+  invoice.cancelReason ?? "",
+).trim();  
+
+        return (
+          <div
+            key={String(invoice.id)}
+            style={{
+              display: "flex",
+              alignItems: "center",
+              gap: "10px",
+              flexWrap: "wrap",
+            }}
+          >
+            <a
+              href={apiUrl(
+                `/api/invoices/${String(invoice.id)}/pdf`,
+              )}
+              target="_blank"
+              rel="noreferrer"
+            >
+              <Download size={13} />
+              {String(invoice.invoiceNumber)}
+            </a>
+
+            <Status value={invoiceStatus} />
+
+            {isCancelled && cancelReason.length > 0 && (
+  <small>{cancelReason}</small>
+)}
+          </div>
+        );
+      })}
+    </div>
+  </div>
+)}
               </section>
             </div>
           </section>
@@ -1140,7 +1398,11 @@ export function FoliosBillingView({
                       {dialog.type === "CHARGE" && "NEW CHARGE"}
                       {dialog.type === "REFUND" && "PAYMENT REFUND"}
                       {dialog.type === "REVERSE" && "PAYMENT REVERSAL"}
-                      {dialog.type === "CHECKOUT" && "CHECKOUT"}
+                      {dialog.type === "CANCEL_INVOICE" && "INVOICE CORRECTION"}
+                      {dialog.type === "CHECKOUT" &&
+                        (isOperationallyCheckedOut
+                          ? "FINAL CHECKOUT"
+                          : "CHECKOUT INSPECTION")}
                     </span>
 
                     <h3>
@@ -1149,7 +1411,11 @@ export function FoliosBillingView({
                       {dialog.type === "CHARGE" && "Add charge"}
                       {dialog.type === "REFUND" && "Refund payment"}
                       {dialog.type === "REVERSE" && "Reverse payment"}
-                      {dialog.type === "CHECKOUT" && "Confirm checkout"}
+                      {dialog.type === "CANCEL_INVOICE" && "Cancel invoice"}
+                      {dialog.type === "CHECKOUT" &&
+                        (isOperationallyCheckedOut
+                          ? "Finalize checkout"
+                          : "Start checkout inspection")}
                     </h3>
                   </div>
 
@@ -1229,7 +1495,7 @@ export function FoliosBillingView({
 
                       {duePaise > 0 && (
                         <small>
-                          Current outstanding: {money(duePaise)}
+                          Current outstanding: {moneyExact(duePaise)}
                         </small>
                       )}
                     </label>
@@ -1495,7 +1761,7 @@ export function FoliosBillingView({
 
                       <span>
                         <small>Payment</small>
-                        <strong>{money(dialog.payment.amountPaise)}</strong>
+                        <strong>{moneyExact(dialog.payment.amountPaise)}</strong>
                       </span>
                     </div>
 
@@ -1599,7 +1865,7 @@ export function FoliosBillingView({
 
                       <span>
                         <small>Amount</small>
-                        <strong>{money(dialog.payment.amountPaise)}</strong>
+                        <strong>{moneyExact(dialog.payment.amountPaise)}</strong>
                       </span>
                     </div>
 
@@ -1637,17 +1903,114 @@ export function FoliosBillingView({
                   </div>
                 )}
 
+                {dialog.type === "CANCEL_INVOICE" && (
+  <div className="folio-form-body">
+    <div className="folio-warning-panel">
+      <AlertTriangle size={18} />
+
+      <div>
+        <strong>Cancel this issued invoice?</strong>
+        <span>
+          Issued invoices are immutable. The existing invoice will remain in
+          history as cancelled, and a new invoice can then be issued with a new
+          invoice number.
+        </span>
+      </div>
+    </div>
+
+    <div className="folio-operation-summary">
+      <span>
+        <small>Invoice</small>
+        <strong>
+          {String(
+            dialog.invoice.invoiceNumber ??
+              "Issued invoice",
+          )}
+        </strong>
+      </span>
+
+      <span>
+        <small>Status</small>
+        <strong>
+          {humanize(
+            dialog.invoice.status ?? "ISSUED",
+          )}
+        </strong>
+      </span>
+
+      <span>
+        <small>Total</small>
+        <strong>
+          {moneyExact(
+            dialog.invoice.grandTotalPaise ??
+              dialog.invoice.totalPaise ??
+              0,
+          )}
+        </strong>
+      </span>
+    </div>
+
+    <label className="folio-form-field">
+      <span>Cancellation reason</span>
+
+      <textarea
+        rows={4}
+        maxLength={500}
+        value={invoiceCancelReason}
+        onChange={(event) =>
+          setInvoiceCancelReason(event.target.value)
+        }
+        placeholder="Example: Historical invoice amount mismatch repair"
+      />
+
+      <small>
+        Required. Minimum 3 characters. This reason will be retained with
+        the cancelled invoice.
+      </small>
+    </label>
+
+    <div className="folio-form-actions">
+      <button
+        type="button"
+        className="secondary-button"
+        disabled={busy}
+        onClick={closeDialog}
+      >
+        Keep invoice
+      </button>
+
+      <button
+        type="button"
+        className="folio-danger-button"
+        disabled={
+          busy ||
+          invoiceCancelReason.trim().length < 3
+        }
+        onClick={() =>
+          void submitInvoiceCancellation(
+            dialog.invoice,
+          )
+        }
+      >
+        {busy
+          ? "Cancelling..."
+          : "Cancel invoice"}
+      </button>
+    </div>
+  </div>
+)}
+
                 {dialog.type === "CHECKOUT" && (
                   <div className="folio-form-body">
                     <div className="folio-checkout-summary">
                       <div>
                         <span>Net charges</span>
-                        <strong>{money(detail.totalPaise ?? 0)}</strong>
+                        <strong>{moneyExact(detail.totalPaise ?? 0)}</strong>
                       </div>
 
                       <div>
                         <span>Paid</span>
-                        <strong>{money(detail.paidPaise ?? 0)}</strong>
+                        <strong>{moneyExact(detail.paidPaise ?? 0)}</strong>
                       </div>
 
                       <div
@@ -1668,7 +2031,7 @@ export function FoliosBillingView({
                         </span>
 
                         <strong>
-                          {money(
+                          {moneyExact(
                             duePaise > 0
                               ? duePaise
                               : creditPaise > 0
@@ -1679,116 +2042,187 @@ export function FoliosBillingView({
                       </div>
                     </div>
 
-                    {duePaise === 0 && creditPaise === 0 && (
-                      <div className="folio-success-panel">
-                        <CheckCircle2 size={18} />
-                        <div>
-                          <strong>Folio is fully settled.</strong>
-                          <span>
-                            Checkout will close the folio and release the room
-                            for housekeeping.
-                          </span>
-                        </div>
-                      </div>
-                    )}
-
-                    {creditPaise > 0 && (
-                      <div className="folio-warning-panel credit">
-                        <AlertTriangle size={18} />
-                        <div>
-                          <strong>
-                            Guest has {money(creditPaise)} credit.
-                          </strong>
-                          <span>
-                            Refund the advance first if the amount should be
-                            returned. Checkout can still be completed.
-                          </span>
-                        </div>
-                      </div>
-                    )}
-
-                    {duePaise > 0 && (
+                    {!isOperationallyCheckedOut ? (
                       <>
                         <div className="folio-warning-panel">
                           <AlertTriangle size={18} />
+
                           <div>
                             <strong>
-                              {money(duePaise)} is still outstanding.
+                              Housekeeping inspection comes before the final bill.
                             </strong>
                             <span>
-                              Standard checkout is blocked until the balance is
-                              paid.
+                              Due room rent will be posted first. The room will
+                              become vacant and dirty, and housekeeping will
+                              receive a checkout inspection task. The folio stays
+                              open so approved damage or missing-item charges can
+                              still be added.
                             </span>
                           </div>
                         </div>
 
-                        {roleCan(role, "billing.override_checkout") ? (
-                          <label className="folio-form-field">
-                            <span>Override reason</span>
-                            <textarea
-                              rows={3}
-                              value={checkoutOverrideReason}
-                              onChange={(event) =>
-                                setCheckoutOverrideReason(event.target.value)
-                              }
-                              placeholder="Why is checkout allowed with an unpaid balance?"
-                            />
-                            <small>
-                              This action is audited as an unpaid checkout
-                              override.
-                            </small>
-                          </label>
-                        ) : (
-                          <div className="folio-checkout-blocked">
-                            You do not have permission to override an unpaid
-                            checkout. Record payment first.
+                        {duePaise > 0 && (
+                          <div className="folio-success-panel">
+                            <CheckCircle2 size={18} />
+
+                            <div>
+                              <strong>
+                                Current balance: {moneyExact(duePaise)}
+                              </strong>
+                              <span>
+                                This does not block the inspection request. The
+                                final balance can be collected after housekeeping
+                                and damage review are complete.
+                              </span>
+                            </div>
                           </div>
                         )}
-                      </>
-                    )}
 
-                    <div className="folio-form-actions">
-                      <button
-                        type="button"
-                        className="secondary-button"
-                        disabled={busy}
-                        onClick={closeDialog}
-                      >
-                        Cancel
-                      </button>
-
-                      {creditPaise > 0 &&
-                        latestReceivedPayment &&
-                        roleCan(role, "billing.refund") && (
+                        <div className="folio-form-actions">
                           <button
                             type="button"
                             className="secondary-button"
                             disabled={busy}
-                            onClick={() =>
-                              openRefundDialog(latestReceivedPayment)
-                            }
+                            onClick={closeDialog}
                           >
-                            Refund credit
+                            Cancel
                           </button>
+
+                          <button
+                            type="button"
+                            className="primary-button"
+                            disabled={busy}
+                            onClick={() => void submitCheckout()}
+                          >
+                            {busy
+                              ? "Starting inspection..."
+                              : "Send to housekeeping"}
+                          </button>
+                        </div>
+                      </>
+                    ) : (
+                      <>
+                        {duePaise === 0 && creditPaise === 0 && (
+                          <div className="folio-success-panel">
+                            <CheckCircle2 size={18} />
+
+                            <div>
+                              <strong>Folio is fully settled.</strong>
+                              <span>
+                                Housekeeping review is complete. Final checkout
+                                will close the folio and allow the final tax
+                                invoice to be issued.
+                              </span>
+                            </div>
+                          </div>
                         )}
 
-                      <button
-                        type="button"
-                        className="primary-button"
-                        disabled={
-                          busy ||
-                          (duePaise > 0 &&
-                            !roleCan(role, "billing.override_checkout"))
-                        }
-                        onClick={() => void submitCheckout()}
-                      >
-                        {busy
-                          ? "Checking out..."
-                          : duePaise > 0
-                            ? "Checkout with override"
-                            : "Complete checkout"}
-                      </button>
-                    </div>
+                        {creditPaise > 0 && (
+                          <div className="folio-warning-panel credit">
+                            <AlertTriangle size={18} />
+
+                            <div>
+                              <strong>
+                                Guest has {moneyExact(creditPaise)} credit.
+                              </strong>
+                              <span>
+                                Refund the advance first if the amount should be
+                                returned. Final checkout can still be completed.
+                              </span>
+                            </div>
+                          </div>
+                        )}
+
+                        {duePaise > 0 && (
+                          <>
+                            <div className="folio-warning-panel">
+                              <AlertTriangle size={18} />
+
+                              <div>
+                                <strong>
+                                  {moneyExact(duePaise)} is still outstanding.
+                                </strong>
+                                <span>
+                                  Final checkout is blocked until the balance is
+                                  paid unless an authorized manager uses an
+                                  override.
+                                </span>
+                              </div>
+                            </div>
+
+                            {roleCan(role, "billing.override_checkout") ? (
+                              <label className="folio-form-field">
+                                <span>Override reason</span>
+
+                                <textarea
+                                  rows={3}
+                                  value={checkoutOverrideReason}
+                                  onChange={(event) =>
+                                    setCheckoutOverrideReason(
+                                      event.target.value,
+                                    )
+                                  }
+                                  placeholder="Why is final checkout allowed with an unpaid balance?"
+                                />
+
+                                <small>
+                                  This action is audited as an unpaid final
+                                  checkout override.
+                                </small>
+                              </label>
+                            ) : (
+                              <div className="folio-checkout-blocked">
+                                You do not have permission to override an unpaid
+                                final checkout. Record payment first.
+                              </div>
+                            )}
+                          </>
+                        )}
+
+                        <div className="folio-form-actions">
+                          <button
+                            type="button"
+                            className="secondary-button"
+                            disabled={busy}
+                            onClick={closeDialog}
+                          >
+                            Cancel
+                          </button>
+
+                          {creditPaise > 0 &&
+                            latestReceivedPayment &&
+                            roleCan(role, "billing.refund") && (
+                              <button
+                                type="button"
+                                className="secondary-button"
+                                disabled={busy}
+                                onClick={() =>
+                                  openRefundDialog(latestReceivedPayment)
+                                }
+                              >
+                                Refund credit
+                              </button>
+                            )}
+
+                          <button
+                            type="button"
+                            className="primary-button"
+                            disabled={
+                              busy ||
+                              (duePaise > 0 &&
+                                !roleCan(role, "billing.override_checkout"))
+                            }
+                            onClick={() => void submitCheckout()}
+                          >
+                            {busy
+                              ? "Finalizing..."
+                              : duePaise > 0
+                                ? "Finalize with override"
+                                : "Finalize checkout"}
+                          </button>
+                        </div>
+                      </>
+                    )}
                   </div>
                 )}
               </section>

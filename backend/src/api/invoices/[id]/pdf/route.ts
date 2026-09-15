@@ -1,7 +1,9 @@
 import { and, asc, eq, isNull } from "drizzle-orm";
 
 import {
+  appUsers,
   folioLines,
+  folios,
   invoices,
   paymentRefunds,
   payments,
@@ -54,6 +56,13 @@ function formatDate(value: string | null | undefined) {
   return `${Number(day)} ${MONTHS[monthIndex]} ${year}`;
 }
 
+function humanize(value: string | null | undefined) {
+  return String(value ?? "")
+    .replaceAll("_", " ")
+    .toLowerCase()
+    .replace(/\b\w/g, (letter) => letter.toUpperCase());
+}
+
 export async function GET(
   request: Request,
   route: {
@@ -70,11 +79,8 @@ export async function GET(
     );
 
     const db = getDb();
-
     const { id } = await route.params;
-
-    const invoiceId =
-      entityIdSchema.parse(id);
+    const invoiceId = entityIdSchema.parse(id);
 
     const [invoice] = await db
       .select()
@@ -107,6 +113,8 @@ export async function GET(
       paymentRows,
       refundRows,
       stayRows,
+      folioRows,
+      issuerRows,
     ] = await Promise.all([
       db
         .select()
@@ -208,19 +216,76 @@ export async function GET(
           ),
         )
         .limit(1),
+
+      db
+        .select({
+          folioNumber:
+            folios.folioNumber,
+        })
+        .from(folios)
+        .where(
+          and(
+            eq(
+              folios.id,
+              invoice.folioId,
+            ),
+            eq(
+              folios.organisationId,
+              context.actor.organisationId,
+            ),
+            eq(
+              folios.propertyId,
+              context.property.id,
+            ),
+          ),
+        )
+        .limit(1),
+
+      db
+        .select({
+          name:
+            appUsers.name,
+          displayName:
+            appUsers.displayName,
+          role:
+            appUsers.role,
+        })
+        .from(appUsers)
+        .where(
+          and(
+            eq(
+              appUsers.id,
+              invoice.issuedBy,
+            ),
+            eq(
+              appUsers.organisationId,
+              context.actor.organisationId,
+            ),
+          ),
+        )
+        .limit(1),
     ]);
 
     const stay = stayRows[0];
+    const folio = folioRows[0];
+    const issuer = issuerRows[0];
+
+    const activePayments =
+      paymentRows.filter(
+        (payment) =>
+          String(
+            payment.status,
+          ).toUpperCase() !==
+          "REVERSED",
+      );
 
     const receivedAmount =
-      paymentRows.reduce(
+      activePayments.reduce(
         (sum, payment) =>
           sum +
-          (payment.status === "REVERSED"
-            ? 0
-            : Number(
-                payment.amountPaise,
-              )),
+          Number(
+            payment.amountPaise,
+          ),
         0,
       );
 
@@ -228,16 +293,22 @@ export async function GET(
       refundRows.reduce(
         (sum, refund) =>
           sum +
-          (refund.status === "RECORDED"
-            ? Number(
-                refund.amountPaise,
-              )
-            : 0),
+          (
+            String(
+              refund.status,
+            ).toUpperCase() ===
+            "RECORDED"
+              ? Number(
+                  refund.amountPaise,
+                )
+              : 0
+          ),
         0,
       );
 
     const paid =
-      receivedAmount - refundedAmount;
+      receivedAmount -
+      refundedAmount;
 
     const grandTotal =
       Number(
@@ -246,6 +317,39 @@ export async function GET(
 
     const balance =
       grandTotal - paid;
+
+    const paymentMethods = [
+      ...new Set(
+        activePayments
+          .map((payment) =>
+            humanize(
+              String(
+                payment.method ?? "",
+              ),
+            ),
+          )
+          .filter(Boolean),
+      ),
+    ];
+
+    const paymentReferences =
+      activePayments
+        .map((payment) =>
+          String(
+            payment.reference ?? "",
+          ).trim(),
+        )
+        .filter(Boolean);
+
+    const managerName =
+      issuer?.displayName?.trim() ||
+      issuer?.name?.trim() ||
+      "Authorized Manager";
+
+    const managerTitle =
+      humanize(
+        issuer?.role,
+      ) || "Manager";
 
     const pdf =
       premiumInvoicePdf({
@@ -274,6 +378,9 @@ export async function GET(
               invoice.status ??
                 "ISSUED",
             ),
+
+          cancelReason:
+            invoice.cancelReason,
         },
 
         customer: {
@@ -295,6 +402,10 @@ export async function GET(
             stay?.reference ??
             invoice.reservationId,
 
+          folio:
+            folio?.folioNumber ??
+            null,
+
           dates:
             stay?.arrivalDate &&
             stay?.departureDate
@@ -308,6 +419,30 @@ export async function GET(
           room:
             stay?.roomNumber ??
             "TBA",
+        },
+
+        payment: {
+          method:
+            paymentMethods.length
+              ? paymentMethods.join(
+                  " / ",
+                )
+              : "Not recorded",
+
+          reference:
+            paymentReferences.length
+              ? paymentReferences.join(
+                  " / ",
+                )
+              : null,
+        },
+
+        manager: {
+          name:
+            managerName,
+
+          title:
+            managerTitle,
         },
 
         lines:

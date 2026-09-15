@@ -1,4 +1,10 @@
-﻿"use client";
+"use client";
+import {readProductionOffline,cacheProductionOffline} from '@/lib/production-offline';
+import { productionSummary } from '@/lib/production-summary';
+import { loadReservationPages } from '@/lib/load-reservations';
+import { ProductionVerification } from '@/components/hotel/ProductionVerification';
+import { TravelWorkspace } from '@/components/travel/TravelWorkspace';
+
 /* eslint-disable @next/next/no-img-element -- Runtime avatars and supplied local logos use direct image URLs. */
 import { apiFetch, apiUrl } from "@/lib/api/client";
 import { routeProductionCommand } from "@/lib/production-command-routing";
@@ -66,7 +72,6 @@ import { usePathname, useRouter } from "next/navigation";
 import {
   AlertTriangle,
   ArrowRight,
-  Bell,
   Check,
   ChevronDown,
   LogOut,
@@ -555,25 +560,6 @@ function productionShell(
 ): DemoState {
   const user = context.user as DemoState["actor"];
   const property = (context.property as Row | null) ?? {};
-  const metrics: Metrics = {
-    occupancyPercent: 0,
-    totalRooms: roomItems.length,
-    occupiedRooms: 0,
-    availableRooms: roomItems.length,
-    readyRooms: roomItems.length,
-    dirtyRooms: 0,
-    maintenanceRooms: 0,
-    arrivalsToday: 0,
-    departuresToday: 0,
-    inHouseGuests: 0,
-    pendingPayments: 0,
-    revenuePaise: 0,
-    adrPaise: 0,
-    revParPaise: 0,
-    lowStockCount: 0,
-    unresolvedMaintenance: 0,
-    overdueFollowUps: 0,
-  };
   return {
     organisationId: String((context.organisation as Row)?.id ?? ""),
     operationalData: operations,
@@ -582,20 +568,12 @@ function productionShell(
     property: {
       id: String(property.id ?? "travel-workspace"),
       name: String(property.name ?? (context.organisation as Row)?.name ?? "Travel & Sales"),
-      city: "",
+      city: String(property.city ?? ""),
       timezone: String(property.timezone),
       connectionStatus: "ONLINE",
       lastSyncAt: new Date().toISOString(),
     },
-    metrics,
-    travelMetrics: {
-      activePackages: 0,
-      openInquiries: 0,
-      pipelineValuePaise: 0,
-      customQuotes: 0,
-      pendingApprovals: 0,
-      overdueFollowUps: 0,
-    },
+    ...productionSummary(property, roomItems, reservationItems, folioItems, operations),
     rooms: roomItems,
     reservations: reservationItems.map((item) => ({
       ...item,
@@ -606,7 +584,6 @@ function productionShell(
     })),
     folios: folioItems,
     folioLines: [],
-    offlineBills: [],
     housekeeping: (operations.housekeeping as Row[]) ?? [],
     housekeepingStaff: (operations.housekeepingStaff as Row[]) ?? [],
     maintenance: (operations.maintenance as Row[]) ?? [],
@@ -1013,6 +990,13 @@ export function HotelPlatform({
       setError("");
       try {
         if (appMode === "production") {
+          if (!navigator.onLine) {
+            const cached=await readProductionOffline();
+            if(!cached)throw new Error('Offline access is unavailable or expired. Reconnect and sign in.');
+            if(sequence!==loadSequence.current)return;
+            setRole(cached.actor.role);setState(cached);setSurface('PROPERTY');setLocalReservations((await getLocalOfflineReservations()).filter(r=>r.organisationId===cached.organisationId&&r.propertyId===cached.property.id&&r.createdById===cached.actor.id));
+            return;
+          }
           const context = await productionApi("/api/context");
           const actualRole = String((context.user as Row).role) as AppRole;
           const allowedUnits = businessUnitsForRole(actualRole);
@@ -1020,7 +1004,12 @@ export function HotelPlatform({
             ? selectedUnit
             : (allowedUnits[0] ?? "HOTEL");
           if (effectiveUnit === "TRAVEL") {
-            const travel = await productionApi("/api/travel");
+            const [travel, administration] = await Promise.all([
+              productionApi("/api/travel"),
+              context.property && (roleCan(actualRole,'staff.manage') || roleCan(actualRole,'property.manage')) ? productionApi('/api/operations') : Promise.resolve({} as Row),
+            ]);
+            travel.staff = administration.staff;
+            travel.propertySettings = administration.propertySettings;
             if (sequence !== loadSequence.current) return;
             setRole(actualRole);
             setState({ ...productionShell(context, [], [], [], travel), businessUnit: "TRAVEL" });
@@ -1030,7 +1019,7 @@ export function HotelPlatform({
           const [reservationPage, roomPage, folioPage, operations] =
             await Promise.all([
               roleCan(actualRole, "reservation.read")
-                ? productionApi("/api/reservations?pageSize=25")
+                ? loadReservationPages(productionApi)
                 : Promise.resolve({ items: [] }),
               productionApi("/api/rooms"),
               roleCan(actualRole, "billing.view")
@@ -1040,7 +1029,7 @@ export function HotelPlatform({
             ]);
           if (sequence !== loadSequence.current) return;
           setRole(actualRole);
-          setState({
+          const loadedState:DemoState={
             ...productionShell(
               context,
               reservationPage.items as Row[],
@@ -1049,7 +1038,10 @@ export function HotelPlatform({
               operations,
             ),
             businessUnit: effectiveUnit,
-          });
+          };
+          setState(loadedState);
+          await cacheProductionOffline(loadedState).catch(()=>notify("Offline cache could not be updated on this device."));
+          setLocalReservations((await getLocalOfflineReservations()).filter(r=>r.organisationId===loadedState.organisationId&&r.propertyId===loadedState.property.id&&r.createdById===loadedState.actor.id));
           setLastRefreshedAt(new Date());
           return;
         }
@@ -1126,7 +1118,7 @@ export function HotelPlatform({
         if (sequence === loadSequence.current) setLoading(false);
       }
     },
-    [appMode],
+    [appMode, notify],
   );
 
   useEffect(() => {
@@ -1393,7 +1385,7 @@ export function HotelPlatform({
   const viewState = useMemo<DemoState | null>(() => {
     if (!state || businessUnit !== "HOTEL") return state;
     const pendingRows: Row[] = localReservations
-      .filter((reservation) => reservation.syncStatus !== "SYNCED")
+      .filter((reservation) => reservation.syncStatus !== "SYNCED" && (appMode!=="production" || (reservation.organisationId===state.organisationId && reservation.propertyId===state.property.id && reservation.createdById===state.actor.id)))
       .map((reservation) => ({
         id: reservation.id,
         reference: reservation.localReference,
@@ -1416,7 +1408,7 @@ export function HotelPlatform({
         syncError: reservation.syncError,
       }));
     return { ...state, reservations: [...state.reservations, ...pendingRows] };
-  }, [businessUnit, localReservations, state]);
+  }, [appMode, businessUnit, localReservations, state]);
   const searchResults = useMemo<Row[]>(() => {
     if (!viewState || search.trim().length < 2) return [];
     const query = search.toLowerCase();
@@ -1829,6 +1821,8 @@ export function HotelPlatform({
                   ...(form as Parameters<
                     typeof createLocalWalkInReservation
                   >[0]),
+                  organisationId: viewState.organisationId,
+                  propertyId: viewState.property.id,
                   createdById: String(viewState.actor.id),
                   createdByName: String(viewState.actor.name),
                   createdByRole: role,
@@ -1932,32 +1926,139 @@ export type PlatformViewProps = {
 };
 
 function ViewRouter(props: PlatformViewProps) {
-  if (props.productionMode && ['Menu Management','Lost & Found','Maintenance','Inventory Movments','Inventory Movements','Room Types & Rates','Users & Permissions','Properties & Settings','Restaurant Orders','Room Service','Meal Service'].includes(props.view)) return <OperationalWorkspace {...props}/>;
+  if(props.productionMode && props.propertyRestricted && !['Overview','Reservations','Housekeeping','Offline Billing','Device Status'].includes(props.view)) return <div className="empty-state glass-card"><h2>{props.view} requires a connection</h2><p>Reconnect to load current records and make changes. Cached reservations, housekeeping and offline billing remain available.</p><button className="secondary-button" onClick={()=>props.setView('Offline Billing')}>Open offline billing</button></div>;
+
+  if (props.productionMode && props.view === 'Verification') return <ProductionVerification {...props}/>;
+  if (props.productionMode && props.businessUnit === 'TRAVEL' && ['Tours','Participants','Tour Managers','Communications','Inquiry CRM','Sales Pipeline','Follow-ups'].includes(props.view)) return <TravelWorkspace {...props}/>;
+
+  // Production-only generic operational modules.
+  // Maintenance intentionally excluded because it now has its own
+  // full Step 8A production CRUD view.
+  if (
+    props.productionMode &&
+    [
+      "Menu Management",
+      "Lost & Found",
+      "Inventory Movements",
+      "Room Types & Rates",
+      "Users & Permissions",
+      "Properties & Settings",
+      "Restaurant Orders",
+      "Room Service",
+      "Meal Service",
+    ].includes(props.view)
+  ) {
+    return <OperationalWorkspace {...props} />;
+  }
+
   if (props.view === "Overview") {
-    if (props.businessUnit === "TRAVEL") return <TravelOverviewView {...props} />;
-    if (props.role === "HOUSEKEEPING") return <HousekeepingOverviewView {...props} />;
-    if (props.role === "RESTAURANT") return <RestaurantOverviewView {...props} />;
+    if (props.businessUnit === "TRAVEL") {
+      return <TravelOverviewView {...props} />;
+    }
+
+    if (props.role === "HOUSEKEEPING") {
+      return <HousekeepingOverviewView {...props} />;
+    }
+
+    if (props.role === "RESTAURANT") {
+      return <RestaurantOverviewView {...props} />;
+    }
+
     return <OverviewView {...props} />;
   }
-  if (props.view === "Reservations") return <ReservationsView {...props} />;
-  if (props.view === "Connectivity") return <ConnectivityView {...props} />;
-  if (props.view === "Front Desk") return props.productionMode ? <ProductionFrontDesk openReservation={props.openReservation} openStay={props.setSelectedReservation} notify={props.notify} refreshKey={props.state.reservations.map((item) => `${String(item.id)}:${String(item.version)}`).join("|")} /> : <FrontDeskView {...props} />;
-  if (props.view === "Guests") return props.productionMode ? <ProductionGuests notify={props.notify} role={props.role} /> : <GuestsView {...props} />;
-  const views: Partial<Record<ViewName, ComponentType<PlatformViewProps>>> = {
-    "Folios & Billing": FoliosBillingView, "Room Calendar": RoomCalendarView, "Arrivals & Departures": ArrivalsDeparturesView,
-    "Room Types & Rates": RoomTypesRatesView, "Guest Profiles": GuestProfilesView, Invoices: InvoicesView,
-    Housekeeping: HousekeepingView, Maintenance: MaintenanceView, Inventory: InventoryView,
-    "Inventory Movements": InventoryMovementsView, "Lost & Found": LostFoundView, "Restaurant Orders": RestaurantOrdersView,
-    "Room Service": RoomServiceView, "Meal Service": MealServiceView, "Menu Management": MenuManagementView,
-    "Offline Billing": OfflineBillingView, Verification: VerificationView, "Device Status": DeviceStatusView,
-    Integrations: IntegrationsView, Reports: props.businessUnit === "TRAVEL" ? TravelReportsView : ReportsView,
-    "Audit Logs": props.businessUnit === "TRAVEL" ? TravelAuditLogsView : AuditLogsView,
-    "Users & Permissions": UsersPermissionsView, "Properties & Settings": PropertiesSettingsView,
-    "Packages & Tours": PackagesToursView, Tours: ToursView, Participants: ParticipantsView,
-    "Tour Managers": TourManagersView, "Inquiry CRM": InquiryCRMView, "Sales Pipeline": SalesPipelineView,
-    "Follow-ups": FollowUpsView, Communications: CommunicationsView,
+
+  if (props.view === "Reservations") {
+    return <ReservationsView {...props} />;
+  }
+
+  if (props.view === "Connectivity") {
+    return <ConnectivityView {...props} />;
+  }
+
+  if (props.view === "Front Desk") {
+    return props.productionMode ? (
+      <ProductionFrontDesk
+        openReservation={props.openReservation}
+        openStay={props.setSelectedReservation}
+        notify={props.notify}
+        refreshKey={props.state.reservations
+          .map(
+            (item) =>
+              `${String(item.id)}:${String(item.version)}`,
+          )
+          .join("|")}
+      />
+    ) : (
+      <FrontDeskView {...props} />
+    );
+  }
+
+  if (props.view === "Guests") {
+    return props.productionMode ? (
+      <ProductionGuests
+        notify={props.notify}
+        role={props.role}
+      />
+    ) : (
+      <GuestsView {...props} />
+    );
+  }
+
+  const views: Partial<
+    Record<ViewName, ComponentType<PlatformViewProps>>
+  > = {
+    "Folios & Billing": FoliosBillingView,
+    "Room Calendar": RoomCalendarView,
+    "Arrivals & Departures": ArrivalsDeparturesView,
+    "Room Types & Rates": RoomTypesRatesView,
+    "Guest Profiles": GuestProfilesView,
+    Invoices: InvoicesView,
+
+    Housekeeping: HousekeepingView,
+
+    // Step 8A dedicated production CRUD
+    Maintenance: MaintenanceView,
+
+    Inventory: InventoryView,
+    "Inventory Movements": InventoryMovementsView,
+    "Lost & Found": LostFoundView,
+
+    "Restaurant Orders": RestaurantOrdersView,
+    "Room Service": RoomServiceView,
+    "Meal Service": MealServiceView,
+    "Menu Management": MenuManagementView,
+
+    "Offline Billing": OfflineBillingView,
+    Verification: VerificationView,
+    "Device Status": DeviceStatusView,
+
+    Integrations: IntegrationsView,
+
+    Reports:
+      props.businessUnit === "TRAVEL"
+        ? TravelReportsView
+        : ReportsView,
+
+    "Audit Logs":
+      props.businessUnit === "TRAVEL"
+        ? TravelAuditLogsView
+        : AuditLogsView,
+
+    "Users & Permissions": UsersPermissionsView,
+    "Properties & Settings": PropertiesSettingsView,
+
+    "Packages & Tours": PackagesToursView,
+    Tours: ToursView,
+    Participants: ParticipantsView,
+    "Tour Managers": TourManagersView,
+    "Inquiry CRM": InquiryCRMView,
+    "Sales Pipeline": SalesPipelineView,
+    "Follow-ups": FollowUpsView,
+    Communications: CommunicationsView,
   };
+
   const ActiveView = views[props.view];
+
   return ActiveView ? <ActiveView {...props} /> : null;
 }
 

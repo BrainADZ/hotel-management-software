@@ -283,6 +283,7 @@ export const folios = pgTable('folios', {
   id: text('id').primaryKey(),
   organisationId: text('organisation_id').notNull().references(() => organisations.id),
   propertyId: text('property_id').notNull().references(() => properties.id),
+  folioNumber: text('folio_number').notNull(),
   reservationId: text('reservation_id').notNull().references(() => reservations.id),
   guestId: text('guest_id').references(() => guests.id),
   stayId: text('stay_id').references(() => stays.id),
@@ -304,6 +305,7 @@ export const folios = pgTable('folios', {
   updatedAt: text('updated_at').notNull(),
 }, (table) => [
   uniqueIndex('idx_folios_reservation').on(table.reservationId),
+  uniqueIndex('idx_folios_property_number').on(table.propertyId, table.folioNumber),
   index('idx_folios_property_status').on(table.propertyId, table.status),
 ]);
 

@@ -7,6 +7,8 @@ import {
   calculateStayNights,
   createOfflineReference,
   createOfflineReservationReference,
+  roleCan,
+  type AppRole,
   DEVICE_ID,
   PROPERTY_ID,
 } from "@hotel/shared/domain";
@@ -278,7 +280,7 @@ export async function cacheCloudPayload(payload: {
   reservations: Array<Record<string, unknown>>;
   folios: Array<Record<string, unknown>>;
   folioLines: Array<Record<string, unknown>>;
-}) {
+}, scope?: {organisationId:string;propertyId:string;userId:string;role:AppRole}) {
   const guests = new Map<string, CachedGuest>();
   const bookings: CachedBooking[] = [];
   payload.reservations.forEach((reservation) => {
@@ -317,7 +319,7 @@ export async function cacheCloudPayload(payload: {
     .where("syncStatus")
     .anyOf(["PENDING_SYNC", "SYNC_FAILED"])
     .toArray();
-  pendingLocalReservations.forEach((reservation) => {
+  pendingLocalReservations.filter(r=>!scope||(r.organisationId===scope.organisationId&&r.propertyId===scope.propertyId&&r.createdById===scope.userId)).forEach((reservation) => {
     guests.set(reservation.guestId, {
       id: reservation.guestId,
       fullName: reservation.guestName,
@@ -378,18 +380,20 @@ export async function cacheCloudPayload(payload: {
           key: "device",
           value: {
             deviceId: DEVICE_ID,
-            propertyId: PROPERTY_ID,
+            propertyId: scope?.propertyId ?? PROPERTY_ID,
+            organisationId: scope?.organisationId,
+            userId: scope?.userId,
             registered: true,
             offlineGrant: {
-              role: "RECEPTION",
+              role: scope?.role ?? "RECEPTION",
               capabilities: [
                 "offline.cached.read",
                 "offline.bill.create",
                 "offline.bill.print",
                 "offline.reservation.create",
-              ],
+              ].filter(capability=>!scope||roleCan(scope.role,capability as import("@hotel/shared/domain").Permission)),
               issuedAt: payload.syncedAt,
-              expiresAt: "2026-09-24T23:59:59.999Z",
+              expiresAt: new Date(Date.now()+8*60*60*1000).toISOString(),
             },
           },
         },
@@ -471,7 +475,7 @@ export async function createLocalWalkInReservation(input: {
     throw new Error("This role cannot create offline walk-in reservations.");
   const deviceRecord = await offlineDb.deviceMetadata.get("device");
   const device = deviceRecord?.value as
-    | { registered?: boolean; offlineGrant?: { capabilities?: string[] } }
+    | { registered?: boolean; organisationId?:string; propertyId?:string; userId?:string; offlineGrant?: { capabilities?: string[]; expiresAt?:string } }
     | undefined;
   if (
     !device?.registered ||
@@ -480,6 +484,7 @@ export async function createLocalWalkInReservation(input: {
     throw new Error(
       "This device is not registered for offline walk-in reservations.",
     );
+  if(input.organisationId && (device.organisationId!==input.organisationId || device.propertyId!==input.propertyId || device.userId!==input.createdById || Date.parse(device.offlineGrant?.expiresAt??'')<=Date.now() || !Number.isFinite(Date.parse(device.offlineGrant?.expiresAt??''))))throw new Error('Offline access expired or belongs to another account. Reconnect and sign in.');
   const guestName = input.guestName.trim();
   if (guestName.length < 2) throw new Error("Guest name is required.");
   const guestCount = input.guestCount ?? 1;

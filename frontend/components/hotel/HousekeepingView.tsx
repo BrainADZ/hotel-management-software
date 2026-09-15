@@ -1,11 +1,41 @@
 "use client";
 /* eslint-disable @typescript-eslint/no-unused-vars */
-import { AlertTriangle, Check, Clock3, IndianRupee, Pencil, Plus, X } from "lucide-react";
+
+import {
+  AlertTriangle,
+  Check,
+  Clock3,
+  IndianRupee,
+  Pencil,
+  Plus,
+  X,
+} from "lucide-react";
 import { useState, type FormEvent } from "react";
+
 import type { AppRole } from "@hotel/shared/domain";
-import { assignmentLabel, assignmentState, canManageHousekeepingAssignment, eligibleHousekeepingStaff, submitHousekeepingAssignment } from "@/lib/housekeeping-assignment";
-import { CreateHousekeepingTask } from './OperationalWorkspace';
-import { AppGlyph, Metric, PageHeading, Status, dateTime, localDateTimeInputValue, money, type DamageSeverity, type PlatformViewProps, type ReservationInspectionSummary, type Row, type Surface } from "@/app/hotel-platform";
+
+import {
+  AppGlyph,
+  Metric,
+  PageHeading,
+  Status,
+  dateTime,
+  localDateTimeInputValue,
+  money,
+  type DamageSeverity,
+  type PlatformViewProps,
+  type ReservationInspectionSummary,
+  type Row,
+  type Surface,
+} from "@/app/hotel-platform";
+import {
+  assignmentLabel,
+  assignmentState,
+  canManageHousekeepingAssignment,
+  eligibleHousekeepingStaff,
+  submitHousekeepingAssignment,
+} from "@/lib/housekeeping-assignment";
+import { CreateHousekeepingTask } from "./OperationalWorkspace";
 export function HousekeepingOverviewView(props: PlatformViewProps) {
  const {
   state,
@@ -21,6 +51,7 @@ export function HousekeepingOverviewView(props: PlatformViewProps) {
   const [damageTask, setDamageTask] = useState<Row | null>(null);
   const [assignmentTask, setAssignmentTask] = useState<Row | null>(null);
   const canAssign = canManageHousekeepingAssignment(state.actor.role, propertyRestricted);
+  const canComplete = ['OWNER', 'MANAGER', 'HOUSEKEEPING'].includes(state.actor.role);
   const tasks = state.housekeeping.filter(
     (task) => !["COMPLETED", "CANCELLED"].includes(String(task.status)),
   );
@@ -188,7 +219,7 @@ export function HousekeepingOverviewView(props: PlatformViewProps) {
                     <Pencil size={14} /> {assignmentLabel(task)}
                   </button>
                 )}
-                {isInspection ? (
+                {canComplete && (isInspection ? (
                   <div className="service-actions">
                     <button
                       className="secondary-button"
@@ -202,7 +233,7 @@ export function HousekeepingOverviewView(props: PlatformViewProps) {
                       disabled={pending.has(String(task.id))}
                       onClick={() => setDamageTask(task)}
                     >
-                      <AlertTriangle size={14} /> Damage found
+                      <AlertTriangle size={14} /> Damage / missing item
                     </button>
                   </div>
                 ) : (
@@ -243,7 +274,7 @@ export function HousekeepingOverviewView(props: PlatformViewProps) {
                       <Clock3 size={14} /> Come later
                     </button>
                   </div>
-                )}
+                ))}
               </article>
             );
           })}
@@ -328,7 +359,24 @@ export function HousekeepingAssignmentModal({ task, staff, onClose, onSave }: { 
 }
 
 export function HousekeepingView(props: PlatformViewProps) {
-  return <HousekeepingOverviewView {...props} />;
+  const canReviewDamage = ["OWNER", "MANAGER"].includes(
+    String(props.state.actor.role),
+  );
+
+  return (
+    <>
+      <HousekeepingOverviewView {...props} />
+      {canReviewDamage && (
+        <DamageReviewPanel
+          reports={props.state.damageReports ?? []}
+          surface={props.surface}
+          command={props.command}
+          refresh={props.refresh}
+          notify={props.notify}
+        />
+      )}
+    </>
+  );
 }
 
 function ComeLaterModal({
@@ -437,8 +485,9 @@ function DamageInspectionModal({
             </p>
             <h2>Record room damage</h2>
             <p>
-              The property manager will review the report and decide whether a
-              guest charge is required.
+              Record any damage, missing hotel item, minibar/linen issue or excess
+              cleaning concern. A manager will review whether a guest charge is
+              required.
             </p>
           </div>
           <button type="button" className="icon-button" onClick={onClose}>
@@ -450,21 +499,22 @@ function DamageInspectionModal({
           <span>
             <strong>Condition report only</strong>
             <small>
-              Housekeeping records the damage and severity. Guest liability is
-              calculated from the hotel&apos;s active policy.
+              Housekeeping records what was found and its severity. The manager
+              reviews the hotel policy and decides whether to charge the guest
+              or waive it.
             </small>
           </span>
         </div>
         <div className="form-grid">
           <label className="wide">
-            <span>Damage and repair notes</span>
+            <span>Damage / missing item details</span>
             <textarea
               required
               minLength={5}
               maxLength={1000}
               value={description}
               onChange={(event) => setDescription(event.target.value)}
-              placeholder="Describe the damaged item, condition and repair likely needed"
+              placeholder="Example: broken lamp, missing towel, minibar item used, stained linen, excess cleaning, or other room damage"
             />
           </label>
           <label className="wide">
@@ -516,7 +566,6 @@ export function DamageReviewPanel({
   const pendingReports = reports.filter(
     (report) => report.status === "PENDING_REVIEW",
   );
-  if (!pendingReports.length) return null;
   async function resolve(
     report: Row,
     decision: "POST_CHARGE" | "WAIVE",
@@ -558,9 +607,10 @@ export function DamageReviewPanel({
         </div>
         <span>{pendingReports.length} awaiting decision</span>
       </div>
-      <div className="damage-review-grid">
-        {pendingReports.map((report) => (
-          <article key={String(report.id)}>
+      {pendingReports.length ? (
+        <div className="damage-review-grid">
+          {pendingReports.map((report) => (
+            <article key={String(report.id)}>
             <div>
               <span className="record-icon">
                 <AppGlyph name="damage-alert" size={26} />
@@ -604,9 +654,19 @@ export function DamageReviewPanel({
                 <IndianRupee size={14} /> Review policy charge
               </button>
             </div>
-          </article>
-        ))}
-      </div>
+            </article>
+          ))}
+        </div>
+      ) : (
+        <div className="empty-state glass-card service-empty">
+          <AppGlyph name="waived-charge" size={42} />
+          <strong>No damage reports awaiting review</strong>
+          <p>
+            Damage or missing-item reports submitted by housekeeping will appear
+            here for manager approval or waiver.
+          </p>
+        </div>
+      )}
       {charging && (
         <DamageChargeModal
           report={charging}

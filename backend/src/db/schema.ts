@@ -1,5 +1,5 @@
 import { sql } from 'drizzle-orm';
-import { boolean, index, integer, jsonb, pgTable, primaryKey, text, timestamp, uniqueIndex } from 'drizzle-orm/pg-core';
+import { boolean, check, index, integer, jsonb, pgTable, primaryKey, text, timestamp, uniqueIndex } from 'drizzle-orm/pg-core';
 
 export const organisations = pgTable('organisations', {
   id: text('id').primaryKey(),
@@ -33,8 +33,15 @@ export const properties = pgTable('properties', {
   receiptPrefix: text('receipt_prefix').notNull().default('RCT'),
   defaultTaxRateBps: integer('default_tax_rate_bps').notNull().default(0),
   defaultTaxMode: text('default_tax_mode').notNull().default('CGST_SGST'),
+  restaurantGstProfile: text('restaurant_gst_profile')
+    .notNull()
+    .default('UNCONFIGURED'),
 }, (table) => [
   uniqueIndex('idx_properties_org_code').on(table.organisationId, table.code),
+  check(
+    'chk_properties_restaurant_gst_profile',
+    sql`${table.restaurantGstProfile} in ('UNCONFIGURED', 'STANDARD_5_NO_ITC', 'SPECIFIED_18_WITH_ITC')`,
+  ),
 ]);
 
 export const appUsers = pgTable('app_users', {
@@ -534,6 +541,10 @@ export const restaurantOrders = pgTable('restaurant_orders', {
   propertyId: text('property_id').notNull().references(() => properties.id),
   reservationId: text('reservation_id').references(() => reservations.id),
   roomNumber: text('room_number'),
+  tableNumber: text('table_number'),
+  covers: integer('covers'),
+  waiterUserId: text('waiter_user_id').references(() => appUsers.id),
+  waiterName: text('waiter_name'),
   orderType: text('order_type').notNull(),
   status: text('status').notNull(),
   kotStatus: text('kot_status').notNull().default('NEW'),
@@ -545,6 +556,12 @@ export const restaurantOrders = pgTable('restaurant_orders', {
 }, (table) => [
   index('idx_restaurant_property_status').on(table.propertyId, table.status),
   index('idx_restaurant_property_kot').on(table.propertyId, table.kotStatus),
+  index('idx_restaurant_property_table').on(table.propertyId, table.tableNumber),
+  index('idx_restaurant_property_waiter').on(table.propertyId, table.waiterUserId),
+  check(
+    'chk_restaurant_orders_covers',
+    sql`${table.covers} is null or (${table.covers} >= 1 and ${table.covers} <= 100)`,
+  ),
 ]);
 
 export const restaurantOrderItems = pgTable('restaurant_order_items', {

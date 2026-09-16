@@ -33,6 +33,11 @@ import {
   menuItems,
 } from '@/db/operational-schema';
 import { calculateLine } from '@/modules/billing/calculations';
+import {
+  normalizeRestaurantGstProfile,
+  restaurantServiceGstRateBps,
+  type RestaurantGstProfile,
+} from '@/modules/billing/india-gst';
 import { hashPassword } from '@/services/auth/local-session';
 import type { ReservationContext } from '@/services/reservations/types';
 
@@ -90,7 +95,7 @@ export const workflowSchemas = {
   CREATE_RESTAURANT_ORDER: z
     .object({
       clientOperationId: z.string().uuid(),
-      reservationId: id,
+      reservationId: id.optional(),
       menuItemId: id.optional(),
       quantity: z.number().int().positive().max(100).optional(),
       items: z
@@ -104,6 +109,9 @@ export const workflowSchemas = {
         .max(50)
         .optional(),
       orderType: z.enum(['RESTAURANT', 'ROOM_SERVICE']),
+      tableNumber: z.string().trim().min(1).max(30).optional(),
+      covers: z.number().int().min(1).max(100).optional(),
+      waiterUserId: id.optional(),
       specialInstructions: z.string().trim().max(500).optional(),
     })
     .superRefine((value, ctx) => {
@@ -116,6 +124,40 @@ export const workflowSchemas = {
           message: 'Add at least one menu item to the order.',
           path: ['items'],
         });
+      }
+
+      if (value.orderType === 'ROOM_SERVICE' && !value.reservationId) {
+        ctx.addIssue({
+          code: 'custom',
+          message: 'Choose a checked-in stay for room service.',
+          path: ['reservationId'],
+        });
+      }
+
+      if (value.orderType === 'RESTAURANT') {
+        if (!value.tableNumber) {
+          ctx.addIssue({
+            code: 'custom',
+            message: 'Enter a table number for dine-in service.',
+            path: ['tableNumber'],
+          });
+        }
+
+        if (!value.covers) {
+          ctx.addIssue({
+            code: 'custom',
+            message: 'Enter the number of covers for dine-in service.',
+            path: ['covers'],
+          });
+        }
+
+        if (!value.waiterUserId) {
+          ctx.addIssue({
+            code: 'custom',
+            message: 'Assign a waiter for dine-in service.',
+            path: ['waiterUserId'],
+          });
+        }
       }
     }),
   UPDATE_RESTAURANT_ORDER: z.object({
@@ -139,6 +181,13 @@ export const workflowSchemas = {
     checkInTime: z.string().regex(/^([01]\d|2[0-3]):[0-5]\d$/),
     checkOutTime: z.string().regex(/^([01]\d|2[0-3]):[0-5]\d$/),
     defaultTaxRateBps: z.number().int().min(0).max(10000),
+    restaurantGstProfile: z
+      .enum([
+        'UNCONFIGURED',
+        'STANDARD_5_NO_ITC',
+        'SPECIFIED_18_WITH_ITC',
+      ])
+      .optional(),
   }),
   BOOK_MEAL: z.object({
     reservationId: id,
@@ -176,6 +225,10 @@ export function restaurantFolioLineSourceId(
   menuItemId: string,
 ) {
   return `${orderId}:${menuItemId}`;
+}
+
+export function restaurantGstRateBps(profile: string) {
+  return restaurantServiceGstRateBps(profile as RestaurantGstProfile);
 }
 
 async function audit(
@@ -238,6 +291,7 @@ export async function operationalSnapshot(c: ReservationContext) {
     staff,
     profile,
     serviceStays,
+    restaurantStaff,
     invoiceRows,
     billRows,
     restaurantItemRows,
@@ -310,6 +364,7 @@ export async function operationalSnapshot(c: ReservationContext) {
             checkInTime: properties.checkInTime,
             checkOutTime: properties.checkOutTime,
             defaultTaxRateBps: properties.defaultTaxRateBps,
+            restaurantGstProfile: properties.restaurantGstProfile,
             version: properties.version,
           })
           .from(properties)
@@ -344,6 +399,24 @@ export async function operationalSnapshot(c: ReservationContext) {
               label: `${row.label} · Room ${row.roomNumber ?? '—'}`,
             })),
           )
+      : [],
+    roleCan(c.actor.role, 'restaurant.manage')
+      ? db
+          .select({
+            id: appUsers.id,
+            name: appUsers.name,
+            role: appUsers.role,
+          })
+          .from(appUsers)
+          .where(
+            and(
+              eq(appUsers.organisationId, c.actor.organisationId),
+              eq(appUsers.propertyId, c.property.id),
+              eq(appUsers.role, 'RESTAURANT'),
+              eq(appUsers.active, true),
+            ),
+          )
+          .orderBy(appUsers.name)
       : [],
     roleCan(c.actor.role, 'billing.view')
       ? db
@@ -461,8 +534,16 @@ export async function operationalSnapshot(c: ReservationContext) {
     lostFound: lost,
     inventoryMovements: stock,
     staff,
-    propertySettings: profile[0] ?? null,
+    propertySettings: profile[0]
+      ? {
+          ...profile[0],
+          restaurantGstProfile: normalizeRestaurantGstProfile(
+            profile[0].restaurantGstProfile as RestaurantGstProfile,
+          ),
+        }
+      : null,
     serviceStays,
+    restaurantStaff,
     invoices: invoiceRows,
     restaurantOrderItems: restaurantItemRows,
   };
@@ -948,6 +1029,7 @@ export async function mutateWorkflow(
 
     if (action === 'CREATE_RESTAURANT_ORDER') {
       const p = workflowSchemas.CREATE_RESTAURANT_ORDER.parse(raw);
+      const dineIn = p.orderType === 'RESTAURANT';
 
       const requestedItems =
         p.items && p.items.length > 0
@@ -1018,7 +1100,6 @@ export async function mutateWorkflow(
           items?: Array<{ menuItemId: string; quantity: number }>;
           menuItemId?: string;
           quantity?: number;
-          specialInstructions?: string | null;
         };
 
         const originalItems = (
@@ -1042,10 +1123,15 @@ export async function mutateWorkflow(
           );
 
         if (
-          existing.reservationId !== p.reservationId ||
+          (existing.reservationId ?? null) !== (p.reservationId ?? null) ||
           existing.orderType !== p.orderType ||
+          (existing.tableNumber ?? null) !==
+            (dineIn ? p.tableNumber ?? null : null) ||
+          (existing.covers ?? null) !== (dineIn ? p.covers ?? null : null) ||
+          (existing.waiterUserId ?? null) !==
+            (dineIn ? p.waiterUserId ?? null : null) ||
           JSON.stringify(originalItems) !== JSON.stringify(normalizedItems) ||
-          (details.specialInstructions ?? '') !==
+          (existing.specialInstructions ?? '') !==
             (p.specialInstructions ?? '')
         ) {
           throw new DomainError(
@@ -1058,57 +1144,100 @@ export async function mutateWorkflow(
         return { id: existing.id };
       }
 
-      const [stay] = await tx
-        .select()
-        .from(reservations)
-        .where(
-          and(
-            eq(reservations.id, p.reservationId),
-            eq(reservations.propertyId, c.property.id),
-            eq(reservations.organisationId, c.actor.organisationId),
-            eq(reservations.status, 'CHECKED_IN'),
-          ),
-        )
-        .for('update');
+      const [stay] = p.reservationId
+        ? await tx
+            .select()
+            .from(reservations)
+            .where(
+              and(
+                eq(reservations.id, p.reservationId),
+                eq(reservations.propertyId, c.property.id),
+                eq(reservations.organisationId, c.actor.organisationId),
+                eq(reservations.status, 'CHECKED_IN'),
+              ),
+            )
+            .for('update')
+        : [];
 
-      if (!stay) {
+      if (p.reservationId && !stay) {
         throw new DomainError(
           'STAY_NOT_ACTIVE',
-          'Choose a checked-in reservation.',
+          'Choose an active checked-in reservation.',
           409,
         );
       }
 
-      const [folioKey] = await tx
-        .select({ id: folios.id })
-        .from(folios)
-        .where(
-          and(
-            eq(folios.reservationId, stay.id),
-            eq(folios.propertyId, c.property.id),
-            eq(folios.organisationId, c.actor.organisationId),
-          ),
+      if (p.orderType === 'ROOM_SERVICE' && !stay) {
+        throw new DomainError(
+          'STAY_NOT_ACTIVE',
+          'Choose a checked-in reservation for room service.',
+          409,
         );
+      }
 
-      if (!folioKey) {
+      const [waiter] = dineIn && p.waiterUserId
+        ? await tx
+            .select({
+              id: appUsers.id,
+              name: appUsers.name,
+            })
+            .from(appUsers)
+            .where(
+              and(
+                eq(appUsers.id, p.waiterUserId),
+                eq(appUsers.organisationId, c.actor.organisationId),
+                eq(appUsers.propertyId, c.property.id),
+                eq(appUsers.role, 'RESTAURANT'),
+                eq(appUsers.active, true),
+              ),
+            )
+            .limit(1)
+        : [];
+
+      if (dineIn && !waiter) {
+        throw new DomainError(
+          'WAITER_NOT_ELIGIBLE',
+          'Choose an active restaurant staff member as waiter.',
+          409,
+        );
+      }
+
+      const [folioKey] = stay
+        ? await tx
+            .select({ id: folios.id })
+            .from(folios)
+            .where(
+              and(
+                eq(folios.reservationId, stay.id),
+                eq(folios.propertyId, c.property.id),
+                eq(folios.organisationId, c.actor.organisationId),
+              ),
+            )
+        : [];
+
+      if (stay && !folioKey) {
         throw new DomainError(
           'FOLIO_NOT_OPEN',
-          'Create a guest folio before posting orders.',
+          'Create a guest folio before posting this order to the room.',
           409,
         );
       }
 
-      await tx.execute(
-        sql`select pg_advisory_xact_lock(hashtext(${`folio:${folioKey.id}`}))`,
-      );
+      if (folioKey) {
+        await tx.execute(
+          sql`select pg_advisory_xact_lock(hashtext(${`folio:${folioKey.id}`}))`,
+        );
+      }
 
-      const [folio] = await tx
-        .select()
-        .from(folios)
-        .where(eq(folios.id, folioKey.id))
-        .for('update');
+      const [folio] = folioKey
+        ? await tx
+            .select()
+            .from(folios)
+            .where(eq(folios.id, folioKey.id))
+            .for('update')
+        : [];
 
-      if (!folio || !['OPEN', 'SETTLED'].includes(folio.status)) {
+      if (folioKey && (!folio || !['OPEN', 'SETTLED'].includes(folio.status))) {
         throw new DomainError(
           'FOLIO_NOT_OPEN',
           'The guest folio must be open.',
@@ -1154,6 +1283,13 @@ export async function mutateWorkflow(
         );
       }
 
+      const restaurantGstProfile = normalizeRestaurantGstProfile(
+        profile.restaurantGstProfile as RestaurantGstProfile,
+      );
+      const restaurantTaxRateBps = restaurantGstRateBps(
+        restaurantGstProfile,
+      );
+
       const calculatedItems = normalizedItems.map((requested) => {
         const menu = menuById.get(requested.menuItemId);
 
@@ -1169,7 +1305,7 @@ export async function mutateWorkflow(
           requested.quantity,
           menu.pricePaise,
           0,
-          profile.defaultTaxRateBps,
+          restaurantTaxRateBps,
           profile.defaultTaxMode as 'CGST_SGST' | 'IGST' | 'EXEMPT',
         );
 
@@ -1203,7 +1339,7 @@ export async function mutateWorkflow(
         },
       );
 
-      if (folio.totalPaise + totals.totalPaise > 2_000_000_000) {
+      if (folio && folio.totalPaise + totals.totalPaise > 2_000_000_000) {
         throw new DomainError(
           'AMOUNT_TOO_LARGE',
           'Order exceeds the supported folio amount.',
@@ -1211,18 +1347,24 @@ export async function mutateWorkflow(
         );
       }
 
-      const [room] = stay.roomId
+      const [room] = stay?.roomId
         ? await tx
             .select()
             .from(rooms)
             .where(eq(rooms.id, stay.roomId))
         : [];
 
+      const paymentStatus = folio ? 'POSTED_TO_FOLIO' : 'UNPAID';
+
       await tx.insert(restaurantOrders).values({
         id: p.clientOperationId,
         propertyId: c.property.id,
-        reservationId: stay.id,
-        roomNumber: room?.number,
+        reservationId: stay?.id ?? null,
+        roomNumber: room?.number ?? null,
+        tableNumber: dineIn ? p.tableNumber! : null,
+        covers: dineIn ? p.covers! : null,
+        waiterUserId: dineIn ? waiter!.id : null,
+        waiterName: dineIn ? waiter!.name : null,
         orderType: p.orderType,
         status: 'PENDING',
         kotStatus: 'NEW',
@@ -1232,7 +1374,7 @@ export async function mutateWorkflow(
         ),
         specialInstructions: p.specialInstructions || null,
         totalPaise: totals.totalPaise,
-        paymentStatus: 'POSTED_TO_FOLIO',
+        paymentStatus,
         createdAt: now,
       });
 
@@ -1246,7 +1388,7 @@ export async function mutateWorkflow(
           category: item.menu.category,
           quantity: item.quantity,
           unitPricePaise: item.menu.pricePaise,
-          taxRateBps: profile.defaultTaxRateBps,
+          taxRateBps: restaurantTaxRateBps,
           subtotalPaise: item.values.subtotalPaise,
           taxableAmountPaise: item.values.taxableAmountPaise,
           taxPaise: item.values.taxPaise,
@@ -1258,60 +1400,69 @@ export async function mutateWorkflow(
         })),
       );
 
-      await tx.insert(folioLines).values(
-        calculatedItems.map((item) => ({
-          id: crypto.randomUUID(),
-          organisationId: c.actor.organisationId,
-          propertyId: c.property.id,
-          folioId: folio.id,
-          description: `${p.orderType}: ${item.menu.name}`,
-          category: p.orderType,
-          quantity: item.quantity,
-          unitAmountPaise: item.menu.pricePaise,
-          taxRateBps: profile.defaultTaxRateBps,
-          lineTotalPaise: item.values.totalPaise,
-          ...item.values,
-          source: 'RESTAURANT',
-          sourceType: 'RESTAURANT_ORDER',
-          sourceId: restaurantFolioLineSourceId(
-            p.clientOperationId,
-            item.menu.id,
-          ),
-          postedBy: c.actor.id,
-          createdAt: now,
-        })),
-      );
+      if (folio) {
+        await tx.insert(folioLines).values(
+          calculatedItems.map((item) => ({
+            id: crypto.randomUUID(),
+            organisationId: c.actor.organisationId,
+            propertyId: c.property.id,
+            folioId: folio.id,
+            description: `${p.orderType}: ${item.menu.name}`,
+            category: p.orderType,
+            quantity: item.quantity,
+            unitAmountPaise: item.menu.pricePaise,
+            taxRateBps: restaurantTaxRateBps,
+            lineTotalPaise: item.values.totalPaise,
+            ...item.values,
+            source: 'RESTAURANT',
+            sourceType: 'RESTAURANT_ORDER',
+            sourceId: restaurantFolioLineSourceId(
+              p.clientOperationId,
+              item.menu.id,
+            ),
+            postedBy: c.actor.id,
+            createdAt: now,
+          })),
+        );
 
-      await tx
-        .update(folios)
-        .set({
-          status:
-            folio.outstandingPaise + totals.totalPaise > 0
-              ? 'OPEN'
-              : 'SETTLED',
-          subtotalPaise: folio.subtotalPaise + totals.subtotalPaise,
-          taxableAmountPaise:
-            folio.taxableAmountPaise + totals.taxableAmountPaise,
-          taxPaise: folio.taxPaise + totals.taxPaise,
-          cgstPaise: folio.cgstPaise + totals.cgstPaise,
-          sgstPaise: folio.sgstPaise + totals.sgstPaise,
-          igstPaise: folio.igstPaise + totals.igstPaise,
-          totalPaise: folio.totalPaise + totals.totalPaise,
-          outstandingPaise:
-            folio.outstandingPaise + totals.totalPaise,
-          version: folio.version + 1,
-          updatedAt: now,
-        })
-        .where(eq(folios.id, folio.id));
+        await tx
+          .update(folios)
+          .set({
+            status:
+              folio.outstandingPaise + totals.totalPaise > 0
+                ? 'OPEN'
+                : 'SETTLED',
+            subtotalPaise: folio.subtotalPaise + totals.subtotalPaise,
+            taxableAmountPaise:
+              folio.taxableAmountPaise + totals.taxableAmountPaise,
+            taxPaise: folio.taxPaise + totals.taxPaise,
+            cgstPaise: folio.cgstPaise + totals.cgstPaise,
+            sgstPaise: folio.sgstPaise + totals.sgstPaise,
+            igstPaise: folio.igstPaise + totals.igstPaise,
+            totalPaise: folio.totalPaise + totals.totalPaise,
+            outstandingPaise:
+              folio.outstandingPaise + totals.totalPaise,
+            version: folio.version + 1,
+            updatedAt: now,
+          })
+          .where(eq(folios.id, folio.id));
+      }
 
       await audit(tx, c, action, p.clientOperationId, {
-        reservationId: stay.id,
+        reservationId: stay?.id ?? null,
+        tableNumber: dineIn ? p.tableNumber : null,
+        covers: dineIn ? p.covers : null,
+        waiterUserId: dineIn ? waiter?.id : null,
+        waiterName: dineIn ? waiter?.name : null,
         items: normalizedItems,
         itemCount: calculatedItems.reduce(
           (sum, item) => sum + item.quantity,
           0,
         ),
         specialInstructions: p.specialInstructions || null,
+        restaurantGstProfile,
+        taxRateBps: restaurantTaxRateBps,
+        paymentStatus,
         totalPaise: totals.totalPaise,
       });
 
@@ -1323,6 +1474,7 @@ export async function mutateWorkflow(
         ),
         totalPaise: totals.totalPaise,
         kotStatus: 'NEW',
+        paymentStatus,
       };
     }
 

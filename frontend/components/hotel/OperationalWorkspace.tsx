@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { roleCan, type Permission } from '@hotel/shared/domain';
 import {
   type PlatformViewProps,
@@ -273,6 +273,7 @@ type RestaurantCartLine = {
 function RestaurantOrderComposer({
   menu,
   stays,
+  restaurantStaff,
   fixedOrderType,
   online,
   command,
@@ -282,6 +283,7 @@ function RestaurantOrderComposer({
 }: {
   menu: Row[];
   stays: Row[];
+  restaurantStaff: Row[];
   fixedOrderType?: 'RESTAURANT' | 'ROOM_SERVICE';
   online: boolean;
   command: PlatformViewProps['command'];
@@ -294,6 +296,9 @@ function RestaurantOrderComposer({
   const [orderType, setOrderType] = useState<'RESTAURANT' | 'ROOM_SERVICE'>(
     fixedOrderType ?? 'RESTAURANT',
   );
+  const [tableNumber, setTableNumber] = useState('');
+  const [covers, setCovers] = useState(2);
+  const [waiterUserId, setWaiterUserId] = useState('');
   const [specialInstructions, setSpecialInstructions] = useState('');
   const [lines, setLines] = useState<RestaurantCartLine[]>([
     {
@@ -309,6 +314,7 @@ function RestaurantOrderComposer({
   const menuById = new Map(
     availableMenu.map((row) => [String(row.id), row]),
   );
+  const effectiveOrderType = fixedOrderType ?? orderType;
 
   const subtotalPaise = lines.reduce((total, line) => {
     const item = menuById.get(line.menuItemId);
@@ -331,6 +337,46 @@ function RestaurantOrderComposer({
             }
           : line,
       ),
+    );
+  };
+
+  const selectMenuItem = (key: string, menuItemId: string) => {
+    const target = lines.find((line) => line.key === key);
+
+    if (!target || !menuItemId) {
+      updateLine(key, { menuItemId });
+      return;
+    }
+
+    const duplicate = lines.find(
+      (line) => line.key !== key && line.menuItemId === menuItemId,
+    );
+
+    if (!duplicate) {
+      setError('');
+      updateLine(key, { menuItemId });
+      return;
+    }
+
+    const combinedQuantity = duplicate.quantity + target.quantity;
+
+    if (combinedQuantity > 100) {
+      setError('A menu item cannot exceed quantity 100 in one order.');
+      return;
+    }
+
+    setError('');
+    setLines((current) =>
+      current
+        .filter((line) => line.key !== key)
+        .map((line) =>
+          line.key === duplicate.key
+            ? {
+                ...line,
+                quantity: combinedQuantity,
+              }
+            : line,
+        ),
     );
   };
 
@@ -363,9 +409,26 @@ function RestaurantOrderComposer({
       return;
     }
 
-    if (!reservationId) {
-      setError('Choose a checked-in stay.');
+    if (effectiveOrderType === 'ROOM_SERVICE' && !reservationId) {
+      setError('Choose a checked-in stay for room service.');
       return;
+    }
+
+    if (effectiveOrderType === 'RESTAURANT') {
+      if (!tableNumber.trim()) {
+        setError('Enter a table number for dine-in service.');
+        return;
+      }
+
+      if (!Number.isInteger(covers) || covers < 1 || covers > 100) {
+        setError('Covers must be between 1 and 100.');
+        return;
+      }
+
+      if (!waiterUserId) {
+        setError('Assign a waiter for dine-in service.');
+        return;
+      }
     }
 
     const items = lines
@@ -392,17 +455,26 @@ function RestaurantOrderComposer({
       await command({
         action: 'CREATE_RESTAURANT_ORDER',
         clientOperationId,
-        reservationId,
-        orderType: fixedOrderType ?? orderType,
+        reservationId: reservationId || undefined,
+        orderType: effectiveOrderType,
+        tableNumber:
+          effectiveOrderType === 'RESTAURANT'
+            ? tableNumber.trim()
+            : undefined,
+        covers: effectiveOrderType === 'RESTAURANT' ? covers : undefined,
+        waiterUserId:
+          effectiveOrderType === 'RESTAURANT' ? waiterUserId : undefined,
         items,
         specialInstructions: specialInstructions.trim() || undefined,
       });
 
       await refresh();
       notify(
-        fixedOrderType === 'ROOM_SERVICE'
+        effectiveOrderType === 'ROOM_SERVICE'
           ? 'Room-service order created and posted to the guest folio.'
-          : 'Restaurant order created and posted to the guest folio.',
+          : reservationId
+            ? 'Dine-in order created and posted to the selected guest folio.'
+            : 'Dine-in order created. Payment is pending at the restaurant POS.',
       );
       onClose();
     } catch (cause) {
@@ -438,9 +510,11 @@ function RestaurantOrderComposer({
                 : 'Create restaurant order'}
             </h2>
             <p>
-              Add multiple menu items. Prices and property tax are
-              recalculated by the server before anything is posted to the
-              guest folio.
+              Add multiple menu items. Prices and Restaurant GST are
+              recalculated by the server. Room-service and linked in-house
+              guest orders post to the folio; walk-in dine-in orders remain
+              unpaid until POS settlement. Standard restaurant service defaults
+              to 5% GST.
             </p>
           </div>
 
@@ -462,14 +536,41 @@ function RestaurantOrderComposer({
         )}
 
         <div className="form-grid">
+          {!fixedOrderType && (
+            <label className="wide">
+              <span>Order type</span>
+              <select
+                value={orderType}
+                onChange={(event) => {
+                  const next = event.target.value as
+                    | 'RESTAURANT'
+                    | 'ROOM_SERVICE';
+                  setOrderType(next);
+                  setError('');
+                }}
+              >
+                <option value="RESTAURANT">Dine-in / restaurant</option>
+                <option value="ROOM_SERVICE">Room service</option>
+              </select>
+            </label>
+          )}
+
           <label className="wide">
-            <span>Checked-in stay</span>
+            <span>
+              {effectiveOrderType === 'ROOM_SERVICE'
+                ? 'Checked-in stay'
+                : 'Post to checked-in guest (optional)'}
+            </span>
             <select
-              required
+              required={effectiveOrderType === 'ROOM_SERVICE'}
               value={reservationId}
               onChange={(event) => setReservationId(event.target.value)}
             >
-              <option value="">Select checked-in stay</option>
+              <option value="">
+                {effectiveOrderType === 'ROOM_SERVICE'
+                  ? 'Select checked-in stay'
+                  : 'Walk-in / direct restaurant payment'}
+              </option>
               {stays.map((stay) => (
                 <option key={String(stay.id)} value={String(stay.id)}>
                   {String(stay.label ?? stay.id)}
@@ -478,23 +579,51 @@ function RestaurantOrderComposer({
             </select>
           </label>
 
-          {!fixedOrderType && (
-            <label className="wide">
-              <span>Order type</span>
-              <select
-                value={orderType}
-                onChange={(event) =>
-                  setOrderType(
-                    event.target.value as
-                      | 'RESTAURANT'
-                      | 'ROOM_SERVICE',
-                  )
-                }
-              >
-                <option value="RESTAURANT">Restaurant</option>
-                <option value="ROOM_SERVICE">Room service</option>
-              </select>
-            </label>
+          {effectiveOrderType === 'RESTAURANT' && (
+            <>
+              <label>
+                <span>Table</span>
+                <input
+                  required
+                  maxLength={30}
+                  value={tableNumber}
+                  placeholder="Example: T12"
+                  onChange={(event) => setTableNumber(event.target.value)}
+                />
+              </label>
+
+              <label>
+                <span>Covers</span>
+                <input
+                  required
+                  type="number"
+                  min={1}
+                  max={100}
+                  step={1}
+                  value={covers}
+                  onChange={(event) => setCovers(Number(event.target.value))}
+                />
+              </label>
+
+              <label className="wide">
+                <span>Waiter</span>
+                <select
+                  required
+                  value={waiterUserId}
+                  onChange={(event) => setWaiterUserId(event.target.value)}
+                >
+                  <option value="">Select waiter</option>
+                  {restaurantStaff.map((staffMember) => (
+                    <option
+                      key={String(staffMember.id)}
+                      value={String(staffMember.id)}
+                    >
+                      {String(staffMember.name ?? staffMember.id)}
+                    </option>
+                  ))}
+                </select>
+              </label>
+            </>
           )}
         </div>
 
@@ -542,9 +671,10 @@ function RestaurantOrderComposer({
                           minWidth: 0,
                         }}
                         onChange={(event) =>
-                          updateLine(line.key, {
-                            menuItemId: event.target.value,
-                          })
+                          selectMenuItem(
+                            line.key,
+                            event.target.value,
+                          )
                         }
                       >
                         <option value="">Select item</option>
@@ -695,8 +825,10 @@ function RestaurantOrderComposer({
             marginTop: 12,
           }}
         >
-          Taxes, if applicable, are calculated automatically when the order is
-          posted.
+          Restaurant GST is automatic: 5% for the standard restaurant-service
+          profile, or 18% only when the property is configured as specified
+          premises. Food, fresh beverages and soft drinks sold as restaurant
+          service do not need item-wise GST entry.
         </p>
 
         <div className="modal-actions">
@@ -715,7 +847,8 @@ function RestaurantOrderComposer({
               busy ||
               !online ||
               availableMenu.length === 0 ||
-              stays.length === 0
+              (effectiveOrderType === 'ROOM_SERVICE' && stays.length === 0) ||
+              (effectiveOrderType === 'RESTAURANT' && restaurantStaff.length === 0)
             }
           >
             {busy ? 'Posting…' : 'Create order'}
@@ -723,6 +856,381 @@ function RestaurantOrderComposer({
         </div>
       </form>
     </div>
+  );
+}
+
+
+type KitchenStage = 'NEW' | 'PREPARING' | 'READY' | 'SERVED';
+
+const kitchenStages: Array<{
+  key: KitchenStage;
+  label: string;
+}> = [
+  { key: 'NEW', label: 'New' },
+  { key: 'PREPARING', label: 'Preparing' },
+  { key: 'READY', label: 'Ready' },
+  { key: 'SERVED', label: 'Served / delivered' },
+];
+
+function kitchenStage(row: Row): KitchenStage {
+  const status = String(row.status ?? '').toUpperCase();
+  const kotStatus = String(row.kotStatus ?? '').toUpperCase();
+
+  if (status === 'DELIVERED' || kotStatus === 'SERVED') {
+    return 'SERVED';
+  }
+
+  if (status === 'READY' || kotStatus === 'READY') {
+    return 'READY';
+  }
+
+  if (status === 'PREPARING' || kotStatus === 'FIRED') {
+    return 'PREPARING';
+  }
+
+  return 'NEW';
+}
+
+function kitchenAge(createdAt: unknown, nowMs: number) {
+  const created = Date.parse(String(createdAt ?? ''));
+
+  if (!Number.isFinite(created)) {
+    return '—';
+  }
+
+  const totalMinutes = Math.max(0, Math.floor((nowMs - created) / 60_000));
+
+  if (totalMinutes < 1) {
+    return '<1 min';
+  }
+
+  if (totalMinutes < 60) {
+    return `${totalMinutes} min`;
+  }
+
+  const hours = Math.floor(totalMinutes / 60);
+  const minutes = totalMinutes % 60;
+
+  return minutes ? `${hours}h ${minutes}m` : `${hours}h`;
+}
+
+function kitchenOrderLabel(row: Row) {
+  const id = String(row.id ?? '');
+  return id ? `#${id.slice(-8).toUpperCase()}` : 'Order';
+}
+
+function KitchenBoard({
+  orders,
+  online,
+  command,
+  refresh,
+  notify,
+}: {
+  orders: Row[];
+  online: boolean;
+  command: PlatformViewProps['command'];
+  refresh: PlatformViewProps['refresh'];
+  notify: PlatformViewProps['notify'];
+}) {
+  const [nowMs, setNowMs] = useState(() => Date.now());
+  const [busyOrderId, setBusyOrderId] = useState('');
+  const [error, setError] = useState('');
+
+  useEffect(() => {
+    const clock = window.setInterval(() => setNowMs(Date.now()), 30_000);
+    return () => window.clearInterval(clock);
+  }, []);
+
+  useEffect(() => {
+    if (!online) {
+      return;
+    }
+
+    const polling = window.setInterval(() => {
+      void refresh();
+    }, 15_000);
+
+    return () => window.clearInterval(polling);
+  }, [online, refresh]);
+
+  const grouped = new Map<KitchenStage, Row[]>();
+
+  for (const stage of kitchenStages) {
+    grouped.set(stage.key, []);
+  }
+
+  for (const order of orders) {
+    grouped.get(kitchenStage(order))?.push(order);
+  }
+
+  for (const stage of kitchenStages) {
+    const stageOrders = grouped.get(stage.key) ?? [];
+
+    stageOrders.sort((left, right) => {
+      const leftTime = Date.parse(String(left.createdAt ?? '')) || 0;
+      const rightTime = Date.parse(String(right.createdAt ?? '')) || 0;
+
+      return stage.key === 'SERVED'
+        ? rightTime - leftTime
+        : leftTime - rightTime;
+    });
+
+    if (stage.key === 'SERVED' && stageOrders.length > 8) {
+      grouped.set(stage.key, stageOrders.slice(0, 8));
+    }
+  }
+
+  const advanceOrder = async (row: Row) => {
+    const currentStage = kitchenStage(row);
+    const nextStatus =
+      currentStage === 'NEW'
+        ? 'PREPARING'
+        : currentStage === 'PREPARING'
+          ? 'READY'
+          : currentStage === 'READY'
+            ? 'DELIVERED'
+            : null;
+
+    if (!nextStatus) {
+      return;
+    }
+
+    const orderId = String(row.id ?? '');
+    const expectedVersion = Number(row.version ?? 0);
+
+    if (!orderId || !Number.isInteger(expectedVersion) || expectedVersion < 1) {
+      setError('This kitchen order is missing a valid version. Refresh and try again.');
+      return;
+    }
+
+    setBusyOrderId(orderId);
+    setError('');
+
+    try {
+      await command({
+        action: 'UPDATE_RESTAURANT_ORDER',
+        id: orderId,
+        expectedVersion,
+        status: nextStatus,
+      });
+
+      await refresh();
+
+      notify(
+        nextStatus === 'PREPARING'
+          ? 'Kitchen started preparing the order.'
+          : nextStatus === 'READY'
+            ? 'Order marked ready.'
+            : String(row.orderType ?? '') === 'ROOM_SERVICE'
+              ? 'Room-service order marked delivered.'
+              : 'Restaurant order marked served.',
+      );
+    } catch (cause) {
+      setError(
+        cause instanceof Error
+          ? cause.message
+          : 'Kitchen order could not be updated.',
+      );
+    } finally {
+      setBusyOrderId('');
+    }
+  };
+
+  return (
+    <section
+      aria-label="Kitchen display system"
+      style={{
+        display: 'grid',
+        gap: 14,
+      }}
+    >
+      {error && (
+        <p role="alert" className="error-banner">
+          {error}
+        </p>
+      )}
+
+      <div
+        style={{
+          display: 'grid',
+          gridTemplateColumns: 'repeat(auto-fit, minmax(245px, 1fr))',
+          gap: 14,
+          alignItems: 'start',
+        }}
+      >
+        {kitchenStages.map((stage) => {
+          const stageOrders = grouped.get(stage.key) ?? [];
+
+          return (
+            <div
+              key={stage.key}
+              className="table-card"
+              style={{
+                minWidth: 0,
+                padding: 14,
+              }}
+            >
+              <div
+                className="card-heading"
+                style={{
+                  marginBottom: 12,
+                }}
+              >
+                <div>
+                  <strong>{stage.label}</strong>
+                  <div style={{ marginTop: 4 }}>
+                    <Status value={stage.key} />
+                  </div>
+                </div>
+                <strong>{stageOrders.length}</strong>
+              </div>
+
+              <div
+                style={{
+                  display: 'grid',
+                  gap: 10,
+                }}
+              >
+                {stageOrders.map((order) => {
+                  const items = Array.isArray(order.items)
+                    ? (order.items as Row[])
+                    : [];
+                  const currentStage = kitchenStage(order);
+                  const orderId = String(order.id ?? '');
+                  const busy = busyOrderId === orderId;
+                  const actionLabel =
+                    currentStage === 'NEW'
+                      ? 'Start preparing'
+                      : currentStage === 'PREPARING'
+                        ? 'Mark ready'
+                        : currentStage === 'READY'
+                          ? String(order.orderType ?? '') === 'ROOM_SERVICE'
+                            ? 'Mark delivered'
+                            : 'Mark served'
+                          : null;
+
+                  return (
+                    <article
+                      key={orderId}
+                      style={{
+                        border: '1px solid var(--border, #dfe5ec)',
+                        borderRadius: 14,
+                        padding: 12,
+                        display: 'grid',
+                        gap: 10,
+                        minWidth: 0,
+                      }}
+                    >
+                      <div
+                        style={{
+                          display: 'flex',
+                          justifyContent: 'space-between',
+                          gap: 10,
+                          alignItems: 'flex-start',
+                        }}
+                      >
+                        <div style={{ minWidth: 0 }}>
+                          <strong>{kitchenOrderLabel(order)}</strong>
+                          <div style={{ marginTop: 4 }}>
+                            {String(order.orderType ?? 'RESTAURANT').replaceAll('_', ' ')}
+                            {String(order.orderType ?? '') === 'ROOM_SERVICE'
+                              ? order.roomNumber
+                                ? ` · Room ${String(order.roomNumber)}`
+                                : ''
+                              : order.tableNumber
+                                ? ` · Table ${String(order.tableNumber)}`
+                                : ''}
+                          </div>
+                          {String(order.orderType ?? '') === 'RESTAURANT' && (
+                            <div style={{ marginTop: 4, fontSize: 13 }}>
+                              {order.covers ? `${String(order.covers)} covers` : 'Covers —'}
+                              {order.waiterName
+                                ? ` · ${String(order.waiterName)}`
+                                : ''}
+                            </div>
+                          )}
+                        </div>
+
+                        <strong style={{ whiteSpace: 'nowrap' }}>
+                          {kitchenAge(order.createdAt, nowMs)}
+                        </strong>
+                      </div>
+
+                      <div style={{ display: 'grid', gap: 5 }}>
+                        {items.length ? (
+                          items.map((item, index) => (
+                            <div
+                              key={String(item.id ?? `${orderId}:${index}`)}
+                              style={{
+                                display: 'flex',
+                                justifyContent: 'space-between',
+                                gap: 10,
+                              }}
+                            >
+                              <span>
+                                {Number(item.quantity ?? 0)}×{' '}
+                                <strong>{String(item.itemName ?? 'Item')}</strong>
+                              </span>
+                              <span>{String(item.category ?? '')}</span>
+                            </div>
+                          ))
+                        ) : (
+                          <span>{String(order.itemSummary ?? 'Order items unavailable')}</span>
+                        )}
+                      </div>
+
+                      {Boolean(order.specialInstructions) && (
+                        <div
+                          style={{
+                            borderTop: '1px solid var(--border, #dfe5ec)',
+                            paddingTop: 9,
+                          }}
+                        >
+                          <strong>Instructions</strong>
+                          <div style={{ marginTop: 4 }}>
+                            {String(order.specialInstructions)}
+                          </div>
+                        </div>
+                      )}
+
+                      <div
+                        style={{
+                          display: 'flex',
+                          justifyContent: 'space-between',
+                          gap: 10,
+                          alignItems: 'center',
+                        }}
+                      >
+                        <span>{money(order.totalPaise)}</span>
+                        {actionLabel && (
+                          <button
+                            type="button"
+                            className="primary-button"
+                            disabled={!online || busy}
+                            title={!online ? 'Requires an online connection.' : undefined}
+                            onClick={() => void advanceOrder(order)}
+                          >
+                            {busy ? 'Updating…' : actionLabel}
+                          </button>
+                        )}
+                      </div>
+                    </article>
+                  );
+                })}
+
+                {stageOrders.length === 0 && (
+                  <div className="empty-state">No orders</div>
+                )}
+              </div>
+            </div>
+          );
+        })}
+      </div>
+
+      <p className="empty-state" style={{ margin: 0 }}>
+        Kitchen board refreshes automatically every 15 seconds while online. Served / delivered shows the latest 8 completed orders; full history remains available in the orders table.
+      </p>
+    </section>
   );
 }
 
@@ -750,10 +1258,12 @@ export function OperationalWorkspace(
     title: string;
   } | null>(null);
   const [restaurantOrderOpen, setRestaurantOrderOpen] = useState(false);
+  const [restaurantDisplay, setRestaurantDisplay] = useState<'KDS' | 'TABLE'>('KDS');
 
   const rooms = state.rooms;
   const menu = rows('menuItems');
   const stays = rows('serviceStays');
+  const restaurantStaff = rows('restaurantStaff');
   const restaurantItems = rows('restaurantOrderItems');
 
   const itemsByOrder = new Map<string, Row[]>();
@@ -788,6 +1298,7 @@ export function OperationalWorkspace(
             .join(', ')
         : 'Legacy order',
       kotStatus: orderRow['kotStatus'] ?? 'NEW',
+      items,
     };
   });
 
@@ -1054,7 +1565,7 @@ export function OperationalWorkspace(
     'Properties & Settings': {
       title: 'Property settings',
       description:
-        'Persisted operating times and default tax settings for this property.',
+        'Room accommodation GST is automatic from the nightly value. Restaurant service defaults to 5%; use 18% only for a valid specified-premises profile. The general tax field remains for other/manual charges.',
       rows: data.propertySettings
         ? [data.propertySettings as Row]
         : [],
@@ -1065,8 +1576,9 @@ export function OperationalWorkspace(
         ['checkOutTime', 'Check-out'],
         [
           'defaultTaxRateBps',
-          'Tax (basis points)',
+          'Other/manual tax (bps)',
         ],
+        ['restaurantGstProfile', 'Restaurant GST'],
       ],
       permission: 'property.manage',
       action: 'SAVE_PROPERTY',
@@ -1094,8 +1606,22 @@ export function OperationalWorkspace(
         {
           key: 'defaultTaxRateBps',
           label:
-            'Default tax (basis points; 1800 = 18%)',
+            'Other/manual charge default tax (basis points; 1800 = 18%)',
           type: 'number',
+        },
+        {
+          key: 'restaurantGstProfile',
+          label: 'Restaurant GST profile',
+          options: [
+            {
+              value: 'STANDARD_5_NO_ITC',
+              label: 'Automatic 5% GST — restaurant service (without ITC)',
+            },
+            {
+              value: 'SPECIFIED_18_WITH_ITC',
+              label: '18% GST — specified premises / opted hotel (with ITC)',
+            },
+          ],
         },
       ],
     },
@@ -1103,11 +1629,14 @@ export function OperationalWorkspace(
     'Restaurant Orders': {
       title: 'Restaurant orders',
       description:
-        'Orders post once to an active guest folio using current menu prices and property taxes.',
+        'Dine-in supports walk-ins, table/covers/waiter assignment and optional guest-folio posting. Room service requires an active checked-in stay. Restaurant-service GST is automatic.',
       rows: restaurantOrderRows,
       columns: [
-        ['roomNumber', 'Room'],
         ['orderType', 'Type'],
+        ['tableNumber', 'Table'],
+        ['covers', 'Covers'],
+        ['waiterName', 'Waiter'],
+        ['roomNumber', 'Room'],
         ['itemSummary', 'Items'],
         ['itemCount', 'Qty'],
         ['totalPaise', 'Total'],
@@ -1295,25 +1824,48 @@ export function OperationalWorkspace(
         }
       />
 
+      {restaurantOrderView && canEdit && (
+        <div
+          className="service-actions"
+          style={{
+            justifyContent: 'flex-start',
+            marginBottom: 14,
+          }}
+        >
+          <button
+            type="button"
+            className={restaurantDisplay === 'KDS' ? 'primary-button' : 'secondary-button'}
+            onClick={() => setRestaurantDisplay('KDS')}
+          >
+            Kitchen board
+          </button>
+          <button
+            type="button"
+            className={restaurantDisplay === 'TABLE' ? 'primary-button' : 'secondary-button'}
+            onClick={() => setRestaurantDisplay('TABLE')}
+          >
+            Orders table
+          </button>
+        </div>
+      )}
+
       {!canEdit &&
       config.rows.length === 0 ? (
         <p className="empty-state">
           Your role does not have access to
           these records.
         </p>
+      ) : restaurantOrderView && restaurantDisplay === 'KDS' ? (
+        <KitchenBoard
+          orders={config.rows}
+          online={online}
+          command={command}
+          refresh={refresh}
+          notify={notify}
+        />
       ) : (
-        <div
-          className="table-card"
-          style={{
-            overflowX: 'hidden',
-          }}
-        >
-          <table
-            style={{
-              minWidth: 0,
-              tableLayout: 'fixed',
-            }}
-          >
+        <div className="table-card">
+          <table>
             <thead>
               <tr>
                 {config.columns.map(
@@ -1452,6 +2004,7 @@ export function OperationalWorkspace(
         <RestaurantOrderComposer
           menu={menu}
           stays={stays}
+          restaurantStaff={restaurantStaff}
           fixedOrderType={
             view === 'Room Service'
               ? 'ROOM_SERVICE'

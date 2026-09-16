@@ -1,0 +1,2 @@
+ALTER TABLE "properties" ADD COLUMN "restaurant_gst_profile" text DEFAULT 'UNCONFIGURED' NOT NULL;--> statement-breakpoint
+ALTER TABLE "properties" ADD CONSTRAINT "chk_properties_restaurant_gst_profile" CHECK ("properties"."restaurant_gst_profile" in ('UNCONFIGURED', 'STANDARD_5_NO_ITC', 'SPECIFIED_18_WITH_ITC'));

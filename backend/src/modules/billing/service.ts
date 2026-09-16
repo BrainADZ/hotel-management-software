@@ -38,6 +38,10 @@ import {
 } from './calculations';
 
 import {
+  hotelAccommodationGstRateBps,
+} from './india-gst';
+
+import {
   checkoutSchema,
   discountSchema,
   invoiceCancelSchema,
@@ -1022,14 +1026,21 @@ export class BillingService {
         for (
           const date of dates
         ) {
+          const accommodationTaxRateBps =
+            hotelAccommodationGstRateBps(
+              reservation.nightlyRatePaise,
+              date,
+              reservation.taxRateBps,
+            );
+
           const values =
             calculateLine(
               1,
               reservation.nightlyRatePaise,
               0,
-              reservation.taxRateBps,
+              accommodationTaxRateBps,
               (
-                reservation.taxRateBps
+                accommodationTaxRateBps
                   ? profile.defaultTaxMode
                   : 'EXEMPT'
               ) as TaxMode,
@@ -1065,7 +1076,7 @@ export class BillingService {
                 reservation.nightlyRatePaise,
 
               taxRateBps:
-                reservation.taxRateBps,
+                accommodationTaxRateBps,
 
               lineTotalPaise:
                 values.totalPaise,

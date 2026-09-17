@@ -353,16 +353,82 @@ export const financialSequences = pgTable('financial_sequences', {
 }, (table) => [primaryKey({ columns: [table.propertyId, table.financialYear, table.sequenceType] })]);
 
 export const payments = pgTable('payments', {
-  id: text('id').primaryKey(), organisationId: text('organisation_id').notNull().references(() => organisations.id),
-  propertyId: text('property_id').notNull().references(() => properties.id), folioId: text('folio_id').notNull().references(() => folios.id),
-  reservationId: text('reservation_id').notNull().references(() => reservations.id), paymentNumber: text('payment_number').notNull(),
-  method: text('method').notNull(), amountPaise: integer('amount_paise').notNull(), reference: text('reference'), notes: text('notes'),
-  status: text('status').notNull().default('RECEIVED'), idempotencyKey: text('idempotency_key').notNull(),
-  receivedAt: timestamp('received_at', { withTimezone: true, mode: 'string' }).notNull(), receivedBy: text('received_by').notNull().references(() => appUsers.id),
-  reversedAt: timestamp('reversed_at', { withTimezone: true, mode: 'string' }), reversedBy: text('reversed_by').references(() => appUsers.id),
-  reversalReason: text('reversal_reason'), createdAt: timestamp('created_at', { withTimezone: true, mode: 'string' }).notNull(),
-  updatedAt: timestamp('updated_at', { withTimezone: true, mode: 'string' }).notNull(),
-}, (table) => [uniqueIndex('idx_payments_property_number').on(table.propertyId, table.paymentNumber), uniqueIndex('idx_payments_folio_idempotency').on(table.folioId, table.idempotencyKey), index('idx_payments_folio_status').on(table.folioId, table.status)]);
+  id: text('id').primaryKey(),
+  organisationId: text('organisation_id')
+    .notNull()
+    .references(() => organisations.id),
+  propertyId: text('property_id')
+    .notNull()
+    .references(() => properties.id),
+  folioId: text('folio_id').references(() => folios.id),
+  reservationId: text('reservation_id').references(() => reservations.id),
+  restaurantOrderId: text('restaurant_order_id').references(() => restaurantOrders.id),
+  paymentNumber: text('payment_number').notNull(),
+  method: text('method').notNull(),
+  amountPaise: integer('amount_paise').notNull(),
+  reference: text('reference'),
+  notes: text('notes'),
+  status: text('status').notNull().default('RECEIVED'),
+  idempotencyKey: text('idempotency_key').notNull(),
+  receivedAt: timestamp('received_at', {
+    withTimezone: true,
+    mode: 'string',
+  }).notNull(),
+  receivedBy: text('received_by')
+    .notNull()
+    .references(() => appUsers.id),
+  reversedAt: timestamp('reversed_at', {
+    withTimezone: true,
+    mode: 'string',
+  }),
+  reversedBy: text('reversed_by').references(() => appUsers.id),
+  reversalReason: text('reversal_reason'),
+  createdAt: timestamp('created_at', {
+    withTimezone: true,
+    mode: 'string',
+  }).notNull(),
+  updatedAt: timestamp('updated_at', {
+    withTimezone: true,
+    mode: 'string',
+  }).notNull(),
+}, (table) => [
+  uniqueIndex('idx_payments_property_number').on(
+    table.propertyId,
+    table.paymentNumber,
+  ),
+  uniqueIndex('idx_payments_folio_idempotency').on(
+    table.folioId,
+    table.idempotencyKey,
+  ),
+  uniqueIndex('idx_payments_restaurant_idempotency').on(
+    table.restaurantOrderId,
+    table.idempotencyKey,
+  ),
+  index('idx_payments_folio_status').on(
+    table.folioId,
+    table.status,
+  ),
+  index('idx_payments_restaurant_status').on(
+    table.restaurantOrderId,
+    table.status,
+  ),
+  check(
+    'chk_payments_source',
+    sql`
+      (
+        ${table.folioId} is not null
+        and ${table.reservationId} is not null
+        and ${table.restaurantOrderId} is null
+      )
+      or
+      (
+        ${table.folioId} is null
+        and ${table.reservationId} is null
+        and ${table.restaurantOrderId} is not null
+      )
+    `,
+  ),
+]);
 
 export const paymentRefunds = pgTable('payment_refunds', {
   id: text('id').primaryKey(), organisationId: text('organisation_id').notNull().references(() => organisations.id),
@@ -550,7 +616,11 @@ export const restaurantOrders = pgTable('restaurant_orders', {
   kotStatus: text('kot_status').notNull().default('NEW'),
   itemCount: integer('item_count').notNull().default(1),
   specialInstructions: text('special_instructions'),
+  customerName: text('customer_name'),
+  customerPhone: text('customer_phone'),
   totalPaise: integer('total_paise').notNull(),
+  paidPaise: integer('paid_paise').notNull().default(0),
+  settledAt: timestamp('settled_at', { withTimezone: true, mode: 'string' }),
   paymentStatus: text('payment_status').notNull(),
   createdAt: text('created_at').notNull(),
 }, (table) => [
@@ -561,6 +631,10 @@ export const restaurantOrders = pgTable('restaurant_orders', {
   check(
     'chk_restaurant_orders_covers',
     sql`${table.covers} is null or (${table.covers} >= 1 and ${table.covers} <= 100)`,
+  ),
+  check(
+    'chk_restaurant_orders_paid_paise',
+    sql`${table.paidPaise} >= 0 and ${table.paidPaise} <= ${table.totalPaise}`,
   ),
 ]);
 

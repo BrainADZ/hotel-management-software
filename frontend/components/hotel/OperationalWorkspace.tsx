@@ -8,6 +8,7 @@ import {
   PageHeading,
   Status,
   money,
+  productionApi,
 } from '@/app/hotel-platform';
 
 type Field = {
@@ -293,13 +294,15 @@ function RestaurantOrderComposer({
 }) {
   const [clientOperationId] = useState(() => crypto.randomUUID());
   const [reservationId, setReservationId] = useState('');
-  const [orderType, setOrderType] = useState<'RESTAURANT' | 'ROOM_SERVICE'>(
+  const [orderType, setOrderType] = useState<'RESTAURANT' | 'ROOM_SERVICE' | 'TAKEAWAY'>(
     fixedOrderType ?? 'RESTAURANT',
   );
   const [tableNumber, setTableNumber] = useState('');
   const [covers, setCovers] = useState(2);
   const [waiterUserId, setWaiterUserId] = useState('');
   const [specialInstructions, setSpecialInstructions] = useState('');
+  const [customerName, setCustomerName] = useState('');
+  const [customerPhone, setCustomerPhone] = useState('');
   const [lines, setLines] = useState<RestaurantCartLine[]>([
     {
       key: crypto.randomUUID(),
@@ -457,6 +460,8 @@ function RestaurantOrderComposer({
         clientOperationId,
         reservationId: reservationId || undefined,
         orderType: effectiveOrderType,
+        customerName: effectiveOrderType === 'TAKEAWAY' ? customerName.trim() || undefined : undefined,
+        customerPhone: effectiveOrderType === 'TAKEAWAY' ? customerPhone.trim() || undefined : undefined,
         tableNumber:
           effectiveOrderType === 'RESTAURANT'
             ? tableNumber.trim()
@@ -544,12 +549,14 @@ function RestaurantOrderComposer({
                 onChange={(event) => {
                   const next = event.target.value as
                     | 'RESTAURANT'
-                    | 'ROOM_SERVICE';
+                    | 'ROOM_SERVICE'
+                    | 'TAKEAWAY';
                   setOrderType(next);
                   setError('');
                 }}
               >
                 <option value="RESTAURANT">Dine-in / restaurant</option>
+                <option value="TAKEAWAY">Takeaway</option>
                 <option value="ROOM_SERVICE">Room service</option>
               </select>
             </label>
@@ -578,6 +585,13 @@ function RestaurantOrderComposer({
               ))}
             </select>
           </label>
+
+          {effectiveOrderType === 'TAKEAWAY' && (
+            <>
+              <label><span>Customer name (optional)</span><input maxLength={200} value={customerName} onChange={(event) => setCustomerName(event.target.value)} /></label>
+              <label><span>Phone (optional)</span><input type="tel" maxLength={30} value={customerPhone} onChange={(event) => setCustomerPhone(event.target.value)} /></label>
+            </>
+          )}
 
           {effectiveOrderType === 'RESTAURANT' && (
             <>
@@ -860,6 +874,43 @@ function RestaurantOrderComposer({
 }
 
 
+function RestaurantSettlement({ order, refresh, onClose }: { order: Row; refresh: () => Promise<unknown>; onClose: () => void }) {
+  const [method, setMethod] = useState<'CASH' | 'CARD' | 'UPI'>('CASH');
+  const [amount, setAmount] = useState('');
+  const [reference, setReference] = useState('');
+  const [key, setKey] = useState(() => crypto.randomUUID());
+  const [result, setResult] = useState<Row | null>(null);
+  const [error, setError] = useState('');
+  const [busy, setBusy] = useState(false);
+  const outstanding = Math.max(0, Number(order.totalPaise ?? 0) - Number(order.paidPaise ?? 0));
+  const received = Math.round(Number(amount) * 100);
+  const change = method === 'CASH' ? Math.max(0, received - outstanding) : 0;
+  const pay = async (event: React.FormEvent) => {
+    event.preventDefault(); setBusy(true); setError('');
+    try {
+      const response = await productionApi(`/api/restaurant-orders/${encodeURIComponent(String(order.id))}/payments`, {
+        method: 'POST', body: JSON.stringify({ method, amountPaise: received, reference: reference.trim() || undefined, idempotencyKey: key }),
+      }) as Row;
+      setResult(response); setKey(crypto.randomUUID()); await refresh();
+    } catch (cause) { setError(cause instanceof Error ? cause.message : 'Payment failed.'); }
+    finally { setBusy(false); }
+  };
+  return <div className="modal-backdrop"><form role="dialog" aria-modal="true" aria-label="Settle restaurant order" className="modal-card" onSubmit={pay}>
+    <div className="modal-heading"><div><p className="section-kicker">Restaurant POS</p><h2>Settle order</h2></div><button type="button" className="icon-button" onClick={onClose}>×</button></div>
+    <p>Order total: {money(order.totalPaise)} · Paid: {money(order.paidPaise)} · Outstanding: {money(outstanding)}</p>
+    <p><Status value={String(result?.paymentStatus ?? order.paymentStatus ?? 'UNPAID')} /></p>
+    {error && <p role="alert" className="error-banner">{error}</p>}
+    {result && <p role="status">Receipt {String(result.paymentNumber)} · Applied {money(result.amountAppliedPaise)} · Received {money(result.amountReceivedPaise)} · Change {money(result.changeDuePaise)} · Remaining {money(result.outstandingPaise)}</p>}
+    {!result && outstanding > 0 && <div className="form-grid">
+      <label><span>Payment method</span><select value={method} onChange={(event) => setMethod(event.target.value as 'CASH' | 'CARD' | 'UPI')}><option>CASH</option><option>CARD</option><option>UPI</option></select></label>
+      <label><span>{method === 'CASH' ? 'Amount received (₹)' : 'Amount (₹)'}</span><input type="number" min="0.01" step="0.01" required value={amount} onChange={(event) => setAmount(event.target.value)} /></label>
+      <label><span>{method === 'UPI' ? 'UTR / transaction reference' : method === 'CARD' ? 'Card / payment reference' : 'Reference (optional)'}</span><input maxLength={100} value={reference} onChange={(event) => setReference(event.target.value)} /></label>
+      {method === 'CASH' && <p>Change due: {money(change)}</p>}
+    </div>}
+    <div className="modal-actions"><button type="button" className="secondary-button" onClick={onClose}>Close</button>{!result && outstanding > 0 && <button type="submit" className="primary-button" disabled={busy || !Number.isInteger(received) || received <= 0 || (method !== 'CASH' && received > outstanding)}>{busy ? 'Recording…' : 'Pay'}</button>}</div>
+  </form></div>;
+}
+
 type KitchenStage = 'NEW' | 'PREPARING' | 'READY' | 'SERVED';
 
 const kitchenStages: Array<{
@@ -1106,7 +1157,7 @@ function KitchenBoard({
                         : currentStage === 'READY'
                           ? String(order.orderType ?? '') === 'ROOM_SERVICE'
                             ? 'Mark delivered'
-                            : 'Mark served'
+                            : String(order.orderType ?? '') === 'TAKEAWAY' ? 'Mark collected' : 'Mark served'
                           : null;
 
                   return (
@@ -1148,6 +1199,9 @@ function KitchenBoard({
                                 ? ` · ${String(order.waiterName)}`
                                 : ''}
                             </div>
+                          )}
+                          {String(order.orderType ?? '') === 'TAKEAWAY' && Boolean(order.customerName || order.customerPhone) && (
+                            <div style={{ marginTop: 4, fontSize: 13 }}>{String(order.customerName ?? '')} {String(order.customerPhone ?? '')}</div>
                           )}
                         </div>
 
@@ -1258,6 +1312,7 @@ export function OperationalWorkspace(
     title: string;
   } | null>(null);
   const [restaurantOrderOpen, setRestaurantOrderOpen] = useState(false);
+  const [settlementOrder, setSettlementOrder] = useState<Row | null>(null);
   const [restaurantDisplay, setRestaurantDisplay] = useState<'KDS' | 'TABLE'>('KDS');
 
   const rooms = state.rooms;
@@ -1929,6 +1984,9 @@ export function OperationalWorkspace(
 
                     {canEdit && (
                       <td>
+                        {restaurantOrderView && !row.reservationId && !['PAID', 'POSTED_TO_FOLIO'].includes(String(row.paymentStatus)) && (
+                          <button className="text-button" disabled={!online} onClick={() => setSettlementOrder(row)}>Settle</button>
+                        )}
                         {config.editable &&
                           row.role !==
                             'OWNER' && (
@@ -2017,6 +2075,8 @@ export function OperationalWorkspace(
           onClose={() => setRestaurantOrderOpen(false)}
         />
       )}
+
+      {settlementOrder && <RestaurantSettlement order={settlementOrder} refresh={refresh} onClose={() => setSettlementOrder(null)} />}
 
       {dialog && (
         <WorkflowForm

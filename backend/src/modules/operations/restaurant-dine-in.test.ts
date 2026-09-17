@@ -8,6 +8,19 @@ const base = {
 };
 
 describe('restaurant dine-in order validation', () => {
+  it('accepts takeaway without a reservation, table, covers or waiter', () => {
+    const order = workflowSchemas.CREATE_RESTAURANT_ORDER.parse({
+      ...base, orderType: 'TAKEAWAY', customerName: 'Asha', customerPhone: '9876543210',
+    });
+    expect(order.reservationId).toBeUndefined();
+    expect(order.customerName).toBe('Asha');
+    expect(order.customerPhone).toBe('9876543210');
+  });
+
+  it('accepts takeaway with no customer details or with a guest link', () => {
+    expect(workflowSchemas.CREATE_RESTAURANT_ORDER.parse({ ...base, orderType: 'TAKEAWAY' }).customerName).toBeUndefined();
+    expect(workflowSchemas.CREATE_RESTAURANT_ORDER.parse({ ...base, orderType: 'TAKEAWAY', reservationId: 'stay-1' }).reservationId).toBe('stay-1');
+  });
   it('allows a walk-in dine-in order without a reservation', () => {
     const parsed = workflowSchemas.CREATE_RESTAURANT_ORDER.parse({
       ...base,

@@ -11,6 +11,8 @@ import {
   invoices,
   paymentRefunds,
   payments,
+  restaurantOrders,
+  restaurantOrderItems,
   properties,
   reservationEvents,
   reservations,
@@ -54,6 +56,7 @@ import {
 import type {
   TaxMode,
 } from './types';
+import { restaurantPaymentSchema, restaurantSettlement } from './restaurant-payment';
 
 type Db = ReturnType<typeof getDb>;
 
@@ -544,6 +547,61 @@ async function recalculate(
 }
 
 export class BillingService {
+  async settleRestaurantOrder(c: ReservationContext, orderId: string, raw: unknown) {
+    scope(c);
+    assertRoleCan(c.actor.role, 'restaurant.manage');
+    const input = restaurantPaymentSchema.parse(raw);
+    return getDb().transaction(async (tx) => {
+      await lock(tx, `restaurant-order:${orderId}`);
+      const [order] = await tx.select().from(restaurantOrders).where(and(
+        eq(restaurantOrders.id, orderId), eq(restaurantOrders.propertyId, c.property.id),
+      )).for('update');
+      if (!order) throw new DomainError('ORDER_NOT_FOUND', 'Restaurant order was not found.', 404);
+      if (order.reservationId || order.paymentStatus === 'POSTED_TO_FOLIO') {
+        throw new DomainError('ORDER_POSTED_TO_FOLIO', 'This order is settled through the guest folio.', 409);
+      }
+      const [existing] = await tx.select().from(payments).where(and(
+        eq(payments.restaurantOrderId, orderId), eq(payments.idempotencyKey, input.idempotencyKey),
+      )).limit(1);
+      const items = await tx.select().from(restaurantOrderItems).where(eq(restaurantOrderItems.orderId, orderId));
+      if (existing) {
+        if (existing.method !== input.method || existing.reference !== (input.reference ?? null) ||
+            existing.amountPaise !== Math.min(input.amountPaise, order.totalPaise - (order.paidPaise - existing.amountPaise))) {
+          throw new DomainError('IDEMPOTENCY_CONFLICT', 'This payment key was used with different details.', 409);
+        }
+        return { restaurantOrderId: orderId, paymentId: existing.id, paymentNumber: existing.paymentNumber,
+          receivedAt: existing.receivedAt, method: existing.method, amountAppliedPaise: existing.amountPaise,
+          amountReceivedPaise: input.amountPaise, changeDuePaise: input.method === 'CASH' ? input.amountPaise - existing.amountPaise : 0,
+          reference: existing.reference, orderTotalPaise: order.totalPaise, paidPaise: order.paidPaise,
+          outstandingPaise: Math.max(0, order.totalPaise - order.paidPaise), paymentStatus: order.paymentStatus,
+          customerName: order.customerName, customerPhone: order.customerPhone, items };
+      }
+      const amounts = restaurantSettlement(order.totalPaise, order.paidPaise, input);
+      const profile = await propertyProfile(tx, c);
+      const issued = await nextNumber(tx, c.property.id, new Date(), 'RECEIPT', profile.receiptPrefix);
+      const timestamp = now();
+      const [payment] = await tx.insert(payments).values({
+        id: crypto.randomUUID(), organisationId: c.actor.organisationId, propertyId: c.property.id,
+        folioId: null, reservationId: null, restaurantOrderId: orderId,
+        paymentNumber: issued.number, method: input.method, amountPaise: amounts.amountAppliedPaise,
+        reference: input.reference, status: 'RECEIVED', idempotencyKey: input.idempotencyKey,
+        receivedAt: timestamp, receivedBy: c.actor.id, createdAt: timestamp, updatedAt: timestamp,
+      }).returning();
+      await tx.update(restaurantOrders).set({ paidPaise: amounts.paidPaise,
+        paymentStatus: amounts.paymentStatus, settledAt: amounts.paymentStatus === 'PAID' ? timestamp : null,
+      }).where(eq(restaurantOrders.id, orderId));
+      await audit(tx, c, 'PAYMENT_RECEIVED', 'PAYMENT', payment.id, {
+        restaurantOrderId: orderId, amountPaise: payment.amountPaise, method: payment.method,
+        reference: payment.reference, amountReceivedPaise: input.amountPaise, changeDuePaise: amounts.changeDuePaise,
+      });
+      return { restaurantOrderId: orderId, paymentId: payment.id, paymentNumber: payment.paymentNumber,
+        receivedAt: payment.receivedAt, method: payment.method, amountAppliedPaise: payment.amountPaise,
+        amountReceivedPaise: input.amountPaise, changeDuePaise: amounts.changeDuePaise,
+        reference: payment.reference, orderTotalPaise: order.totalPaise, paidPaise: amounts.paidPaise,
+        outstandingPaise: amounts.outstandingPaise, paymentStatus: amounts.paymentStatus,
+        customerName: order.customerName, customerPhone: order.customerPhone, items };
+    });
+  }
   async ensureFolio(
     c: ReservationContext,
     reservationId: string,
@@ -1727,7 +1785,7 @@ export class BillingService {
         await recalculate(
           tx,
           c,
-          payment.folioId,
+          payment.folioId!,
         );
 
         await audit(
@@ -1913,7 +1971,7 @@ export class BillingService {
                 c.property.id,
 
               folioId:
-                payment.folioId,
+                payment.folioId!,
 
               paymentId,
 
@@ -1943,7 +2001,7 @@ export class BillingService {
         await recalculate(
           tx,
           c,
-          payment.folioId,
+          payment.folioId!,
         );
 
         await audit(

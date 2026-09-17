@@ -108,9 +108,7 @@ export const workflowSchemas = {
         .min(1)
         .max(50)
         .optional(),
-      orderType: z.enum(['RESTAURANT', 'ROOM_SERVICE', 'TAKEAWAY']),
-      customerName: z.string().trim().max(200).optional(),
-      customerPhone: z.string().trim().max(30).optional(),
+      orderType: z.enum(['RESTAURANT', 'ROOM_SERVICE']),
       tableNumber: z.string().trim().min(1).max(30).optional(),
       covers: z.number().int().min(1).max(100).optional(),
       waiterUserId: id.optional(),
@@ -1132,8 +1130,6 @@ export async function mutateWorkflow(
           (existing.covers ?? null) !== (dineIn ? p.covers ?? null : null) ||
           (existing.waiterUserId ?? null) !==
             (dineIn ? p.waiterUserId ?? null : null) ||
-          (existing.customerName ?? '') !== (p.customerName ?? '') ||
-          (existing.customerPhone ?? '') !== (p.customerPhone ?? '') ||
           JSON.stringify(originalItems) !== JSON.stringify(normalizedItems) ||
           (existing.specialInstructions ?? '') !==
             (p.specialInstructions ?? '')
@@ -1377,8 +1373,6 @@ export async function mutateWorkflow(
           0,
         ),
         specialInstructions: p.specialInstructions || null,
-        customerName: p.customerName || null,
-        customerPhone: p.customerPhone || null,
         totalPaise: totals.totalPaise,
         paymentStatus,
         createdAt: now,
@@ -1466,8 +1460,6 @@ export async function mutateWorkflow(
           0,
         ),
         specialInstructions: p.specialInstructions || null,
-        customerName: p.customerName || null,
-        customerPhone: p.customerPhone || null,
         restaurantGstProfile,
         taxRateBps: restaurantTaxRateBps,
         paymentStatus,
@@ -1617,4 +1609,4 @@ export async function mutateWorkflow(
       400,
     );
   });
-}
+} 

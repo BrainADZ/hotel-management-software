@@ -1,4 +1,4 @@
-﻿import { apiError, apiJson } from '@/services/api-response';
+import { apiError, apiJson } from '@/services/api-response';
 import { requireReservationContext } from '@/services/reservations/http';
 import { BillingService } from '@/modules/billing/service';
 import { entityIdSchema } from '@/services/reservations/validation';

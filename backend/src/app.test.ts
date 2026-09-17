@@ -32,7 +32,7 @@ it('serves backend mode and dispatches dynamic action routes', async () => {
   const app = await createApp();
   try {
     expect((await app.inject('/api/runtime')).json()).toEqual({ mode: 'production', showDemoCredentials: false, googleConfigured: false });
-    for (const url of ['/api/reservations/test/check-in', '/api/stays/test/room-move', '/api/guests/test/identity-documents', '/api/reservations/test/financial-checkout', '/api/folios/test/payments', '/api/payments/test/refund']) {
+    for (const url of ['/api/reservations/test/check-in', '/api/stays/test/room-move', '/api/guests/test/identity-documents', '/api/reservations/test/financial-checkout', '/api/folios/test/payments', '/api/payments/test/refund', '/api/restaurant-orders/test/payments']) {
       const response = await app.inject({ method: 'POST', url, payload: { version: 1 } });
       expect(response.statusCode).toBe(401);
     }

@@ -4109,7 +4109,7 @@
       "checkConstraints": {
         "chk_payments_source": {
           "name": "chk_payments_source",
-          "value": "(\"payments\".\"folio_id\" is not null and \"payments\".\"reservation_id\" is not null and \"payments\".\"restaurant_order_id\" is null) or (\"payments\".\"folio_id\" is null and \"payments\".\"reservation_id\" is null and \"payments\".\"restaurant_order_id\" is not null)"
+          "value": "\n      (\n        \"payments\".\"folio_id\" is not null\n        and \"payments\".\"reservation_id\" is not null\n        and \"payments\".\"restaurant_order_id\" is null\n      )\n      or\n      (\n        \"payments\".\"folio_id\" is null\n        and \"payments\".\"reservation_id\" is null\n        and \"payments\".\"restaurant_order_id\" is not null\n      )\n    "
         }
       },
       "isRLSEnabled": false

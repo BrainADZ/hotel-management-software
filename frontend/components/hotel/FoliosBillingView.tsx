@@ -163,9 +163,9 @@ export function FoliosBillingView({
   const guest = selected?.guest as Row | undefined;
   const room = selected?.room as Row | undefined;
   const lines = (selected?.lines ?? []) as Row[];
-  const payments = (selected?.payments ?? []) as Row[];
+  const payments = useMemo(() => (selected?.payments ?? []) as Row[], [selected?.payments]);
   const refunds = (selected?.refunds ?? []) as Row[];
-  const invoices = (selected?.invoices ?? []) as Row[];
+  const invoices = useMemo(() => (selected?.invoices ?? []) as Row[], [selected?.invoices]);
 
   const outstandingPaise = Number(detail?.outstandingPaise ?? 0);
   const duePaise = Math.max(0, outstandingPaise);

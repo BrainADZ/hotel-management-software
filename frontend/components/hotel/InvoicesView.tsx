@@ -16,8 +16,10 @@ export function InvoicesView({
   state,
   notify,
 }: PlatformViewProps) {
-  const invoices =
-    (state.operationalData?.invoices as Row[] | undefined) ?? [];
+  const invoices = useMemo(
+    () => (state.operationalData?.invoices as Row[] | undefined) ?? [],
+    [state.operationalData?.invoices],
+  );
 
   const stats = useMemo(() => {
     const totalValue = invoices.reduce(

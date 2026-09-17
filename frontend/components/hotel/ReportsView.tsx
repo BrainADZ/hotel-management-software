@@ -160,7 +160,7 @@ export function ReportsView({ state, notify, businessUnit }: PlatformViewProps) 
               <p className="section-kicker">Room performance</p>
               <h2>Occupancy, ADR & RevPAR</h2>
             </div>
-            <span className="date-chip">24 Aug 2026</span>
+            <span className="date-chip">{new Date().toLocaleDateString('en-IN')}</span>
           </div>
           <div className="bar-chart">
             <div>
@@ -173,14 +173,14 @@ export function ReportsView({ state, notify, businessUnit }: PlatformViewProps) 
             <div>
               <span>ADR</span>
               <i>
-                <b style={{ width: "82%" }} />
+                <b style={{ width: `${Math.max(0, state.metrics.adrPaise) / Math.max(1, state.metrics.adrPaise, state.metrics.revParPaise) * 100}%` }} />
               </i>
               <strong>{money(state.metrics.adrPaise)}</strong>
             </div>
             <div>
               <span>RevPAR</span>
               <i>
-                <b style={{ width: "67%" }} />
+                <b style={{ width: `${Math.max(0, state.metrics.revParPaise) / Math.max(1, state.metrics.adrPaise, state.metrics.revParPaise) * 100}%` }} />
               </i>
               <strong>{money(state.metrics.revParPaise)}</strong>
             </div>

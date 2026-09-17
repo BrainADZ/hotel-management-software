@@ -65,6 +65,7 @@ export type PremiumInvoicePdfInput = {
 };
 
 export type PremiumPaymentReceiptPdfInput = {
+  source?: 'RESTAURANT';
   property: {
     name: string;
     address?: string | null;
@@ -1125,7 +1126,7 @@ function renderReceiptIdentity(
       },
     ),
     pdfText(
-      `Booking: ${input.guest.reservation}`,
+      `${input.source === 'RESTAURANT' ? 'Order' : 'Booking'}: ${input.guest.reservation}`,
       405,
       670,
       7.8,
@@ -1135,7 +1136,7 @@ function renderReceiptIdentity(
       },
     ),
     pdfText(
-      `Folio: ${input.guest.folio || "Not assigned"}`,
+      input.source === 'RESTAURANT' ? 'Restaurant POS payment' : `Folio: ${input.guest.folio || "Not assigned"}`,
       405,
       657,
       7.8,
@@ -1145,7 +1146,7 @@ function renderReceiptIdentity(
       },
     ),
     pdfText(
-      `Room: ${input.guest.room || "TBA"}`,
+      `${input.source === 'RESTAURANT' ? 'Service' : 'Room'}: ${input.guest.room || "TBA"}`,
       405,
       644,
       7.8,
@@ -1396,7 +1397,7 @@ function renderReceiptBody(
         font: "serifBold",
       }),
       pdfText(
-        "This receipt confirms the payment recorded against the reservation.",
+        input.source === 'RESTAURANT' ? "This receipt confirms the payment recorded against the restaurant order." : "This receipt confirms the payment recorded against the reservation.",
         50,
         138,
         7.7,

@@ -1,6 +1,8 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
+import { apiFetch } from '@/lib/api/client';
+import { clearPendingRestaurantPayment, loadPendingRestaurantPayment, savePendingRestaurantPayment } from '@/lib/restaurant-payment-recovery';
 import { roleCan, type Permission } from '@hotel/shared/domain';
 import {
   type PlatformViewProps,
@@ -8,7 +10,6 @@ import {
   PageHeading,
   Status,
   money,
-  productionApi,
 } from '@/app/hotel-platform';
 
 type Field = {
@@ -874,40 +875,81 @@ function RestaurantOrderComposer({
 }
 
 
-function RestaurantSettlement({ order, refresh, onClose }: { order: Row; refresh: () => Promise<unknown>; onClose: () => void }) {
-  const [method, setMethod] = useState<'CASH' | 'CARD' | 'UPI'>('CASH');
-  const [amount, setAmount] = useState('');
-  const [reference, setReference] = useState('');
+function RestaurantSettlement({ order, propertyId, userId, refresh, onClose }: { order: Row; propertyId: string; userId: string; refresh: () => Promise<unknown>; onClose: () => void }) {
+  const orderId = String(order.id);
+  const [recovery] = useState(() => {
+    try {
+      const body = loadPendingRestaurantPayment(window.sessionStorage, { orderId, propertyId, userId });
+      const pending = body ? JSON.parse(body) as { method: 'CASH' | 'CARD' | 'UPI'; amountPaise: number; reference?: string } : null;
+      return { body, pending, ready: true, error: '' };
+    } catch (cause) {
+      return { body: null, pending: null, ready: false, error: cause instanceof Error ? cause.message : 'Payment recovery storage is unavailable.' };
+    }
+  });
+  const [method, setMethod] = useState<'CASH' | 'CARD' | 'UPI'>(recovery.pending?.method ?? 'CASH');
+  const [amount, setAmount] = useState(recovery.pending ? String(recovery.pending.amountPaise / 100) : '');
+  const [reference, setReference] = useState(recovery.pending?.reference ?? '');
   const [key, setKey] = useState(() => crypto.randomUUID());
   const [result, setResult] = useState<Row | null>(null);
-  const [error, setError] = useState('');
+  const [error, setError] = useState(recovery.error);
   const [busy, setBusy] = useState(false);
-  const outstanding = Math.max(0, Number(order.totalPaise ?? 0) - Number(order.paidPaise ?? 0));
+  const inFlight = useRef(false);
+  const [retryBody, setRetryBody] = useState<string | null>(recovery.body);
+  const recoveryReady = recovery.ready;
+  const paid = Number(result?.paidPaise ?? order.paidPaise ?? 0);
+  const outstanding = Math.max(0, Number(result?.outstandingPaise ?? (Number(order.totalPaise ?? 0) - paid)));
   const received = Math.round(Number(amount) * 100);
   const change = method === 'CASH' ? Math.max(0, received - outstanding) : 0;
   const pay = async (event: React.FormEvent) => {
-    event.preventDefault(); setBusy(true); setError('');
+    event.preventDefault();
+    if (inFlight.current || !recoveryReady) return;
+    inFlight.current = true; setBusy(true); setError('');
+    const body = retryBody ?? JSON.stringify({ method, amountPaise: received, reference: reference.trim() || undefined, idempotencyKey: key });
     try {
-      const response = await productionApi(`/api/restaurant-orders/${encodeURIComponent(String(order.id))}/payments`, {
-        method: 'POST', body: JSON.stringify({ method, amountPaise: received, reference: reference.trim() || undefined, idempotencyKey: key }),
-      }) as Row;
-      setResult(response); setKey(crypto.randomUUID()); await refresh();
-    } catch (cause) { setError(cause instanceof Error ? cause.message : 'Payment failed.'); }
-    finally { setBusy(false); }
+      savePendingRestaurantPayment(window.sessionStorage, { orderId, propertyId, userId }, body);
+      setRetryBody(body);
+      const response = await apiFetch(`/api/restaurant-orders/${encodeURIComponent(String(order.id))}/payments`, {
+        method: 'POST', headers: { 'Content-Type': 'application/json' }, body,
+      });
+      const data = await response.json();
+      if (!response.ok) {
+        // A rejected request can be corrected; uncertain network/server outcomes
+        // retain the exact request and key until the server confirms its result.
+        if (response.status < 500) {
+          clearPendingRestaurantPayment(window.sessionStorage, { orderId, propertyId, userId });
+          setRetryBody(null);
+        }
+        throw new Error(data.error?.message ?? 'Payment could not be recorded.');
+      }
+      clearPendingRestaurantPayment(window.sessionStorage, { orderId, propertyId, userId });
+      setResult(data as Row); setRetryBody(null); setKey(crypto.randomUUID()); setAmount(''); setReference('');
+      try { await refresh(); } catch { setError('Payment recorded. Refresh the order list when the connection returns.'); }
+    } catch (cause) { setError(cause instanceof Error ? cause.message : 'Payment failed. Retry to confirm the same payment.'); }
+    finally { inFlight.current = false; setBusy(false); }
+  };
+  const downloadReceipt = async () => {
+    try {
+      const response = await apiFetch(`/api/payments/${encodeURIComponent(String(result?.paymentId))}/receipt`);
+      if (!response.ok) throw new Error('Receipt download failed. Please retry.');
+      const url = URL.createObjectURL(await response.blob());
+      const link = document.createElement('a'); link.href = url; link.download = `Receipt-${String(result?.paymentNumber).replaceAll('/', '-')}.pdf`; link.click();
+      window.setTimeout(() => URL.revokeObjectURL(url), 1000);
+    } catch (cause) { setError(cause instanceof Error ? cause.message : 'Receipt download failed.'); }
   };
   return <div className="modal-backdrop"><form role="dialog" aria-modal="true" aria-label="Settle restaurant order" className="modal-card" onSubmit={pay}>
-    <div className="modal-heading"><div><p className="section-kicker">Restaurant POS</p><h2>Settle order</h2></div><button type="button" className="icon-button" onClick={onClose}>×</button></div>
-    <p>Order total: {money(order.totalPaise)} · Paid: {money(order.paidPaise)} · Outstanding: {money(outstanding)}</p>
+    <div className="modal-heading"><div><p className="section-kicker">Restaurant POS</p><h2>Settle order</h2></div><button type="button" className="icon-button" disabled={busy || Boolean(retryBody)} onClick={onClose}>×</button></div>
+    <p>Order total: {money(order.totalPaise)} · Paid: {money(paid)} · Outstanding: {money(outstanding)}</p>
     <p><Status value={String(result?.paymentStatus ?? order.paymentStatus ?? 'UNPAID')} /></p>
     {error && <p role="alert" className="error-banner">{error}</p>}
     {result && <p role="status">Receipt {String(result.paymentNumber)} · Applied {money(result.amountAppliedPaise)} · Received {money(result.amountReceivedPaise)} · Change {money(result.changeDuePaise)} · Remaining {money(result.outstandingPaise)}</p>}
-    {!result && outstanding > 0 && <div className="form-grid">
+    {retryBody && !busy && <p role="status">Payment result is not confirmed. Retry the same payment to check its result.</p>}
+    {outstanding > 0 && <fieldset disabled={busy || Boolean(retryBody)} className="form-grid">
       <label><span>Payment method</span><select value={method} onChange={(event) => setMethod(event.target.value as 'CASH' | 'CARD' | 'UPI')}><option>CASH</option><option>CARD</option><option>UPI</option></select></label>
       <label><span>{method === 'CASH' ? 'Amount received (₹)' : 'Amount (₹)'}</span><input type="number" min="0.01" step="0.01" required value={amount} onChange={(event) => setAmount(event.target.value)} /></label>
       <label><span>{method === 'UPI' ? 'UTR / transaction reference' : method === 'CARD' ? 'Card / payment reference' : 'Reference (optional)'}</span><input maxLength={100} value={reference} onChange={(event) => setReference(event.target.value)} /></label>
       {method === 'CASH' && <p>Change due: {money(change)}</p>}
-    </div>}
-    <div className="modal-actions"><button type="button" className="secondary-button" onClick={onClose}>Close</button>{!result && outstanding > 0 && <button type="submit" className="primary-button" disabled={busy || !Number.isInteger(received) || received <= 0 || (method !== 'CASH' && received > outstanding)}>{busy ? 'Recording…' : 'Pay'}</button>}</div>
+    </fieldset>}
+    <div className="modal-actions"><button type="button" className="secondary-button" disabled={busy || Boolean(retryBody)} onClick={onClose}>Close</button>{result && <button type="button" className="secondary-button" onClick={downloadReceipt}>Download receipt</button>}{(outstanding > 0 || retryBody) && <button type="submit" className="primary-button" disabled={!recoveryReady || busy || (!retryBody && (!Number.isInteger(received) || received <= 0 || (method !== 'CASH' && received > outstanding)))}>{busy ? 'Recording…' : retryBody ? 'Retry same payment' : 'Pay'}</button>}</div>
   </form></div>;
 }
 
@@ -1984,8 +2026,8 @@ export function OperationalWorkspace(
 
                     {canEdit && (
                       <td>
-                        {restaurantOrderView && !row.reservationId && !['PAID', 'POSTED_TO_FOLIO'].includes(String(row.paymentStatus)) && (
-                          <button className="text-button" disabled={!online} onClick={() => setSettlementOrder(row)}>Settle</button>
+                        {restaurantOrderView && !row.reservationId && row.paymentStatus !== 'POSTED_TO_FOLIO' && (
+                          <button className="text-button" disabled={!online} onClick={() => setSettlementOrder(row)}>{row.paymentStatus === 'PAID' ? 'Payment / recovery' : 'Settle'}</button>
                         )}
                         {config.editable &&
                           row.role !==
@@ -2076,7 +2118,7 @@ export function OperationalWorkspace(
         />
       )}
 
-      {settlementOrder && <RestaurantSettlement order={settlementOrder} refresh={refresh} onClose={() => setSettlementOrder(null)} />}
+      {settlementOrder && <RestaurantSettlement key={JSON.stringify([state.property.id, state.actor.id, settlementOrder.id])} order={settlementOrder} propertyId={String(state.property.id)} userId={String(state.actor.id)} refresh={refresh} onClose={() => setSettlementOrder(null)} />}
 
       {dialog && (
         <WorkflowForm

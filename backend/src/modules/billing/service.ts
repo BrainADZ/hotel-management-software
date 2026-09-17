@@ -56,7 +56,7 @@ import {
 import type {
   TaxMode,
 } from './types';
-import { restaurantPaymentSchema, restaurantSettlement } from './restaurant-payment';
+import { assertRestaurantPaymentReplay, requireFolioPayment, restaurantPaymentSchema, restaurantSettlement, restaurantTender } from './restaurant-payment';
 
 type Db = ReturnType<typeof getDb>;
 
@@ -564,19 +564,25 @@ export class BillingService {
         eq(payments.restaurantOrderId, orderId), eq(payments.idempotencyKey, input.idempotencyKey),
       )).limit(1);
       const items = await tx.select().from(restaurantOrderItems).where(eq(restaurantOrderItems.orderId, orderId));
+      const receivedPayments = await tx.select().from(payments).where(and(
+        eq(payments.restaurantOrderId, orderId), eq(payments.status, 'RECEIVED'),
+      ));
+      const paidPaise = receivedPayments.reduce((sum, payment) => sum + payment.amountPaise, 0);
       if (existing) {
-        if (existing.method !== input.method || existing.reference !== (input.reference ?? null) ||
-            existing.amountPaise !== Math.min(input.amountPaise, order.totalPaise - (order.paidPaise - existing.amountPaise))) {
-          throw new DomainError('IDEMPOTENCY_CONFLICT', 'This payment key was used with different details.', 409);
-        }
+        const [originalAudit] = await tx.select().from(auditLogs).where(and(
+          eq(auditLogs.entityId, existing.id), eq(auditLogs.entity, 'PAYMENT'),
+          eq(auditLogs.action, 'PAYMENT_RECEIVED'), eq(auditLogs.propertyId, c.property.id),
+        )).limit(1);
+        const amountReceivedPaise = restaurantTender(existing, originalAudit?.newValue);
+        assertRestaurantPaymentReplay(existing, amountReceivedPaise, input);
         return { restaurantOrderId: orderId, paymentId: existing.id, paymentNumber: existing.paymentNumber,
           receivedAt: existing.receivedAt, method: existing.method, amountAppliedPaise: existing.amountPaise,
-          amountReceivedPaise: input.amountPaise, changeDuePaise: input.method === 'CASH' ? input.amountPaise - existing.amountPaise : 0,
-          reference: existing.reference, orderTotalPaise: order.totalPaise, paidPaise: order.paidPaise,
-          outstandingPaise: Math.max(0, order.totalPaise - order.paidPaise), paymentStatus: order.paymentStatus,
+          amountReceivedPaise, changeDuePaise: amountReceivedPaise - existing.amountPaise,
+          reference: existing.reference, orderTotalPaise: order.totalPaise, paidPaise,
+          outstandingPaise: Math.max(0, order.totalPaise - paidPaise), paymentStatus: paidPaise >= order.totalPaise ? 'PAID' : paidPaise > 0 ? 'PARTIALLY_PAID' : 'UNPAID',
           customerName: order.customerName, customerPhone: order.customerPhone, items };
       }
-      const amounts = restaurantSettlement(order.totalPaise, order.paidPaise, input);
+      const amounts = restaurantSettlement(order.totalPaise, paidPaise, input);
       const profile = await propertyProfile(tx, c);
       const issued = await nextNumber(tx, c.property.id, new Date(), 'RECEIPT', profile.receiptPrefix);
       const timestamp = now();
@@ -1705,6 +1711,7 @@ export class BillingService {
          * all financial recalculations
          * for this folio.
          */
+        requireFolioPayment(payment);
         await lock(
           tx,
           `folio:${payment.folioId}`,
@@ -1872,6 +1879,7 @@ export class BillingService {
          * Lock the whole folio before
          * changing refund totals.
          */
+        requireFolioPayment(payment);
         await lock(
           tx,
           `folio:${payment.folioId}`,

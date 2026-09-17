@@ -66,8 +66,13 @@ import * as route53 from './reservations/[id]/move-room/route';
 import * as route54 from './invoices/[id]/cancel/route';
 
 import * as travelWorkflows from './travel/workflows/route';
+import * as restaurantPayments from './restaurant-orders/[id]/payments/route';
 
 export const routes = [
+  {
+    path: '/api/restaurant-orders/:id/payments',
+    handlers: restaurantPayments,
+  },
   {
     path: '/api/travel/workflows',
     handlers: travelWorkflows,

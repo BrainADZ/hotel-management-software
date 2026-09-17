@@ -14,6 +14,7 @@ import {
 } from "@/db/schema";
 
 import { getDb } from "@/db";
+import { restaurantReceipt } from '@/modules/billing/restaurant-receipt';
 import {
   apiError,
 } from "@/services/api-response";
@@ -84,16 +85,15 @@ export async function GET(
         request,
       );
 
-    assertRoleCan(
-      context.actor.role,
-      "billing.view",
-    );
-
     const { id } =
       await route.params;
 
     const paymentId =
       entityIdSchema.parse(id);
+
+    const restaurantResponse = await restaurantReceipt(context, paymentId);
+    if (restaurantResponse) return restaurantResponse;
+    assertRoleCan(context.actor.role, 'billing.view');
 
     const db = getDb();
 

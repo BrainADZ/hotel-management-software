@@ -9,6 +9,36 @@ export const restaurantPaymentSchema = z.object({
   idempotencyKey: idempotencyKeySchema,
 }).strict();
 
+// Cash tender is recorded by the existing PAYMENT_RECEIVED audit entry.
+// Never reconstruct the original tender from a later retry or order balance.
+export function restaurantTender(payment: { amountPaise: number; method: string }, auditValue?: string | null) {
+  let value: unknown;
+  try { value = JSON.parse(auditValue ?? '{}'); } catch { value = null; }
+  const received = value && typeof value === 'object' && 'amountReceivedPaise' in value
+    ? value.amountReceivedPaise : undefined;
+  if (typeof received === 'number' && Number.isSafeInteger(received) && received >= payment.amountPaise) {
+    return received;
+  }
+  if (payment.method !== 'CASH') return payment.amountPaise;
+  throw new DomainError('PAYMENT_TENDER_UNAVAILABLE', 'The original cash receipt details are unavailable. Contact accounts before retrying.', 409);
+}
+
+export function assertRestaurantPaymentReplay(
+  payment: { method: string; reference: string | null; amountPaise: number },
+  receivedPaise: number,
+  input: z.infer<typeof restaurantPaymentSchema>,
+) {
+  if (payment.method !== input.method || (payment.reference ?? '') !== (input.reference ?? '') || receivedPaise !== input.amountPaise) {
+    throw new DomainError('IDEMPOTENCY_CONFLICT', 'This payment key was used with different details.', 409);
+  }
+}
+
+export function requireFolioPayment(payment: { folioId: string | null }): asserts payment is { folioId: string } {
+  if (!payment.folioId) {
+    throw new DomainError('RESTAURANT_REVERSAL_UNSUPPORTED', 'Restaurant refunds and reversals are not yet supported. No payment was changed.', 409);
+  }
+}
+
 export function restaurantSettlement(totalPaise: number, paidPaise: number,
   input: z.infer<typeof restaurantPaymentSchema>) {
   const outstandingPaise = totalPaise - paidPaise;

@@ -11,6 +11,7 @@
     "lint": "eslint .",
     "db:migrate": "drizzle-kit migrate",
     "db:generate": "drizzle-kit generate",
+    "db:check-restaurant": "node --env-file-if-exists=.env src/scripts/check-restaurant-readiness.mjs",
     "db:seed-local": "tsx --env-file-if-exists=.env src/scripts/seed-local-production.ts"
   },
   "dependencies": {

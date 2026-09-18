@@ -432,7 +432,7 @@ export const payments = pgTable('payments', {
 
 export const paymentRefunds = pgTable('payment_refunds', {
   id: text('id').primaryKey(), organisationId: text('organisation_id').notNull().references(() => organisations.id),
-  propertyId: text('property_id').notNull().references(() => properties.id), folioId: text('folio_id').notNull().references(() => folios.id),
+  propertyId: text('property_id').notNull().references(() => properties.id), folioId: text('folio_id').references(() => folios.id),
   paymentId: text('payment_id').notNull().references(() => payments.id), amountPaise: integer('amount_paise').notNull(), reason: text('reason').notNull(),
   reference: text('reference'), status: text('status').notNull().default('RECORDED'), idempotencyKey: text('idempotency_key').notNull(),
   processedAt: timestamp('processed_at', { withTimezone: true, mode: 'string' }).notNull(), processedBy: text('processed_by').notNull().references(() => appUsers.id),

@@ -1,7 +1,7 @@
 import { and, eq } from 'drizzle-orm';
 import { DomainError, roleCan } from '@hotel/shared/domain';
 import { getDb } from '@/db';
-import { auditLogs, payments, properties, restaurantOrders } from '@/db/schema';
+import { auditLogs, paymentRefunds, payments, properties, restaurantOrders } from '@/db/schema';
 import type { ReservationContext } from '@/services/reservations/types';
 import { premiumPaymentReceiptPdf } from './documents';
 import { restaurantTender } from './restaurant-payment';
@@ -28,6 +28,11 @@ export async function restaurantReceipt(context: ReservationContext, paymentId: 
   )).limit(1);
   if (!order || !profile) throw new DomainError('RECEIPT_NOT_FOUND', 'Receipt details were not found.', 404);
   const tender = restaurantTender(payment, audit?.newValue);
+  const refunds = await db.select({ paymentId: paymentRefunds.paymentId, amountPaise: paymentRefunds.amountPaise }).from(paymentRefunds).where(and(
+    eq(paymentRefunds.paymentId, payment.id), eq(paymentRefunds.propertyId, context.property.id),
+    eq(paymentRefunds.organisationId, context.actor.organisationId), eq(paymentRefunds.status, 'RECORDED'),
+  ));
+  const refundedPaise = refunds.reduce((sum, row) => sum + row.amountPaise, 0);
   const rupees = (value: number) => `INR ${(value / 100).toFixed(2)}`;
   const pdf = premiumPaymentReceiptPdf({
     source: 'RESTAURANT',
@@ -36,7 +41,7 @@ export async function restaurantReceipt(context: ReservationContext, paymentId: 
       method: payment.method, reference: payment.reference,
       notes: `Tender ${rupees(tender)}; change ${rupees(tender - payment.amountPaise)}` },
     guest: { name: order.customerName || 'Walk-in customer', reservation: order.id, room: order.orderType },
-    amounts: { receivedPaise: payment.amountPaise, refundedPaise: 0, netPaise: payment.status === 'RECEIVED' ? payment.amountPaise : 0 },
+    amounts: { receivedPaise: payment.amountPaise, refundedPaise, netPaise: payment.status === 'RECEIVED' ? payment.amountPaise - refundedPaise : 0 },
     reversal: payment.reversedAt ? { reversedAt: payment.reversedAt, reason: payment.reversalReason } : null,
   });
   return new Response(Buffer.from(pdf), { headers: {

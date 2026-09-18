@@ -1,4 +1,4 @@
-﻿import { and, asc, eq, isNull, sql } from 'drizzle-orm';
+import { and, asc, eq, isNull, sql } from 'drizzle-orm';
 
 import {
   auditLogs,
@@ -21,6 +21,7 @@ import {
 } from '@/db/schema';
 
 import { getDb } from '@/db';
+import { desc, inArray } from 'drizzle-orm';
 
 import {
   assertRoleCan,
@@ -546,7 +547,70 @@ async function recalculate(
   return totals;
 }
 
+async function restaurantRefundTotals(tx: Tx, c: ReservationContext, rows: Array<{ id: string }>) {
+  const totals = new Map<string, number>();
+  const refunds = rows.length ? await tx.select({ id: paymentRefunds.id, paymentId: paymentRefunds.paymentId,
+    amountPaise: paymentRefunds.amountPaise, reason: paymentRefunds.reason, reference: paymentRefunds.reference,
+    processedAt: paymentRefunds.processedAt })
+    .from(paymentRefunds).where(and(inArray(paymentRefunds.paymentId, rows.map(row => row.id)),
+      eq(paymentRefunds.propertyId, c.property.id), eq(paymentRefunds.organisationId, c.actor.organisationId),
+      eq(paymentRefunds.status, 'RECORDED'))) : [];
+  for (const row of refunds) totals.set(row.paymentId, (totals.get(row.paymentId) ?? 0) + row.amountPaise);
+  return { totals, refunds };
+}
+
 export class BillingService {
+  async restaurantPaymentHistory(c: ReservationContext, orderId: string) {
+    scope(c);
+    if (!roleCan(c.actor.role, 'restaurant.manage') && !roleCan(c.actor.role, 'billing.view')) {
+      throw new DomainError('FORBIDDEN', 'You cannot view restaurant payments.', 403);
+    }
+    return getDb().transaction(async tx => {
+      // Serialize with settlement so the history and balance are one snapshot.
+      await lock(tx, `restaurant-order:${orderId}`);
+      const [order] = await tx.select().from(restaurantOrders).where(and(
+        eq(restaurantOrders.id, orderId), eq(restaurantOrders.propertyId, c.property.id),
+      )).limit(1);
+      if (!order) throw new DomainError('ORDER_NOT_FOUND', 'Restaurant order was not found.', 404);
+      const rows = await tx.select().from(payments).where(and(
+        eq(payments.restaurantOrderId, orderId), eq(payments.propertyId, c.property.id),
+        eq(payments.organisationId, c.actor.organisationId),
+      )).orderBy(desc(payments.receivedAt), desc(payments.id));
+      const audits = rows.length ? await tx.select().from(auditLogs).where(and(
+        inArray(auditLogs.entityId, rows.map(payment => payment.id)), eq(auditLogs.propertyId, c.property.id),
+        eq(auditLogs.entity, 'PAYMENT'), eq(auditLogs.action, 'PAYMENT_RECEIVED'),
+      )) : [];
+      const auditByPayment = new Map(audits.map(entry => [entry.entityId, entry.newValue]));
+      const refundTotals = await restaurantRefundTotals(tx, c, rows);
+      const paidPaise = rows.filter(payment => payment.status === 'RECEIVED').reduce((sum, payment) => sum + payment.amountPaise - (refundTotals.totals.get(payment.id) ?? 0), 0);
+      const postedToFolio = Boolean(order.reservationId) || order.paymentStatus === 'POSTED_TO_FOLIO';
+      return {
+        restaurantOrderId: order.id, totalPaise: order.totalPaise, paidPaise,
+        outstandingPaise: postedToFolio ? null : Math.max(0, order.totalPaise - paidPaise),
+        paymentStatus: postedToFolio ? 'POSTED_TO_FOLIO' : paidPaise >= order.totalPaise ? 'PAID' : paidPaise > 0 ? 'PARTIALLY_PAID' : 'UNPAID',
+        payments: rows.map(payment => {
+          let amountReceivedPaise: number | null = null;
+          try { amountReceivedPaise = restaurantTender(payment, auditByPayment.get(payment.id)); }
+          catch (error) {
+            if (!(error instanceof DomainError) || error.code !== 'PAYMENT_TENDER_UNAVAILABLE') throw error;
+          }
+          return {
+            paymentId: payment.id, paymentNumber: payment.paymentNumber, receivedAt: payment.receivedAt,
+            method: payment.method, status: payment.status, reference: payment.reference,
+            reversalReason: payment.reversalReason, reversedAt: payment.reversedAt,
+            amountAppliedPaise: payment.amountPaise, amountReceivedPaise,
+            refunds: refundTotals.refunds.filter(refund => refund.paymentId === payment.id),
+            refundedPaise: refundTotals.totals.get(payment.id) ?? 0,
+            refundablePaise: payment.status === 'RECEIVED' ? payment.amountPaise - (refundTotals.totals.get(payment.id) ?? 0) : 0,
+            changeDuePaise: amountReceivedPaise === null ? null : amountReceivedPaise - payment.amountPaise,
+            receiptAvailable: amountReceivedPaise !== null,
+            receiptUnavailableReason: amountReceivedPaise === null ? 'Original cash tender details are unavailable. Contact accounts.' : null,
+          };
+        }),
+      };
+    });
+  }
+
   async settleRestaurantOrder(c: ReservationContext, orderId: string, raw: unknown) {
     scope(c);
     assertRoleCan(c.actor.role, 'restaurant.manage');
@@ -567,7 +631,8 @@ export class BillingService {
       const receivedPayments = await tx.select().from(payments).where(and(
         eq(payments.restaurantOrderId, orderId), eq(payments.status, 'RECEIVED'),
       ));
-      const paidPaise = receivedPayments.reduce((sum, payment) => sum + payment.amountPaise, 0);
+      const refundTotals = await restaurantRefundTotals(tx, c, receivedPayments);
+      const paidPaise = receivedPayments.reduce((sum, payment) => sum + payment.amountPaise - (refundTotals.totals.get(payment.id) ?? 0), 0);
       if (existing) {
         const [originalAudit] = await tx.select().from(auditLogs).where(and(
           eq(auditLogs.entityId, existing.id), eq(auditLogs.entity, 'PAYMENT'),
@@ -1711,6 +1776,41 @@ export class BillingService {
          * all financial recalculations
          * for this folio.
          */
+        if (payment.restaurantOrderId) {
+          // Same order lock as settlement/history; payment lock is always acquired first.
+          await lock(tx, `restaurant-order:${payment.restaurantOrderId}`);
+          const [order] = await tx.select().from(restaurantOrders).where(and(
+            eq(restaurantOrders.id, payment.restaurantOrderId), eq(restaurantOrders.propertyId, c.property.id),
+          )).limit(1);
+          if (!order) throw new DomainError('ORDER_NOT_FOUND', 'Restaurant order was not found.', 404);
+          if (order.reservationId || order.paymentStatus === 'POSTED_TO_FOLIO') {
+            throw new DomainError('ORDER_POSTED_TO_FOLIO', 'Correct guest payments through the guest folio.', 409);
+          }
+          if (payment.status === 'REVERSED') return payment;
+          if (payment.status !== 'RECEIVED') throw new DomainError('PAYMENT_NOT_REVERSIBLE', 'Payment cannot be reversed.', 409);
+          const refunds = await tx.select().from(paymentRefunds).where(and(
+            eq(paymentRefunds.paymentId, paymentId), eq(paymentRefunds.status, 'RECORDED'),
+          ));
+          if (refunds.length) throw new DomainError('PAYMENT_HAS_REFUNDS', 'A refunded payment cannot be reversed.', 409);
+          const active = await tx.select().from(payments).where(and(
+            eq(payments.restaurantOrderId, order.id), eq(payments.propertyId, c.property.id),
+            eq(payments.organisationId, c.actor.organisationId), eq(payments.status, 'RECEIVED'),
+          ));
+          const refundTotals = await restaurantRefundTotals(tx, c, active);
+          const paidPaise = active.filter(row => row.id !== paymentId).reduce((sum, row) => sum + row.amountPaise - (refundTotals.totals.get(row.id) ?? 0), 0);
+          const timestamp = now();
+          const [updated] = await tx.update(payments).set({ status: 'REVERSED', reversedAt: timestamp,
+            reversedBy: c.actor.id, reversalReason: input.reason, updatedAt: timestamp,
+          }).where(eq(payments.id, paymentId)).returning();
+          await tx.update(restaurantOrders).set({ paidPaise,
+            paymentStatus: paidPaise >= order.totalPaise ? 'PAID' : paidPaise > 0 ? 'PARTIALLY_PAID' : 'UNPAID',
+            settledAt: paidPaise >= order.totalPaise ? order.settledAt : null,
+          }).where(eq(restaurantOrders.id, order.id));
+          await audit(tx, c, 'PAYMENT_REVERSED', 'PAYMENT', paymentId, {
+            restaurantOrderId: order.id, amountPaise: payment.amountPaise, reason: input.reason,
+          });
+          return updated;
+        }
         requireFolioPayment(payment);
         await lock(
           tx,
@@ -1879,11 +1979,16 @@ export class BillingService {
          * Lock the whole folio before
          * changing refund totals.
          */
-        requireFolioPayment(payment);
-        await lock(
-          tx,
-          `folio:${payment.folioId}`,
-        );
+        const restaurantOrderId = payment.restaurantOrderId;
+        if (!restaurantOrderId) requireFolioPayment(payment);
+        await lock(tx, restaurantOrderId ? `restaurant-order:${restaurantOrderId}` : `folio:${payment.folioId}`);
+        const [order] = restaurantOrderId ? await tx.select().from(restaurantOrders).where(and(
+          eq(restaurantOrders.id, restaurantOrderId), eq(restaurantOrders.propertyId, c.property.id),
+        )).limit(1) : [];
+        if (restaurantOrderId && !order) throw new DomainError('ORDER_NOT_FOUND', 'Restaurant order was not found.', 404);
+        if (order && (order.reservationId || order.paymentStatus === 'POSTED_TO_FOLIO')) {
+          throw new DomainError('ORDER_POSTED_TO_FOLIO', 'Refund guest payments through the guest folio.', 409);
+        }
 
         if (
           payment.status !==
@@ -1917,6 +2022,10 @@ export class BillingService {
             .limit(1);
 
         if (existing) {
+          if (existing.amountPaise !== input.amountPaise || existing.reason !== input.reason ||
+              (existing.reference ?? '') !== (input.reference ?? '')) {
+            throw new DomainError('IDEMPOTENCY_CONFLICT', 'This refund key was used with different details.', 409);
+          }
           return existing;
         }
 
@@ -1979,7 +2088,7 @@ export class BillingService {
                 c.property.id,
 
               folioId:
-                payment.folioId!,
+                payment.folioId,
 
               paymentId,
 
@@ -2006,11 +2115,20 @@ export class BillingService {
             })
             .returning();
 
-        await recalculate(
-          tx,
-          c,
-          payment.folioId!,
-        );
+        if (order) {
+          const active = await tx.select().from(payments).where(and(
+            eq(payments.restaurantOrderId, order.id), eq(payments.propertyId, c.property.id),
+            eq(payments.organisationId, c.actor.organisationId), eq(payments.status, 'RECEIVED'),
+          ));
+          const totals = await restaurantRefundTotals(tx, c, active);
+          const paidPaise = active.reduce((sum, row) => sum + row.amountPaise - (totals.totals.get(row.id) ?? 0), 0);
+          await tx.update(restaurantOrders).set({ paidPaise,
+            paymentStatus: paidPaise >= order.totalPaise ? 'PAID' : paidPaise > 0 ? 'PARTIALLY_PAID' : 'UNPAID',
+            settledAt: paidPaise >= order.totalPaise ? order.settledAt : null,
+          }).where(eq(restaurantOrders.id, order.id));
+        } else {
+          await recalculate(tx, c, payment.folioId!);
+        }
 
         await audit(
           tx,
@@ -2019,6 +2137,7 @@ export class BillingService {
           'PAYMENT_REFUND',
           refund.id,
           {
+            paymentId, restaurantOrderId, reference: refund.reference,
             amountPaise:
               refund.amountPaise,
 

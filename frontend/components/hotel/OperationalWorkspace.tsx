@@ -1,8 +1,9 @@
 'use client';
 
-import { useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { apiFetch } from '@/lib/api/client';
 import { clearPendingRestaurantPayment, loadPendingRestaurantPayment, savePendingRestaurantPayment } from '@/lib/restaurant-payment-recovery';
+import { clearRestaurantRefund, loadRestaurantRefund, saveRestaurantRefund, type PendingRestaurantRefund } from '@/lib/restaurant-refund-recovery';
 import { roleCan, type Permission } from '@hotel/shared/domain';
 import {
   type PlatformViewProps,
@@ -875,8 +876,31 @@ function RestaurantOrderComposer({
 }
 
 
-function RestaurantSettlement({ order, propertyId, userId, refresh, onClose }: { order: Row; propertyId: string; userId: string; refresh: () => Promise<unknown>; onClose: () => void }) {
+function RestaurantSettlement({ order, propertyId, userId, canReverse, canRefund, refresh, onClose }: { order: Row; propertyId: string; userId: string; canReverse: boolean; canRefund: boolean; refresh: () => Promise<unknown>; onClose: () => void }) {
   const orderId = String(order.id);
+  const [history, setHistory] = useState<Row | null>(null);
+  const [historyError, setHistoryError] = useState('');
+  const historyRequest = useRef(0);
+  const paymentsPath = `/api/restaurant-orders/${encodeURIComponent(orderId)}/payments?propertyId=${encodeURIComponent(propertyId)}`;
+  const loadHistory = useCallback(async (signal?: AbortSignal) => {
+    const requestNumber = ++historyRequest.current;
+    try {
+      const response = await apiFetch(paymentsPath, { signal, cache: 'no-store' });
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.error?.message ?? 'Payment history could not be loaded.');
+      if (!signal?.aborted && requestNumber === historyRequest.current) { setHistory(data as Row); setHistoryError(''); }
+    } catch (cause) {
+      if (!signal?.aborted && requestNumber === historyRequest.current) setHistoryError(cause instanceof Error ? cause.message : 'Payment history could not be loaded.');
+      throw cause;
+    }
+  }, [paymentsPath]);
+  useEffect(() => {
+    const controller = new AbortController();
+    void Promise.resolve().then(() => {
+      if (!controller.signal.aborted) return loadHistory(controller.signal);
+    }).catch(() => undefined);
+    return () => controller.abort();
+  }, [loadHistory]);
   const [recovery] = useState(() => {
     try {
       const body = loadPendingRestaurantPayment(window.sessionStorage, { orderId, propertyId, userId });
@@ -893,22 +917,65 @@ function RestaurantSettlement({ order, propertyId, userId, refresh, onClose }: {
   const [result, setResult] = useState<Row | null>(null);
   const [error, setError] = useState(recovery.error);
   const [busy, setBusy] = useState(false);
+  const [correction, setCorrection] = useState<Row | null>(null);
+  const [correctionReason, setCorrectionReason] = useState('');
+  const [correctionPending, setCorrectionPending] = useState(false);
+  const [refundRecovery] = useState(() => {
+    try { return { pending: loadRestaurantRefund(window.sessionStorage, { orderId, propertyId, userId }), error: '' }; }
+    catch (cause) { return { pending: null, error: cause instanceof Error ? cause.message : 'Refund recovery is unavailable.' }; }
+  });
+  const [pendingRefund, setPendingRefund] = useState<PendingRestaurantRefund | null>(refundRecovery.pending);
+  const [refundPayment, setRefundPayment] = useState<Row | null>(refundRecovery.pending ? { paymentId: refundRecovery.pending.paymentId } : null);
+  const [refundAmount, setRefundAmount] = useState(refundRecovery.pending ? String(refundRecovery.pending.amountPaise / 100) : '');
+  const [refundReason, setRefundReason] = useState(refundRecovery.pending?.reason ?? '');
+  const [refundReference, setRefundReference] = useState(refundRecovery.pending?.reference ?? '');
+  const refundBlocked = Boolean(refundPayment || pendingRefund || refundRecovery.error);
+  const refundPaise = Math.round(Number(refundAmount) * 100);
+  const recordRefund = async () => {
+    if (inFlight.current || !canRefund || !refundPayment || refundRecovery.error) return;
+    const request = pendingRefund ?? { paymentId: String(refundPayment.paymentId), amountPaise: refundPaise,
+      reason: refundReason.trim(), reference: refundReference.trim() || undefined, idempotencyKey: crypto.randomUUID() };
+    inFlight.current = true; setBusy(true); setError('');
+    try {
+      saveRestaurantRefund(window.sessionStorage, { orderId, propertyId, userId }, request);
+      setPendingRefund(request);
+      const { paymentId, ...body } = request;
+      const response = await apiFetch(`/api/payments/${encodeURIComponent(paymentId)}/refund?propertyId=${encodeURIComponent(propertyId)}`, {
+        method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body),
+      });
+      const data = await response.json();
+      if (!response.ok) {
+        if (response.status < 500 && data.error?.code !== 'IDEMPOTENCY_CONFLICT') {
+          clearRestaurantRefund(window.sessionStorage, { orderId, propertyId, userId }); setPendingRefund(null);
+        }
+        throw new Error(data.error?.message ?? 'Refund result is unconfirmed. Retry the same record.');
+      }
+      clearRestaurantRefund(window.sessionStorage, { orderId, propertyId, userId });
+      setPendingRefund(null); setRefundPayment(null); setRefundAmount(''); setRefundReason(''); setRefundReference('');
+      setResult(null); setHistory(null);
+      try { await loadHistory(); await refresh(); }
+      catch { setError('Refund recorded. Refresh payments to see the updated balance.'); }
+    } catch (cause) { setError(cause instanceof Error ? cause.message : 'Refund result is unconfirmed. Retry the same record.'); }
+    finally { inFlight.current = false; setBusy(false); }
+  };
   const inFlight = useRef(false);
   const [retryBody, setRetryBody] = useState<string | null>(recovery.body);
   const recoveryReady = recovery.ready;
-  const paid = Number(result?.paidPaise ?? order.paidPaise ?? 0);
-  const outstanding = Math.max(0, Number(result?.outstandingPaise ?? (Number(order.totalPaise ?? 0) - paid)));
+  const paid = Number(history?.paidPaise ?? result?.paidPaise ?? order.paidPaise ?? 0);
+  const outstanding = Math.max(0, Number(history?.outstandingPaise ?? result?.outstandingPaise ?? (Number(order.totalPaise ?? 0) - paid)));
+  const postedToFolio = (history?.paymentStatus ?? order.paymentStatus) === 'POSTED_TO_FOLIO';
+  const paymentRows = (history?.payments ?? []) as Row[];
   const received = Math.round(Number(amount) * 100);
   const change = method === 'CASH' ? Math.max(0, received - outstanding) : 0;
   const pay = async (event: React.FormEvent) => {
     event.preventDefault();
-    if (inFlight.current || !recoveryReady) return;
+    if (inFlight.current || correction || refundBlocked || !recoveryReady || (!retryBody && (!history || historyError || postedToFolio))) return;
     inFlight.current = true; setBusy(true); setError('');
     const body = retryBody ?? JSON.stringify({ method, amountPaise: received, reference: reference.trim() || undefined, idempotencyKey: key });
     try {
       savePendingRestaurantPayment(window.sessionStorage, { orderId, propertyId, userId }, body);
       setRetryBody(body);
-      const response = await apiFetch(`/api/restaurant-orders/${encodeURIComponent(String(order.id))}/payments`, {
+      const response = await apiFetch(paymentsPath, {
         method: 'POST', headers: { 'Content-Type': 'application/json' }, body,
       });
       const data = await response.json();
@@ -923,33 +990,97 @@ function RestaurantSettlement({ order, propertyId, userId, refresh, onClose }: {
       }
       clearPendingRestaurantPayment(window.sessionStorage, { orderId, propertyId, userId });
       setResult(data as Row); setRetryBody(null); setKey(crypto.randomUUID()); setAmount(''); setReference('');
+      setHistory(null);
+      try { await loadHistory(); } catch { /* Receipt result remains available; history can be refreshed. */ }
       try { await refresh(); } catch { setError('Payment recorded. Refresh the order list when the connection returns.'); }
     } catch (cause) { setError(cause instanceof Error ? cause.message : 'Payment failed. Retry to confirm the same payment.'); }
     finally { inFlight.current = false; setBusy(false); }
   };
-  const downloadReceipt = async () => {
+  const reverse = async () => {
+    if (inFlight.current || refundBlocked || !canReverse || !correction || correctionReason.trim().length < 3) return;
+    inFlight.current = true; setBusy(true); setError(''); setCorrectionPending(true);
     try {
-      const response = await apiFetch(`/api/payments/${encodeURIComponent(String(result?.paymentId))}/receipt`);
+      const response = await apiFetch(`/api/payments/${encodeURIComponent(String(correction.paymentId))}/reverse?propertyId=${encodeURIComponent(propertyId)}`, {
+        method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ reason: correctionReason.trim() }),
+      });
+      const data = await response.json();
+      if (!response.ok) {
+        if (response.status < 500) setCorrectionPending(false);
+        throw new Error(data.error?.message ?? 'Reversal could not be confirmed. Retry the same reversal.');
+      }
+      setCorrectionPending(false); setCorrection(null); setCorrectionReason(''); setResult(null); setHistory(null);
+      await loadHistory();
+      await refresh();
+    } catch (cause) { setError(cause instanceof Error ? cause.message : 'Reversal result is uncertain. Retry the same reversal.'); }
+    finally { inFlight.current = false; setBusy(false); }
+  };
+  const downloadReceipt = async (payment: Row) => {
+    try {
+      const response = await apiFetch(`/api/payments/${encodeURIComponent(String(payment.paymentId))}/receipt?propertyId=${encodeURIComponent(propertyId)}`);
       if (!response.ok) throw new Error('Receipt download failed. Please retry.');
       const url = URL.createObjectURL(await response.blob());
-      const link = document.createElement('a'); link.href = url; link.download = `Receipt-${String(result?.paymentNumber).replaceAll('/', '-')}.pdf`; link.click();
+      const link = document.createElement('a'); link.href = url; link.download = `Receipt-${String(payment.paymentNumber).replaceAll('/', '-')}.pdf`; link.click();
       window.setTimeout(() => URL.revokeObjectURL(url), 1000);
     } catch (cause) { setError(cause instanceof Error ? cause.message : 'Receipt download failed.'); }
   };
   return <div className="modal-backdrop"><form role="dialog" aria-modal="true" aria-label="Settle restaurant order" className="modal-card" onSubmit={pay}>
-    <div className="modal-heading"><div><p className="section-kicker">Restaurant POS</p><h2>Settle order</h2></div><button type="button" className="icon-button" disabled={busy || Boolean(retryBody)} onClick={onClose}>×</button></div>
+    <div className="modal-heading"><div><p className="section-kicker">Restaurant POS</p><h2>Payments & receipts</h2></div><button type="button" className="icon-button" disabled={busy || Boolean(retryBody) || correctionPending || Boolean(pendingRefund)} onClick={onClose}>×</button></div>
     <p>Order total: {money(order.totalPaise)} · Paid: {money(paid)} · Outstanding: {money(outstanding)}</p>
-    <p><Status value={String(result?.paymentStatus ?? order.paymentStatus ?? 'UNPAID')} /></p>
+    <p><Status value={String(history?.paymentStatus ?? result?.paymentStatus ?? order.paymentStatus ?? 'UNPAID')} /></p>
     {error && <p role="alert" className="error-banner">{error}</p>}
+    <section aria-label="Recorded payments">
+      <div className="card-heading"><h3>Payment history</h3><button type="button" className="text-button" disabled={busy} onClick={() => { setHistory(null); setHistoryError(''); void loadHistory().catch(() => undefined); }}>Refresh payments</button></div>
+      {historyError && <p role="alert">{historyError} Refresh payments before collecting more money.</p>}
+      {!history && !historyError && <p role="status">Loading recorded payments…</p>}
+      {history && paymentRows.length === 0 && <p>No direct payments recorded.</p>}
+      {paymentRows.length > 0 && <div style={{ overflowX: 'auto' }}><table>
+        <thead><tr><th>Receipt / date</th><th>Method / reference</th><th>Applied / refunded</th><th>Received</th><th>Change</th><th>Status</th><th>Receipt</th></tr></thead>
+        <tbody>{paymentRows.map(payment => <tr key={String(payment.paymentId)}>
+          <td>{String(payment.paymentNumber)}<br /><small>{new Date(String(payment.receivedAt)).toLocaleString('en-IN')}</small></td>
+          <td>{String(payment.method)}<br /><small>{String(payment.reference ?? '—')}</small></td>
+          <td>{money(payment.amountAppliedPaise)}<br /><small>Refunded: {money(payment.refundedPaise ?? 0)}</small>
+            {((payment.refunds ?? []) as Row[]).map(refund => <div key={String(refund.id)}><small>{money(refund.amountPaise)} ? {String(refund.reason)} ? {String(refund.reference ?? 'No reference')} ? {new Date(String(refund.processedAt)).toLocaleString('en-IN')}</small></div>)}
+          </td><td>{payment.amountReceivedPaise == null ? 'Unavailable' : money(payment.amountReceivedPaise)}</td>
+          <td>{payment.changeDuePaise == null ? 'Unavailable' : money(payment.changeDuePaise)}</td><td><Status value={String(payment.status)} /></td>
+          <td>{payment.receiptAvailable ? <button type="button" className="text-button" onClick={() => void downloadReceipt(payment)}>Download / reprint</button> : <small>{String(payment.receiptUnavailableReason)}</small>}
+            {Boolean(payment.reversalReason) && <small>Reason: {String(payment.reversalReason)}</small>}
+            {canReverse && !postedToFolio && !Number(payment.refundedPaise) && payment.status === 'RECEIVED' && <button type="button" className="text-button" disabled={busy || refundBlocked || Boolean(retryBody) || Boolean(correction)} onClick={() => { setCorrection(payment); setCorrectionReason(''); }}>Reverse mistaken entry</button>}
+            {canRefund && !postedToFolio && Number(payment.refundablePaise) > 0 && <button type="button" className="text-button" disabled={busy || refundBlocked || Boolean(retryBody) || Boolean(correction)} onClick={() => { setRefundPayment(payment); setRefundAmount(''); setRefundReason(''); setRefundReference(''); }}>Record refund</button>}
+          </td>
+        </tr>)}</tbody>
+      </table></div>}
+      <p className="privacy-note">Check existing payments before collecting money after a lost connection. Reprinting uses the original receipt number.</p>
+    </section>
+    {refundRecovery.error && <p role="alert">{refundRecovery.error}</p>}
+    {refundPayment && <section aria-label="Record restaurant refund">
+      <h3>Record refund: {String(refundPayment.paymentNumber ?? refundPayment.paymentId)}</h3>
+      <p>Record money already returned to the customer. This does not send a bank, card or UPI refund. The order balance will reopen; it does not cancel food charges.</p>
+      <fieldset disabled={busy || Boolean(pendingRefund)}>
+        <label>Refund amount (INR)<input type="number" min="0.01" step="0.01" value={refundAmount} onChange={event => setRefundAmount(event.target.value)} /></label>
+        <label>Reason<textarea maxLength={500} value={refundReason} onChange={event => setRefundReason(event.target.value)} /></label>
+        <label>Refund transaction / cash reference<input maxLength={100} value={refundReference} onChange={event => setRefundReference(event.target.value)} /></label>
+      </fieldset>
+      {pendingRefund && <p role="status">Unconfirmed record. Retry this record only; do not return the money again.</p>}
+      <button type="button" disabled={!canRefund || busy || (!pendingRefund && (!Number.isSafeInteger(refundPaise) || refundPaise <= 0 || refundPaise > Number(refundPayment.refundablePaise) || refundReason.trim().length < 3))} onClick={() => void recordRefund()}>{pendingRefund ? 'Retry same refund record' : 'Confirm money returned'}</button>
+      <button type="button" disabled={busy || Boolean(pendingRefund)} onClick={() => setRefundPayment(null)}>Cancel</button>
+    </section>}
+    {correction && <section aria-label="Reverse mistaken payment">
+      <h3>Reverse {String(correction.paymentNumber)} — {money(correction.amountAppliedPaise)}</h3>
+      <p>Use this for an incorrectly recorded payment. It reopens the order balance and keeps an audit record. It does not return money to the customer.</p>
+      <label>Reason<textarea maxLength={500} disabled={busy || correctionPending} value={correctionReason} onChange={event => setCorrectionReason(event.target.value)} /></label>
+      {correctionPending && <p role="status">Result unconfirmed. Retry this reversal; an already reversed payment will not be reversed again.</p>}
+      <button type="button" disabled={busy || correctionReason.trim().length < 3} onClick={() => void reverse()}>{correctionPending ? 'Retry reversal' : 'Confirm reversal'}</button>
+      <button type="button" disabled={busy || correctionPending} onClick={() => setCorrection(null)}>Cancel</button>
+    </section>}
     {result && <p role="status">Receipt {String(result.paymentNumber)} · Applied {money(result.amountAppliedPaise)} · Received {money(result.amountReceivedPaise)} · Change {money(result.changeDuePaise)} · Remaining {money(result.outstandingPaise)}</p>}
     {retryBody && !busy && <p role="status">Payment result is not confirmed. Retry the same payment to check its result.</p>}
-    {outstanding > 0 && <fieldset disabled={busy || Boolean(retryBody)} className="form-grid">
+    {!postedToFolio && outstanding > 0 && <fieldset disabled={busy || refundBlocked || Boolean(correction) || Boolean(retryBody) || !history || Boolean(historyError)} className="form-grid">
       <label><span>Payment method</span><select value={method} onChange={(event) => setMethod(event.target.value as 'CASH' | 'CARD' | 'UPI')}><option>CASH</option><option>CARD</option><option>UPI</option></select></label>
       <label><span>{method === 'CASH' ? 'Amount received (₹)' : 'Amount (₹)'}</span><input type="number" min="0.01" step="0.01" required value={amount} onChange={(event) => setAmount(event.target.value)} /></label>
       <label><span>{method === 'UPI' ? 'UTR / transaction reference' : method === 'CARD' ? 'Card / payment reference' : 'Reference (optional)'}</span><input maxLength={100} value={reference} onChange={(event) => setReference(event.target.value)} /></label>
       {method === 'CASH' && <p>Change due: {money(change)}</p>}
     </fieldset>}
-    <div className="modal-actions"><button type="button" className="secondary-button" disabled={busy || Boolean(retryBody)} onClick={onClose}>Close</button>{result && <button type="button" className="secondary-button" onClick={downloadReceipt}>Download receipt</button>}{(outstanding > 0 || retryBody) && <button type="submit" className="primary-button" disabled={!recoveryReady || busy || (!retryBody && (!Number.isInteger(received) || received <= 0 || (method !== 'CASH' && received > outstanding)))}>{busy ? 'Recording…' : retryBody ? 'Retry same payment' : 'Pay'}</button>}</div>
+    <div className="modal-actions"><button type="button" className="secondary-button" disabled={busy || Boolean(retryBody) || correctionPending || Boolean(pendingRefund)} onClick={onClose}>Close</button>{result && <button type="button" className="secondary-button" onClick={() => void downloadReceipt(result)}>Download receipt</button>}{!postedToFolio && (outstanding > 0 || retryBody) && <button type="submit" className="primary-button" disabled={!recoveryReady || busy || refundBlocked || Boolean(correction) || (!retryBody && (!history || Boolean(historyError) || !Number.isInteger(received) || received <= 0 || (method !== 'CASH' && received > outstanding)))}>{busy ? 'Recording…' : retryBody ? 'Retry same payment' : 'Pay'}</button>}</div>
   </form></div>;
 }
 
@@ -1018,12 +1149,14 @@ function KitchenBoard({
   command,
   refresh,
   notify,
+  onPayments,
 }: {
   orders: Row[];
   online: boolean;
   command: PlatformViewProps['command'];
   refresh: PlatformViewProps['refresh'];
   notify: PlatformViewProps['notify'];
+  onPayments?: (order: Row) => void;
 }) {
   const [nowMs, setNowMs] = useState(() => Date.now());
   const [busyOrderId, setBusyOrderId] = useState('');
@@ -1298,6 +1431,9 @@ function KitchenBoard({
                         }}
                       >
                         <span>{money(order.totalPaise)}</span>
+                        {onPayments && !order.reservationId && order.paymentStatus !== 'POSTED_TO_FOLIO' && (
+                          <button type="button" className="secondary-button" disabled={!online || busy} onClick={() => onPayments(order)}>Payments & receipts</button>
+                        )}
                         {actionLabel && (
                           <button
                             type="button"
@@ -1959,6 +2095,7 @@ export function OperationalWorkspace(
           command={command}
           refresh={refresh}
           notify={notify}
+          onPayments={canEdit ? setSettlementOrder : undefined}
         />
       ) : (
         <div className="table-card">
@@ -2118,7 +2255,7 @@ export function OperationalWorkspace(
         />
       )}
 
-      {settlementOrder && <RestaurantSettlement key={JSON.stringify([state.property.id, state.actor.id, settlementOrder.id])} order={settlementOrder} propertyId={String(state.property.id)} userId={String(state.actor.id)} refresh={refresh} onClose={() => setSettlementOrder(null)} />}
+      {settlementOrder && <RestaurantSettlement key={JSON.stringify([state.property.id, state.actor.id, settlementOrder.id])} order={settlementOrder} propertyId={String(state.property.id)} userId={String(state.actor.id)} canReverse={roleCan(state.actor.role, 'billing.reverse_payment')} canRefund={roleCan(state.actor.role, 'billing.refund')} refresh={refresh} onClose={() => setSettlementOrder(null)} />}
 
       {dialog && (
         <WorkflowForm

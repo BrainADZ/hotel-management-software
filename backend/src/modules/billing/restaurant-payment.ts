@@ -35,7 +35,7 @@ export function assertRestaurantPaymentReplay(
 
 export function requireFolioPayment(payment: { folioId: string | null }): asserts payment is { folioId: string } {
   if (!payment.folioId) {
-    throw new DomainError('RESTAURANT_REVERSAL_UNSUPPORTED', 'Restaurant refunds and reversals are not yet supported. No payment was changed.', 409);
+    throw new DomainError('PAYMENT_SOURCE_INVALID', 'This operation requires a valid payment source. No payment was changed.', 409);
   }
 }
 

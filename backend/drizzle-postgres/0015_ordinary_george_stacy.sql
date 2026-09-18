@@ -1,0 +1,1 @@
+ALTER TABLE "payment_refunds" ALTER COLUMN "folio_id" DROP NOT NULL;

@@ -6,9 +6,9 @@ import type { ReservationChanges, ReservationContext, ReservationCreate, Reserva
 
 const now = new Date('2026-09-12T06:00:00.000Z');
 const rooms: RoomRecord[] = [
-  { id: 'room-101', propertyId: 'property-a', number: '101', roomType: 'Standard', baseRatePaise: 500_000, active: true, operationalStatus: 'READY' },
-  { id: 'room-201', propertyId: 'property-a', number: '201', roomType: 'Deluxe', baseRatePaise: 800_000, active: true, operationalStatus: 'CLEAN' },
-  { id: 'foreign-room', propertyId: 'property-b', number: '1', roomType: 'Standard', baseRatePaise: 1, active: true, operationalStatus: 'READY' },
+  { id: 'room-101', propertyId: 'property-a', number: '101', roomType: 'Standard', baseRateRupees: 5000, active: true, operationalStatus: 'READY' },
+  { id: 'room-201', propertyId: 'property-a', number: '201', roomType: 'Deluxe', baseRateRupees: 8000, active: true, operationalStatus: 'CLEAN' },
+  { id: 'foreign-room', propertyId: 'property-b', number: '1', roomType: 'Standard', baseRateRupees: 0.01, active: true, operationalStatus: 'READY' },
 ];
 function context(role: AppRole = 'MANAGER', organisationId = 'org-a', propertyId = 'property-a'): ReservationContext {
   return { actor: { id: `user-${role}`, name: role, email: `${role}@example.test`, role, organisationId, propertyId },
@@ -17,7 +17,7 @@ function context(role: AppRole = 'MANAGER', organisationId = 'org-a', propertyId
 function input(overrides: Partial<ReservationCreate> = {}): ReservationCreate {
   return { guestName: 'Guest One', email: 'guest@example.test', phone: '9999999999', roomId: 'room-101', roomType: 'Standard',
     arrivalDate: '2026-09-12', departureDate: '2026-09-14', adults: 2, children: 0, status: 'CONFIRMED', source: 'DIRECT',
-    nightlyRatePaise: 500_000, taxRateBps: 1200, ...overrides };
+    nightlyRateRupees: 5000, taxRateBps: 1200, ...overrides };
 }
 class MemoryRepository implements ReservationRepository {
   reservations: ReservationRecord[] = []; events: ReservationEventRecord[] = []; sequence = 1;
@@ -28,13 +28,13 @@ class MemoryRepository implements ReservationRepository {
   async conflicts(ctx: ReservationContext, roomId: string, arrivalDate: string, departureDate: string, excludeId?: string) { return this.reservations.filter((item) => item.organisationId === ctx.actor.organisationId && item.propertyId === ctx.property.id && item.roomId === roomId && item.id !== excludeId && stayDatesOverlap(item.arrivalDate, item.departureDate, arrivalDate, departureDate)); }
   async expiredHolds(ctx: ReservationContext, before: string) { return this.reservations.filter((item) => item.organisationId === ctx.actor.organisationId && item.propertyId === ctx.property.id && item.status === 'HOLD' && Boolean(item.holdUntil && item.holdUntil < before)); }
   async nextReference() { return `RES-2026-${String(this.sequence++).padStart(6, '0')}`; }
-  async create(ctx: ReservationContext, value: ReservationCreate & { id: string; reference: string; estimatedTotalPaise: number; now: string }) {
+  async create(ctx: ReservationContext, value: ReservationCreate & { id: string; reference: string; estimatedTotalRupees: number; now: string }) {
     const record: ReservationRecord = { id: value.id, organisationId: ctx.actor.organisationId, propertyId: ctx.property.id, reference: value.reference,
       guestId: crypto.randomUUID(), primaryGuestName: value.guestName, guestEmail: value.email ?? null, guestPhone: value.phone ?? null,
       roomId: value.roomId, roomNumber: rooms.find((room) => room.id === value.roomId)?.number ?? null, roomType: value.roomType,
       arrivalDate: value.arrivalDate, departureDate: value.departureDate, adults: value.adults, children: value.children, status: value.status,
-      source: value.source, sourceReference: value.sourceReference ?? null, nightlyRatePaise: value.nightlyRatePaise, taxRateBps: value.taxRateBps,
-      estimatedTotalPaise: value.estimatedTotalPaise, specialRequests: value.specialRequests ?? null, internalNotes: value.internalNotes ?? null,
+      source: value.source, sourceReference: value.sourceReference ?? null, nightlyRateRupees: value.nightlyRateRupees, taxRateBps: value.taxRateBps,
+      estimatedTotalRupees: value.estimatedTotalRupees, specialRequests: value.specialRequests ?? null, internalNotes: value.internalNotes ?? null,
       holdUntil: value.holdUntil ?? null, cancellationReason: null, cancelledAt: null, cancelledBy: null, noShowAt: null, noShowBy: null,
       createdBy: ctx.actor.id, updatedBy: ctx.actor.id, createdAt: value.now, updatedAt: value.now, version: 1 };
     this.reservations.push(record); return record;
@@ -57,7 +57,7 @@ function setup(role: AppRole = 'MANAGER') { const repository = new MemoryReposit
 describe('production reservation lifecycle', () => {
   it('creates a scoped reservation, snapshot total, reference and history', async () => {
     const { service, repository, ctx } = setup(); const created = await service.create(ctx, input());
-    expect(created.reference).toBe('RES-2026-000001'); expect(created.estimatedTotalPaise).toBe(1_120_000); expect(repository.events[0]?.eventType).toBe('RESERVATION_CREATED');
+    expect(created.reference).toBe('RES-2026-000001'); expect(created.estimatedTotalRupees).toBe(11200); expect(repository.events[0]?.eventType).toBe('RESERVATION_CREATED');
   });
   it.each([['2026-09-12', '2026-09-12'], ['2026-09-13', '2026-09-12']])('rejects invalid stay dates %s to %s', async (arrivalDate, departureDate) => {
     await expect(setup().service.create(context(), input({ arrivalDate, departureDate }))).rejects.toMatchObject({ code: 'INVALID_STAY_DATES' });
@@ -95,8 +95,8 @@ describe('production reservation lifecycle', () => {
   it('allows only owner/manager to change the agreed rate after creation', async () => {
     const { service, ctx } = setup(); const item = await service.create(ctx, input());
     const reception = context('RECEPTION');
-    await expect(service.edit(reception, item.id, { nightlyRatePaise: 600_000 })).rejects.toMatchObject({ code: 'RATE_OVERRIDE_FORBIDDEN' });
-    await expect(service.edit(ctx, item.id, { nightlyRatePaise: 600_000 })).resolves.toMatchObject({ nightlyRatePaise: 600_000 });
+    await expect(service.edit(reception, item.id, { nightlyRateRupees: 6000 })).rejects.toMatchObject({ code: 'RATE_OVERRIDE_FORBIDDEN' });
+    await expect(service.edit(ctx, item.id, { nightlyRateRupees: 6000 })).resolves.toMatchObject({ nightlyRateRupees: 6000 });
   });
   it('changes dates after availability validation', async () => {
     const { service, repository, ctx } = setup(); const item = await service.create(ctx, input());
@@ -105,8 +105,8 @@ describe('production reservation lifecycle', () => {
   });
   it('extends and shortens a stay and recalculates value', async () => {
     const { service, repository, ctx } = setup(); const item = await service.create(ctx, input());
-    const extended = await service.action(ctx, item.id, { type: 'EXTEND_STAY', departureDate: '2026-09-16' }); expect(extended.estimatedTotalPaise).toBe(2_240_000);
-    const shortened = await service.action(ctx, item.id, { type: 'SHORTEN_STAY', departureDate: '2026-09-13' }); expect(shortened.estimatedTotalPaise).toBe(560_000);
+    const extended = await service.action(ctx, item.id, { type: 'EXTEND_STAY', departureDate: '2026-09-16' }); expect(extended.estimatedTotalRupees).toBe(22400);
+    const shortened = await service.action(ctx, item.id, { type: 'SHORTEN_STAY', departureDate: '2026-09-13' }); expect(shortened.estimatedTotalRupees).toBe(5600);
     expect(repository.events.slice(-2).map((event) => event.eventType)).toEqual(['STAY_EXTENDED', 'STAY_SHORTENED']);
   });
   it('rejects an extension when the room is unavailable', async () => {
@@ -121,8 +121,8 @@ describe('production reservation lifecycle', () => {
   });
   it('records upgrades and only changes an agreed rate when explicitly supplied', async () => {
     const { service, repository, ctx } = setup(); const item = await service.create(ctx, input());
-    const updated = await service.action(ctx, item.id, { type: 'UPGRADE_ROOM', roomId: 'room-201', roomType: 'Deluxe', nightlyRatePaise: 900_000 });
-    expect(updated.nightlyRatePaise).toBe(900_000); expect(repository.events.at(-1)?.eventType).toBe('ROOM_UPGRADED');
+    const updated = await service.action(ctx, item.id, { type: 'UPGRADE_ROOM', roomId: 'room-201', roomType: 'Deluxe', nightlyRateRupees: 9000 });
+    expect(updated.nightlyRateRupees).toBe(9000); expect(repository.events.at(-1)?.eventType).toBe('ROOM_UPGRADED');
   });
   it('places and releases a hold', async () => {
     const { service, repository, ctx } = setup(); const item = await service.create(ctx, input({ status: 'PENDING' }));

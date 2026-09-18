@@ -55,7 +55,7 @@ export function VerificationView({
       const result = await command({
         action: "MANUAL_MASTER_UPDATE",
         bookingReference: bill.bookingReference,
-        amountPaise: bill.totalPaise,
+        amountRupees: bill.totalRupees,
       });
       await refresh();
       notify(
@@ -121,13 +121,13 @@ export function VerificationView({
                 <div className="compare-grid">
                   <div>
                     <small>Offline amount</small>
-                    <strong>{money(local.totalPaise)}</strong>
+                    <strong>{money(local.totalRupees)}</strong>
                   </div>
                   <div>
                     <small>Master Hub amount</small>
                     <strong>
-                      {cloud?.cloudAmountPaise != null
-                        ? money(cloud.cloudAmountPaise)
+                      {cloud?.cloudAmountRupees != null
+                        ? money(cloud.cloudAmountRupees)
                         : "Not downloaded"}
                     </strong>
                   </div>

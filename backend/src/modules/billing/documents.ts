@@ -7,8 +7,8 @@ type FontStyle = "sans" | "serif" | "serifItalic" | "serifBold";
 type InvoiceLine = {
   description: string;
   quantity: number;
-  unitAmountPaise: number;
-  amountPaise: number;
+  unitAmountRupees: number;
+  amountRupees: number;
 };
 
 export type PremiumInvoicePdfInput = {
@@ -52,15 +52,15 @@ export type PremiumInvoicePdfInput = {
   lines: InvoiceLine[];
 
   totals: {
-    subtotalPaise: number;
-    discountPaise: number;
-    taxableAmountPaise: number;
-    cgstPaise: number;
-    sgstPaise: number;
-    igstPaise: number;
-    grandTotalPaise: number;
-    paidPaise: number;
-    balancePaise: number;
+    subtotalRupees: number;
+    discountRupees: number;
+    taxableAmountRupees: number;
+    cgstRupees: number;
+    sgstRupees: number;
+    igstRupees: number;
+    grandTotalRupees: number;
+    paidRupees: number;
+    balanceRupees: number;
   };
 };
 
@@ -95,9 +95,9 @@ export type PremiumPaymentReceiptPdfInput = {
   };
 
   amounts: {
-    receivedPaise: number;
-    refundedPaise: number;
-    netPaise: number;
+    receivedRupees: number;
+    refundedRupees: number;
+    netRupees: number;
   };
 
   reversal?: {
@@ -164,7 +164,7 @@ function pdfText(
   y: number,
   size = 10,
   options: TextOptions = {},
-) {
+): string {
   const {
     bold = false,
     color = C.ink,
@@ -177,6 +177,20 @@ function pdfText(
 
   if (align === "right") textX = x - width;
   if (align === "center") textX = x - width / 2;
+
+  if (value.includes('₹')) {
+    let cursor = textX;
+    return value.split('₹').map((part, index) => {
+      let symbol = '';
+      if (index > 0) {
+        symbol = pdfRupeeSymbol(cursor, y, size, color);
+        cursor += size * 0.8;
+      }
+      const text = pdfText(part, cursor, y, size, { ...options, align: 'left' });
+      cursor += estimateTextWidth(part, size, bold, font);
+      return `${symbol} ${text}`;
+    }).join(' ');
+  }
 
   return [
     "BT",
@@ -250,7 +264,7 @@ function humanize(value: unknown) {
 }
 
 function formatMoneyNumber(value: number) {
-  const rupees = Number(value || 0) / 100;
+  const rupees = Number(value || 0);
 
   return new Intl.NumberFormat("en-IN", {
     minimumFractionDigits: 2,
@@ -258,7 +272,7 @@ function formatMoneyNumber(value: number) {
   }).format(rupees);
 }
 
-export function formatInrPaise(value: number) {
+export function formatInrRupees(value: number) {
   return `₹${formatMoneyNumber(value)}`;
 }
 
@@ -485,8 +499,8 @@ function paginateInvoiceLines(lines: InvoiceLine[]): InvoiceChunk[] {
           {
             description: "No charge lines posted",
             quantity: 1,
-            unitAmountPaise: 0,
-            amountPaise: 0,
+            unitAmountRupees: 0,
+            amountRupees: 0,
           },
         ];
 
@@ -754,12 +768,12 @@ function renderInvoiceTable(
         align: "center",
         font: "serif",
       }),
-      pdfMoney(item.unitAmountPaise, 472, y - 13, 8.2, {
+      pdfMoney(item.unitAmountRupees, 472, y - 13, 8.2, {
         color: C.ink,
         align: "right",
         font: "serif",
       }),
-      pdfMoney(item.amountPaise, 575, y - 13, 8.2, {
+      pdfMoney(item.amountRupees, 575, y - 13, 8.2, {
         color: C.ink,
         align: "right",
         font: "serif",
@@ -799,35 +813,35 @@ function renderInvoiceSummary(
   const valueX = 567;
 
   const totals: Array<[string, number]> = [
-    ["SUB TOTAL", input.totals.subtotalPaise],
+    ["SUB TOTAL", input.totals.subtotalRupees],
   ];
 
-  if (input.totals.discountPaise) {
+  if (input.totals.discountRupees) {
     totals.push([
       "DISCOUNT",
-      -Math.abs(input.totals.discountPaise),
+      -Math.abs(input.totals.discountRupees),
     ]);
   }
 
   totals.push([
     "TAXABLE AMOUNT",
-    input.totals.taxableAmountPaise,
+    input.totals.taxableAmountRupees,
   ]);
 
   // GST is rendered from the immutable invoice snapshot.
   // Intra-state invoices normally carry CGST + SGST; inter-state invoices
   // carry IGST. Zero-value tax components are intentionally hidden so the
   // customer-facing invoice only shows taxes that actually apply.
-  if (input.totals.cgstPaise) {
-    totals.push(["CGST", input.totals.cgstPaise]);
+  if (input.totals.cgstRupees) {
+    totals.push(["CGST", input.totals.cgstRupees]);
   }
 
-  if (input.totals.sgstPaise) {
-    totals.push(["SGST", input.totals.sgstPaise]);
+  if (input.totals.sgstRupees) {
+    totals.push(["SGST", input.totals.sgstRupees]);
   }
 
-  if (input.totals.igstPaise) {
-    totals.push(["IGST", input.totals.igstPaise]);
+  if (input.totals.igstRupees) {
+    totals.push(["IGST", input.totals.igstRupees]);
   }
 
   let y = top;
@@ -860,7 +874,7 @@ function renderInvoiceSummary(
       font: "serifBold",
     }),
     pdfMoney(
-      input.totals.grandTotalPaise,
+      input.totals.grandTotalRupees,
       valueX,
       y,
       10,
@@ -877,7 +891,7 @@ function renderInvoiceSummary(
   const reference = cleanText(input.payment?.reference || "Not provided");
   const managerName = cleanText(input.manager?.name || "Authorized Manager");
   const managerTitle = cleanText(input.manager?.title || "Manager");
-  const due = Number(input.totals.balancePaise || 0);
+  const due = Number(input.totals.balanceRupees || 0);
 
   commands.push(
     pdfText("Payment Method:", 50, detailTop, 8.5, {
@@ -897,7 +911,7 @@ function renderInvoiceSummary(
       color: C.ink,
       font: "serif",
     }),
-    pdfMoney(input.totals.paidPaise, 120, detailTop - 40, 8, {
+    pdfMoney(input.totals.paidRupees, 120, detailTop - 40, 8, {
       color: C.ink,
       align: "right",
       font: "serif",
@@ -1242,7 +1256,7 @@ function renderReceiptBody(
       },
     ),
     pdfMoney(
-      input.amounts.receivedPaise,
+      input.amounts.receivedRupees,
       575,
       523,
       8.5,
@@ -1256,8 +1270,8 @@ function renderReceiptBody(
   );
 
   const summaryRows: Array<[string, number]> = [
-    ["AMOUNT RECEIVED", input.amounts.receivedPaise],
-    ["REFUNDED", input.amounts.refundedPaise],
+    ["AMOUNT RECEIVED", input.amounts.receivedRupees],
+    ["REFUNDED", input.amounts.refundedRupees],
   ];
 
   let y = 466;
@@ -1286,7 +1300,7 @@ function renderReceiptBody(
       font: "serifBold",
     }),
     pdfMoney(
-      input.amounts.netPaise,
+      input.amounts.netRupees,
       567,
       y - 7,
       10,

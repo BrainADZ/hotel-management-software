@@ -2,34 +2,34 @@ import { describe, expect, it } from 'vitest';
 
 import {
   hotelAccommodationGstRateBps,
-  hotelAccommodationStayEstimatePaise,
+  hotelAccommodationStayEstimateRupees,
   normalizeRestaurantGstProfile,
   restaurantServiceGstRateBps,
 } from './india-gst';
 
 describe('India GST policy', () => {
   it('uses 5% for current hotel accommodation up to and including INR 7,500 per unit/day', () => {
-    expect(hotelAccommodationGstRateBps(450_000, '2026-09-16')).toBe(500);
-    expect(hotelAccommodationGstRateBps(750_000, '2026-09-16')).toBe(500);
+    expect(hotelAccommodationGstRateBps(4500, '2026-09-16')).toBe(500);
+    expect(hotelAccommodationGstRateBps(7500, '2026-09-16')).toBe(500);
   });
 
   it('uses 18% for current hotel accommodation above INR 7,500 per unit/day', () => {
-    expect(hotelAccommodationGstRateBps(750_001, '2026-09-16')).toBe(1800);
-    expect(hotelAccommodationGstRateBps(900_000, '2026-09-16')).toBe(1800);
+    expect(hotelAccommodationGstRateBps(7500.01, '2026-09-16')).toBe(1800);
+    expect(hotelAccommodationGstRateBps(9000, '2026-09-16')).toBe(1800);
   });
 
   it('preserves the stored tax snapshot for pre-22-Sep-2025 room nights', () => {
-    expect(hotelAccommodationGstRateBps(450_000, '2025-09-21', 1200)).toBe(1200);
+    expect(hotelAccommodationGstRateBps(4500, '2025-09-21', 1200)).toBe(1200);
   });
 
   it('estimates stay totals per night using the accommodation rule', () => {
     expect(
-      hotelAccommodationStayEstimatePaise(
-        600_000,
+      hotelAccommodationStayEstimateRupees(
+        6000,
         '2026-09-16',
         '2026-09-18',
       ),
-    ).toBe(1_260_000);
+    ).toBe(12600);
   });
 
   it('defaults normal and legacy-unconfigured restaurant service to 5%', () => {

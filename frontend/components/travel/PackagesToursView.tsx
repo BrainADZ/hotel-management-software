@@ -96,7 +96,7 @@ export function PackagesToursView({
                 </span>
                 <span>
                   <small>Price</small>
-                  <strong>{money(item.sellingPricePaise)}</strong>
+                  <strong>{money(item.sellingPriceRupees)}</strong>
                 </span>
               </div>
               <div className="capacity-bar">
@@ -127,8 +127,8 @@ export function PackagesToursView({
               0,
               Math.round(
                 (1 -
-                  Number(item.quotedPricePaise) /
-                    Math.max(Number(item.basePricePaise), 1)) *
+                  Number(item.quotedPriceRupees) /
+                    Math.max(Number(item.basePriceRupees), 1)) *
                   100,
               ),
             );
@@ -154,18 +154,18 @@ export function PackagesToursView({
                 <div className="quote-pricing-grid">
                   <span>
                     <small>Asset value</small>
-                    <strong>{money(item.assetSubtotalPaise)}</strong>
+                    <strong>{money(item.assetSubtotalRupees)}</strong>
                   </span>
                   <span>
                     <small>Base / floor</small>
                     <strong>
-                      {money(item.basePricePaise)} /{" "}
-                      {money(item.floorPricePaise)}
+                      {money(item.basePriceRupees)} /{" "}
+                      {money(item.floorPriceRupees)}
                     </strong>
                   </span>
                   <span>
                     <small>Client quote</small>
-                    <strong>{money(item.quotedPricePaise)}</strong>
+                    <strong>{money(item.quotedPriceRupees)}</strong>
                     <em>{discount}% discount</em>
                   </span>
                 </div>
@@ -214,15 +214,15 @@ export function PackagesToursView({
                 <div className="approval-price">
                   <span>
                     <small>Base</small>
-                    <strong>{money(request.basePricePaise)}</strong>
+                    <strong>{money(request.basePriceRupees)}</strong>
                   </span>
                   <span>
                     <small>Floor</small>
-                    <strong>{money(request.floorPricePaise)}</strong>
+                    <strong>{money(request.floorPriceRupees)}</strong>
                   </span>
                   <span>
                     <small>Requested</small>
-                    <strong>{money(request.requestedPricePaise)}</strong>
+                    <strong>{money(request.requestedPriceRupees)}</strong>
                   </span>
                 </div>
                 <blockquote>{String(request.reason)}</blockquote>
@@ -338,22 +338,22 @@ function PackageBuilderModal({
   });
   const [busy, setBusy] = useState(false);
   const canManage = ["OWNER", "MANAGER", "TOUR_MANAGER"].includes(role);
-  const assetSubtotalPaise = assets.reduce(
+  const assetSubtotalRupees = assets.reduce(
     (sum, asset) =>
-      sum + (selected[String(asset.id)] ?? 0) * Number(asset.unitPricePaise),
+      sum + (selected[String(asset.id)] ?? 0) * Number(asset.unitPriceRupees),
     0,
   );
-  const basePaise =
+  const baseRupees =
     canManage && form.baseRupees > 0
-      ? Math.round(form.baseRupees * 100)
-      : assetSubtotalPaise;
-  const floorPaise =
+      ? form.baseRupees
+      : assetSubtotalRupees;
+  const floorRupees =
     canManage && form.floorRupees > 0
-      ? Math.round(form.floorRupees * 100)
-      : Math.round(basePaise * 0.9);
-  const quotePaise =
-    form.quoteRupees > 0 ? Math.round(form.quoteRupees * 100) : basePaise;
-  const belowFloor = quotePaise > 0 && quotePaise < floorPaise && !canManage;
+      ? form.floorRupees
+      : Math.round(baseRupees * 0.9);
+  const quoteRupees =
+    form.quoteRupees > 0 ? form.quoteRupees : baseRupees;
+  const belowFloor = quoteRupees > 0 && quoteRupees < floorRupees && !canManage;
   function toggle(assetId: string) {
     setSelected((current) => {
       const next = { ...current };
@@ -369,9 +369,9 @@ function PackageBuilderModal({
       await onSubmit({
         clientName: form.clientName,
         name: form.name,
-        basePricePaise: basePaise,
-        floorPricePaise: floorPaise,
-        quotedPricePaise: quotePaise,
+        basePriceRupees: baseRupees,
+        floorPriceRupees: floorRupees,
+        quotedPriceRupees: quoteRupees,
         discountReason: form.discountReason,
         assetSelections: Object.entries(selected).map(
           ([assetId, quantity]) => ({ assetId, quantity }),
@@ -447,7 +447,7 @@ function PackageBuilderModal({
                           {String(asset.category)} · {String(asset.pricingUnit)}
                         </small>
                       </span>
-                      <b>{money(asset.unitPricePaise)}</b>
+                      <b>{money(asset.unitPriceRupees)}</b>
                     </button>
                     {quantity > 0 && (
                       <label>
@@ -481,7 +481,7 @@ function PackageBuilderModal({
             <div className="pricing-summary">
               <span>
                 <small>Selected asset value</small>
-                <strong>{money(assetSubtotalPaise)}</strong>
+                <strong>{money(assetSubtotalRupees)}</strong>
               </span>
               {canManage && (
                 <>
@@ -498,7 +498,7 @@ function PackageBuilderModal({
                           baseRupees: Number(event.target.value),
                         })
                       }
-                      placeholder={String(assetSubtotalPaise / 100)}
+                      placeholder={String(assetSubtotalRupees)}
                     />
                   </label>
                   <label>
@@ -515,7 +515,7 @@ function PackageBuilderModal({
                         })
                       }
                       placeholder={String(
-                        Math.round(assetSubtotalPaise * 0.9) / 100,
+                        Math.round(assetSubtotalRupees * 0.9),
                       )}
                     />
                   </label>
@@ -523,11 +523,11 @@ function PackageBuilderModal({
               )}
               <span>
                 <small>Base price</small>
-                <strong>{money(basePaise)}</strong>
+                <strong>{money(baseRupees)}</strong>
               </span>
               <span>
                 <small>Sales floor</small>
-                <strong>{money(floorPaise)}</strong>
+                <strong>{money(floorRupees)}</strong>
               </span>
               <label>
                 <span>Client quote (₹)</span>
@@ -542,7 +542,7 @@ function PackageBuilderModal({
                       quoteRupees: Number(event.target.value),
                     })
                   }
-                  placeholder={String(basePaise / 100)}
+                  placeholder={String(baseRupees)}
                 />
               </label>
             </div>
@@ -572,7 +572,7 @@ function PackageBuilderModal({
                 </strong>
                 <small>
                   {belowFloor
-                    ? `${money(floorPaise - quotePaise)} below the current floor`
+                    ? `${money(floorRupees - quoteRupees)} below the current floor`
                     : "This quote can be sent without a discount request."}
                 </small>
               </span>
@@ -586,7 +586,7 @@ function PackageBuilderModal({
           <button
             type="submit"
             className="primary-button"
-            disabled={busy || assetSubtotalPaise <= 0}
+            disabled={busy || assetSubtotalRupees <= 0}
           >
             {busy
               ? "Saving package…"
@@ -610,10 +610,10 @@ function PackagePricingModal({
   onSubmit: (payload: Row) => Promise<void>;
 }) {
   const [baseRupees, setBaseRupees] = useState(
-    Number(item.basePricePaise) / 100,
+    Number(item.basePriceRupees),
   );
   const [floorRupees, setFloorRupees] = useState(
-    Number(item.floorPricePaise) / 100,
+    Number(item.floorPriceRupees),
   );
   const [busy, setBusy] = useState(false);
   async function submit(event: FormEvent) {
@@ -621,8 +621,8 @@ function PackagePricingModal({
     setBusy(true);
     try {
       await onSubmit({
-        basePricePaise: Math.round(baseRupees * 100),
-        floorPricePaise: Math.round(floorRupees * 100),
+        basePriceRupees: baseRupees,
+        floorPriceRupees: floorRupees,
       });
     } finally {
       setBusy(false);

@@ -36,6 +36,7 @@ const operationsActions = new Set([
   "RELEASE_LOST_ITEM",
   "MOVE_STOCK",
   "SAVE_ROOM",
+  "SAVE_RATE_PLAN",
   "CREATE_HOUSEKEEPING_TASK",
   "CREATE_RESTAURANT_ORDER",
   "UPDATE_RESTAURANT_ORDER",
@@ -106,8 +107,8 @@ export function routeProductionCommand(
         children: payload.children ?? 0,
         status: "CONFIRMED",
         source: payload.source ?? "DIRECT",
-        nightlyRatePaise:
-          payload.nightlyRatePaise,
+        nightlyRateRupees:
+          payload.nightlyRateRupees,
         taxRateBps:
           payload.taxRateBps ?? 0,
         specialRequests:

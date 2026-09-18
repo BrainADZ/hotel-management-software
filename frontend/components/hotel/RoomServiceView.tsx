@@ -31,7 +31,7 @@ export function RoomServiceView(props: ExtraFeatureProps) {
             "Order value",
             money(
               roomOrders.reduce(
-                (sum, item) => sum + Number(item.totalPaise),
+                (sum, item) => sum + Number(item.totalRupees),
                 0,
               ),
             ),
@@ -45,7 +45,7 @@ export function RoomServiceView(props: ExtraFeatureProps) {
             String(item.id),
             String(item.roomNumber),
             String(item.reservationId),
-            money(item.totalPaise),
+            money(item.totalRupees),
             <Status key="payment" value={item.paymentStatus} />,
             <Status key="status" value={item.status} />,
           ])}

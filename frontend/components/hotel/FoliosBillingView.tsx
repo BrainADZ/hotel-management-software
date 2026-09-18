@@ -80,20 +80,20 @@ function humanize(value: unknown) {
     .replace(/\b\w/g, (letter) => letter.toUpperCase());
 }
 
-function rupeesInput(paise: unknown) {
-  const value = Number(paise ?? 0) / 100;
+function rupeesInput(rupees: unknown) {
+  const value = Number(rupees ?? 0);
   if (!Number.isFinite(value) || value <= 0) return "";
   return value.toFixed(2).replace(/\.00$/, "");
 }
 
-function toPaise(value: string) {
+function parseRupees(value: string) {
   const amount = Number(value);
   if (!Number.isFinite(amount) || amount <= 0) return null;
-  return Math.round(amount * 100);
+  return amount;
 }
 
-function moneyExact(paise: unknown) {
-  const value = Number(paise ?? 0) / 100;
+function moneyExact(rupees: unknown) {
+  const value = Number(rupees ?? 0);
 
   if (!Number.isFinite(value)) {
     return "₹0.00";
@@ -167,9 +167,9 @@ export function FoliosBillingView({
   const refunds = (selected?.refunds ?? []) as Row[];
   const invoices = useMemo(() => (selected?.invoices ?? []) as Row[], [selected?.invoices]);
 
-  const outstandingPaise = Number(detail?.outstandingPaise ?? 0);
-  const duePaise = Math.max(0, outstandingPaise);
-  const creditPaise = Math.max(0, -outstandingPaise);
+  const outstandingRupees = Number(detail?.outstandingRupees ?? 0);
+  const dueRupees = Math.max(0, outstandingRupees);
+  const creditRupees = Math.max(0, -outstandingRupees);
 
   const latestReceivedPayment = useMemo(
     () =>
@@ -325,7 +325,7 @@ export function FoliosBillingView({
     setFormError("");
     setPaymentForm({
       method: "UPI",
-      amount: duePaise > 0 ? rupeesInput(duePaise) : "",
+      amount: dueRupees > 0 ? rupeesInput(dueRupees) : "",
       reference: "",
       notes: "",
     });
@@ -359,16 +359,16 @@ export function FoliosBillingView({
           String(refund.paymentId) === String(payment.id) &&
           String(refund.status) === "RECORDED",
       )
-      .reduce((sum, refund) => sum + Number(refund.amountPaise ?? 0), 0);
+      .reduce((sum, refund) => sum + Number(refund.amountRupees ?? 0), 0);
 
     const refundable = Math.max(
       0,
-      Number(payment.amountPaise ?? 0) - alreadyRefunded,
+      Number(payment.amountRupees ?? 0) - alreadyRefunded,
     );
 
     const suggested =
-      creditPaise > 0
-        ? Math.min(refundable, creditPaise)
+      creditRupees > 0
+        ? Math.min(refundable, creditRupees)
         : refundable;
 
     setFormError("");
@@ -404,9 +404,9 @@ export function FoliosBillingView({
   async function submitPayment() {
     if (!detail) return;
 
-    const amountPaise = toPaise(paymentForm.amount);
+    const amountRupees = parseRupees(paymentForm.amount);
 
-    if (!amountPaise) {
+    if (!amountRupees) {
       setFormError("Enter a valid payment amount.");
       return;
     }
@@ -415,7 +415,7 @@ export function FoliosBillingView({
       `/api/folios/${String(detail.id)}/payments`,
       {
         method: paymentForm.method,
-        amountPaise,
+        amountRupees,
         reference: paymentForm.reference.trim() || undefined,
         notes: paymentForm.notes.trim() || undefined,
         idempotencyKey: crypto.randomUUID(),
@@ -443,7 +443,7 @@ export function FoliosBillingView({
       discountForm.kind === "FIXED"
         ? {
             kind: "FIXED",
-            amountPaise: Math.round(value * 100),
+            amountRupees: value,
             reason: discountForm.reason.trim(),
             idempotencyKey: crypto.randomUUID(),
           }
@@ -469,9 +469,9 @@ export function FoliosBillingView({
   async function submitCharge() {
     if (!detail) return;
 
-    const amountPaise = toPaise(chargeForm.amount);
+    const amountRupees = parseRupees(chargeForm.amount);
 
-    if (!amountPaise) {
+    if (!amountRupees) {
       setFormError("Enter a valid charge amount.");
       return;
     }
@@ -487,7 +487,7 @@ export function FoliosBillingView({
         category: chargeForm.category,
         description: chargeForm.description.trim(),
         quantity: 1,
-        unitAmountPaise: amountPaise,
+        unitAmountRupees: amountRupees,
         idempotencyKey: crypto.randomUUID(),
       },
       { success: "Charge added to the folio." },
@@ -495,9 +495,9 @@ export function FoliosBillingView({
   }
 
   async function submitRefund(payment: Row) {
-    const amountPaise = toPaise(refundForm.amount);
+    const amountRupees = parseRupees(refundForm.amount);
 
-    if (!amountPaise) {
+    if (!amountRupees) {
       setFormError("Enter a valid refund amount.");
       return;
     }
@@ -510,7 +510,7 @@ export function FoliosBillingView({
     await postAction(
       `/api/payments/${String(payment.id)}/refund`,
       {
-        amountPaise,
+        amountRupees,
         reason: refundForm.reason.trim(),
         reference: refundForm.reference.trim() || undefined,
         idempotencyKey: crypto.randomUUID(),
@@ -579,7 +579,7 @@ export function FoliosBillingView({
     /*
      * Stage 2 is the actual financial close after inspection/damage review.
      */
-    if (duePaise > 0) {
+    if (dueRupees > 0) {
       if (!roleCan(role, "billing.override_checkout")) {
         setFormError(
           "Final checkout is blocked until the outstanding balance is settled.",
@@ -666,14 +666,14 @@ export function FoliosBillingView({
                     <small>{String(currentReservation?.reference ?? "")}</small>
                   </td>
 
-                  <td>{moneyExact(folio.subtotalPaise)}</td>
-                  <td>{moneyExact(folio.discountPaise ?? 0)}</td>
-                  <td>{moneyExact(folio.taxPaise)}</td>
-                  <td>{moneyExact(folio.paidPaise ?? 0)}</td>
+                  <td>{moneyExact(folio.subtotalRupees)}</td>
+                  <td>{moneyExact(folio.discountRupees ?? 0)}</td>
+                  <td>{moneyExact(folio.taxRupees)}</td>
+                  <td>{moneyExact(folio.paidRupees ?? 0)}</td>
 
                   <td>
                     <strong>
-                      {moneyExact(folio.outstandingPaise ?? folio.totalPaise)}
+                      {moneyExact(folio.outstandingRupees ?? folio.totalRupees)}
                     </strong>
                   </td>
 
@@ -752,47 +752,47 @@ export function FoliosBillingView({
               <section className="folio-summary-strip">
                 <div>
                   <span>Gross</span>
-                  <strong>{moneyExact(detail.subtotalPaise)}</strong>
+                  <strong>{moneyExact(detail.subtotalRupees)}</strong>
                 </div>
 
                 <div>
                   <span>Discount</span>
-                  <strong>{moneyExact(detail.discountPaise ?? 0)}</strong>
+                  <strong>{moneyExact(detail.discountRupees ?? 0)}</strong>
                 </div>
 
                 <div>
                   <span>Tax</span>
-                  <strong>{moneyExact(detail.taxPaise ?? 0)}</strong>
+                  <strong>{moneyExact(detail.taxRupees ?? 0)}</strong>
                 </div>
 
                 <div>
                   <span>Paid</span>
-                  <strong>{moneyExact(detail.paidPaise ?? 0)}</strong>
+                  <strong>{moneyExact(detail.paidRupees ?? 0)}</strong>
                 </div>
 
                 <div
                   className={
-                    duePaise > 0
+                    dueRupees > 0
                       ? "attention"
-                      : creditPaise > 0
+                      : creditRupees > 0
                         ? "credit"
                         : "settled"
                   }
                 >
                   <span>
-                    {duePaise > 0
+                    {dueRupees > 0
                       ? "Outstanding"
-                      : creditPaise > 0
+                      : creditRupees > 0
                         ? "Guest credit"
                         : "Balance"}
                   </span>
 
                   <strong>
                     {moneyExact(
-                      duePaise > 0
-                        ? duePaise
-                        : creditPaise > 0
-                          ? creditPaise
+                      dueRupees > 0
+                        ? dueRupees
+                        : creditRupees > 0
+                          ? creditRupees
                           : 0,
                     )}
                   </strong>
@@ -810,7 +810,7 @@ export function FoliosBillingView({
                   </div>
 
                   <span className="folio-tax-copy">
-                    Taxable {moneyExact(detail.taxableAmountPaise ?? 0)}
+                    Taxable {moneyExact(detail.taxableAmountRupees ?? 0)}
                   </span>
                 </div>
 
@@ -832,7 +832,7 @@ export function FoliosBillingView({
                           <tr
                             key={String(line.id)}
                             className={
-                              Number(line.lineTotalPaise ?? 0) < 0
+                              Number(line.lineTotalRupees ?? 0) < 0
                                 ? "negative"
                                 : undefined
                             }
@@ -846,10 +846,10 @@ export function FoliosBillingView({
                               <small>{humanize(line.category)}</small>
                             </td>
 
-                            <td>{moneyExact(line.taxableAmountPaise ?? 0)}</td>
-                            <td>{moneyExact(line.taxPaise ?? 0)}</td>
+                            <td>{moneyExact(line.taxableAmountRupees ?? 0)}</td>
+                            <td>{moneyExact(line.taxRupees ?? 0)}</td>
                             <td>
-                              <strong>{moneyExact(line.lineTotalPaise ?? 0)}</strong>
+                              <strong>{moneyExact(line.lineTotalRupees ?? 0)}</strong>
                             </td>
                           </tr>
                         ))
@@ -868,16 +868,16 @@ export function FoliosBillingView({
 
                 <div className="folio-tax-breakup">
                   <span>
-                    CGST <strong>{moneyExact(detail.cgstPaise ?? 0)}</strong>
+                    CGST <strong>{moneyExact(detail.cgstRupees ?? 0)}</strong>
                   </span>
                   <span>
-                    SGST <strong>{moneyExact(detail.sgstPaise ?? 0)}</strong>
+                    SGST <strong>{moneyExact(detail.sgstRupees ?? 0)}</strong>
                   </span>
                   <span>
-                    IGST <strong>{moneyExact(detail.igstPaise ?? 0)}</strong>
+                    IGST <strong>{moneyExact(detail.igstRupees ?? 0)}</strong>
                   </span>
                   <span className="folio-net-total">
-                    Net charges <strong>{moneyExact(detail.totalPaise ?? 0)}</strong>
+                    Net charges <strong>{moneyExact(detail.totalRupees ?? 0)}</strong>
                   </span>
                 </div>
               </section>
@@ -896,18 +896,18 @@ export function FoliosBillingView({
 
                   <div className="folio-net-received">
                     <span>Net received</span>
-                    <strong>{moneyExact(detail.paidPaise ?? 0)}</strong>
+                    <strong>{moneyExact(detail.paidRupees ?? 0)}</strong>
                   </div>
                 </div>
 
-                {creditPaise > 0 && (
+                {creditRupees > 0 && (
                   <div className="folio-credit-banner">
                     <div>
                       <CheckCircle2 size={18} />
                       <span>
                         <strong>Guest has an advance / credit.</strong>
                         <small>
-                          {moneyExact(creditPaise)} can be refunded before checkout
+                          {moneyExact(creditRupees)} can be refunded before checkout
                           if required.
                         </small>
                       </span>
@@ -977,7 +977,7 @@ export function FoliosBillingView({
                           </div>
 
                           <strong className="folio-payment-amount">
-                            {moneyExact(payment.amountPaise)}
+                            {moneyExact(payment.amountRupees)}
                           </strong>
 
                           <div className="folio-payment-actions">
@@ -1058,7 +1058,7 @@ export function FoliosBillingView({
                       </div>
 
                       <strong className="folio-payment-amount refund-amount">
-                        -{moneyExact(refund.amountPaise)}
+                        -{moneyExact(refund.amountRupees)}
                       </strong>
                     </article>
                   ))}
@@ -1222,22 +1222,22 @@ export function FoliosBillingView({
 
                 <div className="folio-final-actions">
                   <div>
-                    {duePaise > 0 ? (
+                    {dueRupees > 0 ? (
                       <>
                         <span className="folio-balance-label">
                           Outstanding balance
                         </span>
                         <strong className="folio-balance-due">
-                          {moneyExact(duePaise)}
+                          {moneyExact(dueRupees)}
                         </strong>
                       </>
-                    ) : creditPaise > 0 ? (
+                    ) : creditRupees > 0 ? (
                       <>
                         <span className="folio-balance-label">
                           Guest credit
                         </span>
                         <strong className="folio-balance-credit">
-                          {moneyExact(creditPaise)}
+                          {moneyExact(creditRupees)}
                         </strong>
                       </>
                     ) : (
@@ -1493,9 +1493,9 @@ export function FoliosBillingView({
                         />
                       </div>
 
-                      {duePaise > 0 && (
+                      {dueRupees > 0 && (
                         <small>
-                          Current outstanding: {moneyExact(duePaise)}
+                          Current outstanding: {moneyExact(dueRupees)}
                         </small>
                       )}
                     </label>
@@ -1761,7 +1761,7 @@ export function FoliosBillingView({
 
                       <span>
                         <small>Payment</small>
-                        <strong>{moneyExact(dialog.payment.amountPaise)}</strong>
+                        <strong>{moneyExact(dialog.payment.amountRupees)}</strong>
                       </span>
                     </div>
 
@@ -1865,7 +1865,7 @@ export function FoliosBillingView({
 
                       <span>
                         <small>Amount</small>
-                        <strong>{moneyExact(dialog.payment.amountPaise)}</strong>
+                        <strong>{moneyExact(dialog.payment.amountRupees)}</strong>
                       </span>
                     </div>
 
@@ -1942,8 +1942,8 @@ export function FoliosBillingView({
         <small>Total</small>
         <strong>
           {moneyExact(
-            dialog.invoice.grandTotalPaise ??
-              dialog.invoice.totalPaise ??
+            dialog.invoice.grandTotalRupees ??
+              dialog.invoice.totalRupees ??
               0,
           )}
         </strong>
@@ -2005,37 +2005,37 @@ export function FoliosBillingView({
                     <div className="folio-checkout-summary">
                       <div>
                         <span>Net charges</span>
-                        <strong>{moneyExact(detail.totalPaise ?? 0)}</strong>
+                        <strong>{moneyExact(detail.totalRupees ?? 0)}</strong>
                       </div>
 
                       <div>
                         <span>Paid</span>
-                        <strong>{moneyExact(detail.paidPaise ?? 0)}</strong>
+                        <strong>{moneyExact(detail.paidRupees ?? 0)}</strong>
                       </div>
 
                       <div
                         className={
-                          duePaise > 0
+                          dueRupees > 0
                             ? "due"
-                            : creditPaise > 0
+                            : creditRupees > 0
                               ? "credit"
                               : "settled"
                         }
                       >
                         <span>
-                          {duePaise > 0
+                          {dueRupees > 0
                             ? "Outstanding"
-                            : creditPaise > 0
+                            : creditRupees > 0
                               ? "Guest credit"
                               : "Balance"}
                         </span>
 
                         <strong>
                           {moneyExact(
-                            duePaise > 0
-                              ? duePaise
-                              : creditPaise > 0
-                                ? creditPaise
+                            dueRupees > 0
+                              ? dueRupees
+                              : creditRupees > 0
+                                ? creditRupees
                                 : 0,
                           )}
                         </strong>
@@ -2061,13 +2061,13 @@ export function FoliosBillingView({
                           </div>
                         </div>
 
-                        {duePaise > 0 && (
+                        {dueRupees > 0 && (
                           <div className="folio-success-panel">
                             <CheckCircle2 size={18} />
 
                             <div>
                               <strong>
-                                Current balance: {moneyExact(duePaise)}
+                                Current balance: {moneyExact(dueRupees)}
                               </strong>
                               <span>
                                 This does not block the inspection request. The
@@ -2102,7 +2102,7 @@ export function FoliosBillingView({
                       </>
                     ) : (
                       <>
-                        {duePaise === 0 && creditPaise === 0 && (
+                        {dueRupees === 0 && creditRupees === 0 && (
                           <div className="folio-success-panel">
                             <CheckCircle2 size={18} />
 
@@ -2117,13 +2117,13 @@ export function FoliosBillingView({
                           </div>
                         )}
 
-                        {creditPaise > 0 && (
+                        {creditRupees > 0 && (
                           <div className="folio-warning-panel credit">
                             <AlertTriangle size={18} />
 
                             <div>
                               <strong>
-                                Guest has {moneyExact(creditPaise)} credit.
+                                Guest has {moneyExact(creditRupees)} credit.
                               </strong>
                               <span>
                                 Refund the advance first if the amount should be
@@ -2133,14 +2133,14 @@ export function FoliosBillingView({
                           </div>
                         )}
 
-                        {duePaise > 0 && (
+                        {dueRupees > 0 && (
                           <>
                             <div className="folio-warning-panel">
                               <AlertTriangle size={18} />
 
                               <div>
                                 <strong>
-                                  {moneyExact(duePaise)} is still outstanding.
+                                  {moneyExact(dueRupees)} is still outstanding.
                                 </strong>
                                 <span>
                                   Final checkout is blocked until the balance is
@@ -2189,7 +2189,7 @@ export function FoliosBillingView({
                             Cancel
                           </button>
 
-                          {creditPaise > 0 &&
+                          {creditRupees > 0 &&
                             latestReceivedPayment &&
                             roleCan(role, "billing.refund") && (
                               <button
@@ -2209,14 +2209,14 @@ export function FoliosBillingView({
                             className="primary-button"
                             disabled={
                               busy ||
-                              (duePaise > 0 &&
+                              (dueRupees > 0 &&
                                 !roleCan(role, "billing.override_checkout"))
                             }
                             onClick={() => void submitCheckout()}
                           >
                             {busy
                               ? "Finalizing..."
-                              : duePaise > 0
+                              : dueRupees > 0
                                 ? "Finalize with override"
                                 : "Finalize checkout"}
                           </button>

@@ -27,7 +27,7 @@ export function TourManagersView(props: ExtraFeatureProps) {
             </p>
             <div>
               <small>{12 + index * 7} tours led</small>
-              <b>{(4.7 + index / 10).toFixed(1)} ★</b>
+              <b>{(4.7 + index / 10).toFixed(1)} / 5</b>
             </div>
           </article>
         ))}

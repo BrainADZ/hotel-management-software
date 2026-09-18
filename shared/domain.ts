@@ -134,25 +134,25 @@ export function normalizeDamageSeverity(value: unknown): DamageSeverity | null {
   return normalized === 'LOW' || normalized === 'MEDIUM' || normalized === 'HIGH' ? normalized : null;
 }
 
-export function calculatePolicyDamageCharge(repairCostPaise: number, policyLiabilityPaise: number): number {
-  if (!Number.isSafeInteger(repairCostPaise) || repairCostPaise <= 0 || repairCostPaise > 100_000_000) {
+export function calculatePolicyDamageCharge(repairCostRupees: number, policyLiabilityRupees: number): number {
+  if (!Number.isSafeInteger(repairCostRupees) || repairCostRupees <= 0 || repairCostRupees > 100_000_000) {
     throw new DomainError('INVALID_REPAIR_COST', 'Repair cost must be a positive whole amount up to ₹10,00,000.', 400);
   }
-  if (!Number.isSafeInteger(policyLiabilityPaise) || policyLiabilityPaise <= 0) {
+  if (!Number.isSafeInteger(policyLiabilityRupees) || policyLiabilityRupees <= 0) {
     throw new DomainError('INVALID_DAMAGE_POLICY', 'The property damage policy has no valid liability limit.', 409);
   }
-  return Math.min(repairCostPaise, policyLiabilityPaise);
+  return Math.min(repairCostRupees, policyLiabilityRupees);
 }
 
-export function calculateBill(subtotalPaise: number, taxRateBps: number) {
-  if (!Number.isInteger(subtotalPaise) || subtotalPaise < 0) {
-    throw new DomainError('INVALID_AMOUNT', 'Subtotal must be a non-negative integer amount in paise.', 400);
+export function calculateBill(subtotalRupees: number, taxRateBps: number) {
+  if (!Number.isInteger(subtotalRupees) || subtotalRupees < 0) {
+    throw new DomainError('INVALID_AMOUNT', 'Subtotal must be a non-negative integer amount in rupees.', 400);
   }
   if (!Number.isInteger(taxRateBps) || taxRateBps < 0 || taxRateBps > 10_000) {
     throw new DomainError('INVALID_TAX', 'Tax rate must be between 0 and 10000 basis points.', 400);
   }
-  const taxPaise = Math.round((subtotalPaise * taxRateBps) / 10_000);
-  return { subtotalPaise, taxPaise, totalPaise: subtotalPaise + taxPaise };
+  const taxRupees = Math.round((subtotalRupees * taxRateBps) / 10_000);
+  return { subtotalRupees, taxRupees, totalRupees: subtotalRupees + taxRupees };
 }
 
 export type ReconciliationStatus =
@@ -165,15 +165,15 @@ export type ReconciliationStatus =
 
 export function reconcileOfflineBill(input: {
   localBookingReference: string;
-  localAmountPaise: number;
+  localAmountRupees: number;
   cloudBookingReference?: string | null;
-  cloudAmountPaise?: number | null;
+  cloudAmountRupees?: number | null;
   candidateCount?: number;
 }): ReconciliationStatus {
-  if (!input.cloudBookingReference || input.cloudAmountPaise == null) return 'MASTER_RECORD_NOT_FOUND';
+  if (!input.cloudBookingReference || input.cloudAmountRupees == null) return 'MASTER_RECORD_NOT_FOUND';
   if (input.candidateCount && input.candidateCount > 1) return 'REVIEW_REQUIRED';
   if (input.cloudBookingReference !== input.localBookingReference) return 'BOOKING_MISMATCH';
-  if (input.cloudAmountPaise !== input.localAmountPaise) return 'AMOUNT_MISMATCH';
+  if (input.cloudAmountRupees !== input.localAmountRupees) return 'AMOUNT_MISMATCH';
   return 'MATCHED';
 }
 

@@ -85,9 +85,9 @@ function rowSelection() {
     status: reservations.status,
     source: reservations.source,
     sourceReference: reservations.sourceReference,
-    nightlyRatePaise: reservations.nightlyRatePaise,
+    nightlyRateRupees: reservations.nightlyRateRupees,
     taxRateBps: reservations.taxRateBps,
-    estimatedTotalPaise: reservations.estimatedTotalPaise,
+    estimatedTotalRupees: reservations.estimatedTotalRupees,
     specialRequests: reservations.specialRequests,
     internalNotes: reservations.internalNotes,
     holdUntil: reservations.holdUntil,
@@ -304,7 +304,7 @@ function createRepository(
           propertyId: rooms.propertyId,
           number: rooms.number,
           roomType: rooms.roomType,
-          baseRatePaise: rooms.baseRatePaise,
+          baseRateRupees: rooms.baseRateRupees,
           active: rooms.active,
           operationalStatus: rooms.operationalStatus,
         })
@@ -513,22 +513,22 @@ function createRepository(
             input.source,
           sourceReference:
             input.sourceReference || null,
-          nightlyRatePaise:
-            input.nightlyRatePaise,
+          nightlyRateRupees:
+            input.nightlyRateRupees,
           taxRateBps:
             input.taxRateBps,
-          estimatedTotalPaise:
-            input.estimatedTotalPaise,
+          estimatedTotalRupees:
+            input.estimatedTotalRupees,
           specialRequests:
             input.specialRequests || null,
           internalNotes:
             input.internalNotes || null,
           holdUntil:
             input.holdUntil || null,
-          totalAmountPaise:
-            input.estimatedTotalPaise,
-          balancePaise:
-            input.estimatedTotalPaise,
+          totalAmountRupees:
+            input.estimatedTotalRupees,
+          balanceRupees:
+            input.estimatedTotalRupees,
           createdWhilePropertyOffline:
             false,
           contactStatus:

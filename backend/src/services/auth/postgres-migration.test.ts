@@ -32,7 +32,7 @@ describe('PostgreSQL reservation migration', () => {
     expect(reservationMigration).toContain('CREATE TABLE "reservation_events"');
     expect(reservationMigration).toContain('CREATE TABLE "reservation_sequences"');
     expect(reservationMigration).toContain('ADD COLUMN "organisation_id" text NOT NULL');
-    expect(reservationMigration).toContain('ADD COLUMN "nightly_rate_paise" integer');
+    expect(reservationMigration).toContain('ADD COLUMN "nightly_rate_rupees" integer');
     expect(reservationMigration).toContain('ADD COLUMN "created_by" text NOT NULL');
   });
 

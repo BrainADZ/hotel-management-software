@@ -5,7 +5,10 @@
 import { useEffect, useState, type FormEvent } from "react";
 import { usePathname, useRouter } from "next/navigation";
 
-import {readProductionOffline,clearProductionOffline} from '@/lib/production-offline';
+import {
+  readProductionOffline,
+  clearProductionOffline,
+} from "@/lib/production-offline";
 import { HotelPlatform } from "./hotel-platform";
 import { apiFetch, apiUrl } from "@/lib/api/client";
 
@@ -19,12 +22,10 @@ type Runtime = {
 
 type FocusedField = "email" | "password" | null;
 
-const DEMO_EMAIL = "web@brainadz.marketing";
-const DEMO_PASSWORD = "admin@HMS";
-
 export default function Home() {
   const pathname = usePathname();
   const router = useRouter();
+
   const [mode, setMode] = useState<Mode | null>(null);
   const [authenticated, setAuthenticated] = useState(false);
   const [error, setError] = useState("");
@@ -34,7 +35,21 @@ export default function Home() {
   });
 
   async function loadRuntime(): Promise<Runtime> {
-    if(!navigator.onLine){const cached=await readProductionOffline();if(cached)return {mode:'production',authenticated:true,googleConfigured:false};throw new Error('Connect to the hotel server and sign in before using this device offline.');}
+    if (!navigator.onLine) {
+      const cached = await readProductionOffline();
+
+      if (cached) {
+        return {
+          mode: "production",
+          authenticated: true,
+          googleConfigured: false,
+        };
+      }
+
+      throw new Error(
+        "Connect to the hotel server and sign in before using this device offline.",
+      );
+    }
 
     const response = await apiFetch("/api/runtime");
 
@@ -92,18 +107,34 @@ export default function Home() {
         );
       });
   }, []);
+
   useEffect(() => {
     if (pathname === "/" && mode && (mode === "demo" || authenticated)) {
       router.replace("/hotel");
     }
   }, [authenticated, mode, pathname, router]);
 
-  useEffect(()=>{const expired=()=>{setAuthenticated(false);void clearProductionOffline();};window.addEventListener('hotel-auth-expired',expired);return()=>window.removeEventListener('hotel-auth-expired',expired);},[]);
+  useEffect(() => {
+    const expired = () => {
+      setAuthenticated(false);
+      void clearProductionOffline();
+    };
+
+    window.addEventListener("hotel-auth-expired", expired);
+
+    return () => {
+      window.removeEventListener("hotel-auth-expired", expired);
+    };
+  }, []);
 
   async function logout() {
     await clearProductionOffline();
     setAuthenticated(false);
-    if(!navigator.onLine)return;
+
+    if (!navigator.onLine) {
+      return;
+    }
+
     await apiFetch("/api/auth/logout", {
       method: "POST",
     });
@@ -148,7 +179,10 @@ export default function Home() {
 
   if (mode === "production" && !authenticated) {
     return (
-      <LocalLogin {...loginOptions} onSuccess={() => setAuthenticated(true)} />
+      <LocalLogin
+        {...loginOptions}
+        onSuccess={() => setAuthenticated(true)}
+      />
     );
   }
 
@@ -167,8 +201,8 @@ function LocalLogin({
   onSuccess: () => void;
   googleConfigured: boolean;
 }) {
-  const [email, setEmail] = useState(DEMO_EMAIL);
-  const [password, setPassword] = useState(DEMO_PASSWORD);
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
 
   const [error, setError] = useState(() => {
     if (typeof window === "undefined") {
@@ -211,7 +245,11 @@ function LocalLogin({
 
       onSuccess();
     } catch (cause) {
-      setError(cause instanceof Error ? cause.message : "Login failed.");
+      setError(
+        cause instanceof Error
+          ? cause.message
+          : "Login failed.",
+      );
     } finally {
       setBusy(false);
     }
@@ -220,9 +258,14 @@ function LocalLogin({
   return (
     <main className="login-shell">
       <form className="login-card" onSubmit={submit}>
-        <img src="/main-logo.png" alt="BrainADZ" />
+        <img
+          src="/main-logo.png"
+          alt="BrainADZ"
+        />
 
-        <p className="eyebrow">Hotel Management Software</p>
+        <p className="eyebrow">
+          Hotel Management Software
+        </p>
 
         <h1>Welcome Back</h1>
 
@@ -265,12 +308,19 @@ function LocalLogin({
         </label>
 
         {error && (
-          <p className="login-error" role="alert">
+          <p
+            className="login-error"
+            role="alert"
+          >
             {error}
           </p>
         )}
 
-        <button className="primary-button" disabled={busy} type="submit">
+        <button
+          className="primary-button"
+          disabled={busy}
+          type="submit"
+        >
           {busy ? "Signing in…" : "Sign In"}
         </button>
 

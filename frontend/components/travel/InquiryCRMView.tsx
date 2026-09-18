@@ -29,7 +29,7 @@ export function InquiryCRMView(props: PlatformViewProps) {
                       <small>
                         {String(inquiry.source)} · {String(inquiry.owner)}
                       </small>
-                      <b>{money(inquiry.estimatedValuePaise)}</b>
+                      <b>{money(inquiry.estimatedValueRupees)}</b>
                     </div>
                     <em>Follow-up {dateTime(inquiry.followUpAt)}</em>
                   </article>

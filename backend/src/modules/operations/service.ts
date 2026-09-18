@@ -758,7 +758,7 @@ async function submitInspection(
         status: 'PENDING_REVIEW',
         policyRuleId: policy.id,
         policyLabel: policy.label,
-        policyLiabilityPaise: policy.liabilityCapPaise,
+        policyLiabilityRupees: policy.liabilityCapRupees,
         reportedBy: c.actor.name,
         reportedAt: timestamp,
         version: 1,
@@ -925,10 +925,10 @@ async function resolveDamage(
       );
     }
 
-    const repairCostPaise =
+    const repairCostRupees =
       decision === 'POST_CHARGE'
         ? integer(
-            raw.repairCostPaise ?? raw.amountPaise,
+            raw.repairCostRupees ?? raw.amountRupees,
             'Repair cost',
           )
         : 0;
@@ -936,8 +936,8 @@ async function resolveDamage(
     const amount =
       decision === 'POST_CHARGE'
         ? calculatePolicyDamageCharge(
-            repairCostPaise,
-            Number(row.report.policyLiabilityPaise),
+            repairCostRupees,
+            Number(row.report.policyLiabilityRupees),
           )
         : 0;
 
@@ -949,9 +949,9 @@ async function resolveDamage(
       .update(damageReports)
       .set({
         status,
-        repairCostPaise:
-          decision === 'POST_CHARGE' ? repairCostPaise : null,
-        chargeAmountPaise: amount || null,
+        repairCostRupees:
+          decision === 'POST_CHARGE' ? repairCostRupees : null,
+        chargeAmountRupees: amount || null,
         folioLineId: lineId,
         decisionNote:
           String(raw.decisionNote ?? '').slice(0, 500) || null,
@@ -984,16 +984,16 @@ async function resolveDamage(
         description: `Room damage: ${row.report.description}`,
         category: 'DAMAGE',
         quantity: 1,
-        unitAmountPaise: amount,
+        unitAmountRupees: amount,
         taxRateBps: 0,
-        lineTotalPaise: amount,
-        subtotalPaise: amount,
-        discountPaise: 0,
-        taxableAmountPaise: amount,
-        taxPaise: 0,
-        cgstPaise: 0,
-        sgstPaise: 0,
-        igstPaise: 0,
+        lineTotalRupees: amount,
+        subtotalRupees: amount,
+        discountRupees: 0,
+        taxableAmountRupees: amount,
+        taxRupees: 0,
+        cgstRupees: 0,
+        sgstRupees: 0,
+        igstRupees: 0,
         sourceType: 'DAMAGE_REPORT',
         sourceId: id,
         postedBy: c.actor.id,
@@ -1006,10 +1006,10 @@ async function resolveDamage(
       .update(folios)
       .set({
         status: 'CHECKOUT_READY',
-        subtotalPaise: row.folio.subtotalPaise + amount,
-        taxableAmountPaise: row.folio.taxableAmountPaise + amount,
-        totalPaise: row.folio.totalPaise + amount,
-        outstandingPaise: row.folio.outstandingPaise + amount,
+        subtotalRupees: row.folio.subtotalRupees + amount,
+        taxableAmountRupees: row.folio.taxableAmountRupees + amount,
+        totalRupees: row.folio.totalRupees + amount,
+        outstandingRupees: row.folio.outstandingRupees + amount,
         updatedAt: timestamp,
         version: row.folio.version + 1,
       })
@@ -1039,7 +1039,7 @@ async function resolveDamage(
     return {
       reportId: id,
       status,
-      amountPaise: amount,
+      amountRupees: amount,
       folioLineId: lineId,
     };
   });
@@ -1079,7 +1079,7 @@ async function upsertInventory(
 
   const currentQuantity = integer(raw.currentQuantity, 'Current quantity');
   const minimumQuantity = integer(raw.minimumQuantity, 'Minimum quantity');
-  const unitCostPaise = integer(raw.unitCostPaise, 'Unit cost');
+  const unitCostRupees = integer(raw.unitCostRupees, 'Unit cost');
 
   return getDb().transaction(async (db) => {
     const existing = id
@@ -1128,7 +1128,7 @@ async function upsertInventory(
       unit,
       currentQuantity,
       minimumQuantity,
-      unitCostPaise,
+      unitCostRupees,
       updatedAt: timestamp,
     };
 

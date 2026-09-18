@@ -439,14 +439,14 @@ async function recalculate(
       lines.map(
         (line) => ({
           ...line,
-          totalPaise:
-            line.lineTotalPaise,
+          totalRupees:
+            line.lineTotalRupees,
         }),
       ),
 
       ledger.map(
         (payment) =>
-          payment.amountPaise,
+          payment.amountRupees,
       ),
 
       ledger
@@ -457,7 +457,7 @@ async function recalculate(
         )
         .map(
           (payment) =>
-            payment.amountPaise,
+            payment.amountRupees,
         ),
 
       refunds
@@ -468,7 +468,7 @@ async function recalculate(
         )
         .map(
           (refund) =>
-            refund.amountPaise,
+            refund.amountRupees,
         ),
     );
 
@@ -485,7 +485,7 @@ async function recalculate(
       current.status,
     )
       ? current.status
-      : totals.outstandingPaise <=
+      : totals.outstandingRupees <=
           0
         ? 'SETTLED'
         : 'OPEN';
@@ -493,38 +493,38 @@ async function recalculate(
   await tx
     .update(folios)
     .set({
-      subtotalPaise:
-        totals.subtotalPaise,
+      subtotalRupees:
+        totals.subtotalRupees,
 
-      discountPaise:
-        totals.discountPaise,
+      discountRupees:
+        totals.discountRupees,
 
-      taxableAmountPaise:
-        totals.taxableAmountPaise,
+      taxableAmountRupees:
+        totals.taxableAmountRupees,
 
-      taxPaise:
-        totals.taxPaise,
+      taxRupees:
+        totals.taxRupees,
 
-      cgstPaise:
-        totals.cgstPaise,
+      cgstRupees:
+        totals.cgstRupees,
 
-      sgstPaise:
-        totals.sgstPaise,
+      sgstRupees:
+        totals.sgstRupees,
 
-      igstPaise:
-        totals.igstPaise,
+      igstRupees:
+        totals.igstRupees,
 
-      totalPaise:
-        totals.totalPaise,
+      totalRupees:
+        totals.totalRupees,
 
-      paidPaise:
-        totals.paymentsPaise,
+      paidRupees:
+        totals.paymentsRupees,
 
-      refundedPaise:
-        totals.refundsPaise,
+      refundedRupees:
+        totals.refundsRupees,
 
-      outstandingPaise:
-        totals.outstandingPaise,
+      outstandingRupees:
+        totals.outstandingRupees,
 
       status:
         nextStatus,
@@ -550,12 +550,12 @@ async function recalculate(
 async function restaurantRefundTotals(tx: Tx, c: ReservationContext, rows: Array<{ id: string }>) {
   const totals = new Map<string, number>();
   const refunds = rows.length ? await tx.select({ id: paymentRefunds.id, paymentId: paymentRefunds.paymentId,
-    amountPaise: paymentRefunds.amountPaise, reason: paymentRefunds.reason, reference: paymentRefunds.reference,
+    amountRupees: paymentRefunds.amountRupees, reason: paymentRefunds.reason, reference: paymentRefunds.reference,
     processedAt: paymentRefunds.processedAt })
     .from(paymentRefunds).where(and(inArray(paymentRefunds.paymentId, rows.map(row => row.id)),
       eq(paymentRefunds.propertyId, c.property.id), eq(paymentRefunds.organisationId, c.actor.organisationId),
       eq(paymentRefunds.status, 'RECORDED'))) : [];
-  for (const row of refunds) totals.set(row.paymentId, (totals.get(row.paymentId) ?? 0) + row.amountPaise);
+  for (const row of refunds) totals.set(row.paymentId, (totals.get(row.paymentId) ?? 0) + row.amountRupees);
   return { totals, refunds };
 }
 
@@ -582,15 +582,15 @@ export class BillingService {
       )) : [];
       const auditByPayment = new Map(audits.map(entry => [entry.entityId, entry.newValue]));
       const refundTotals = await restaurantRefundTotals(tx, c, rows);
-      const paidPaise = rows.filter(payment => payment.status === 'RECEIVED').reduce((sum, payment) => sum + payment.amountPaise - (refundTotals.totals.get(payment.id) ?? 0), 0);
+      const paidRupees = rows.filter(payment => payment.status === 'RECEIVED').reduce((sum, payment) => sum + payment.amountRupees - (refundTotals.totals.get(payment.id) ?? 0), 0);
       const postedToFolio = Boolean(order.reservationId) || order.paymentStatus === 'POSTED_TO_FOLIO';
       return {
-        restaurantOrderId: order.id, totalPaise: order.totalPaise, paidPaise,
-        outstandingPaise: postedToFolio ? null : Math.max(0, order.totalPaise - paidPaise),
-        paymentStatus: postedToFolio ? 'POSTED_TO_FOLIO' : paidPaise >= order.totalPaise ? 'PAID' : paidPaise > 0 ? 'PARTIALLY_PAID' : 'UNPAID',
+        restaurantOrderId: order.id, totalRupees: order.totalRupees, paidRupees,
+        outstandingRupees: postedToFolio ? null : Math.max(0, order.totalRupees - paidRupees),
+        paymentStatus: postedToFolio ? 'POSTED_TO_FOLIO' : paidRupees >= order.totalRupees ? 'PAID' : paidRupees > 0 ? 'PARTIALLY_PAID' : 'UNPAID',
         payments: rows.map(payment => {
-          let amountReceivedPaise: number | null = null;
-          try { amountReceivedPaise = restaurantTender(payment, auditByPayment.get(payment.id)); }
+          let amountReceivedRupees: number | null = null;
+          try { amountReceivedRupees = restaurantTender(payment, auditByPayment.get(payment.id)); }
           catch (error) {
             if (!(error instanceof DomainError) || error.code !== 'PAYMENT_TENDER_UNAVAILABLE') throw error;
           }
@@ -598,13 +598,13 @@ export class BillingService {
             paymentId: payment.id, paymentNumber: payment.paymentNumber, receivedAt: payment.receivedAt,
             method: payment.method, status: payment.status, reference: payment.reference,
             reversalReason: payment.reversalReason, reversedAt: payment.reversedAt,
-            amountAppliedPaise: payment.amountPaise, amountReceivedPaise,
+            amountAppliedRupees: payment.amountRupees, amountReceivedRupees,
             refunds: refundTotals.refunds.filter(refund => refund.paymentId === payment.id),
-            refundedPaise: refundTotals.totals.get(payment.id) ?? 0,
-            refundablePaise: payment.status === 'RECEIVED' ? payment.amountPaise - (refundTotals.totals.get(payment.id) ?? 0) : 0,
-            changeDuePaise: amountReceivedPaise === null ? null : amountReceivedPaise - payment.amountPaise,
-            receiptAvailable: amountReceivedPaise !== null,
-            receiptUnavailableReason: amountReceivedPaise === null ? 'Original cash tender details are unavailable. Contact accounts.' : null,
+            refundedRupees: refundTotals.totals.get(payment.id) ?? 0,
+            refundableRupees: payment.status === 'RECEIVED' ? payment.amountRupees - (refundTotals.totals.get(payment.id) ?? 0) : 0,
+            changeDueRupees: amountReceivedRupees === null ? null : amountReceivedRupees - payment.amountRupees,
+            receiptAvailable: amountReceivedRupees !== null,
+            receiptUnavailableReason: amountReceivedRupees === null ? 'Original cash tender details are unavailable. Contact accounts.' : null,
           };
         }),
       };
@@ -632,44 +632,44 @@ export class BillingService {
         eq(payments.restaurantOrderId, orderId), eq(payments.status, 'RECEIVED'),
       ));
       const refundTotals = await restaurantRefundTotals(tx, c, receivedPayments);
-      const paidPaise = receivedPayments.reduce((sum, payment) => sum + payment.amountPaise - (refundTotals.totals.get(payment.id) ?? 0), 0);
+      const paidRupees = receivedPayments.reduce((sum, payment) => sum + payment.amountRupees - (refundTotals.totals.get(payment.id) ?? 0), 0);
       if (existing) {
         const [originalAudit] = await tx.select().from(auditLogs).where(and(
           eq(auditLogs.entityId, existing.id), eq(auditLogs.entity, 'PAYMENT'),
           eq(auditLogs.action, 'PAYMENT_RECEIVED'), eq(auditLogs.propertyId, c.property.id),
         )).limit(1);
-        const amountReceivedPaise = restaurantTender(existing, originalAudit?.newValue);
-        assertRestaurantPaymentReplay(existing, amountReceivedPaise, input);
+        const amountReceivedRupees = restaurantTender(existing, originalAudit?.newValue);
+        assertRestaurantPaymentReplay(existing, amountReceivedRupees, input);
         return { restaurantOrderId: orderId, paymentId: existing.id, paymentNumber: existing.paymentNumber,
-          receivedAt: existing.receivedAt, method: existing.method, amountAppliedPaise: existing.amountPaise,
-          amountReceivedPaise, changeDuePaise: amountReceivedPaise - existing.amountPaise,
-          reference: existing.reference, orderTotalPaise: order.totalPaise, paidPaise,
-          outstandingPaise: Math.max(0, order.totalPaise - paidPaise), paymentStatus: paidPaise >= order.totalPaise ? 'PAID' : paidPaise > 0 ? 'PARTIALLY_PAID' : 'UNPAID',
+          receivedAt: existing.receivedAt, method: existing.method, amountAppliedRupees: existing.amountRupees,
+          amountReceivedRupees, changeDueRupees: amountReceivedRupees - existing.amountRupees,
+          reference: existing.reference, orderTotalRupees: order.totalRupees, paidRupees,
+          outstandingRupees: Math.max(0, order.totalRupees - paidRupees), paymentStatus: paidRupees >= order.totalRupees ? 'PAID' : paidRupees > 0 ? 'PARTIALLY_PAID' : 'UNPAID',
           customerName: order.customerName, customerPhone: order.customerPhone, items };
       }
-      const amounts = restaurantSettlement(order.totalPaise, paidPaise, input);
+      const amounts = restaurantSettlement(order.totalRupees, paidRupees, input);
       const profile = await propertyProfile(tx, c);
       const issued = await nextNumber(tx, c.property.id, new Date(), 'RECEIPT', profile.receiptPrefix);
       const timestamp = now();
       const [payment] = await tx.insert(payments).values({
         id: crypto.randomUUID(), organisationId: c.actor.organisationId, propertyId: c.property.id,
         folioId: null, reservationId: null, restaurantOrderId: orderId,
-        paymentNumber: issued.number, method: input.method, amountPaise: amounts.amountAppliedPaise,
+        paymentNumber: issued.number, method: input.method, amountRupees: amounts.amountAppliedRupees,
         reference: input.reference, status: 'RECEIVED', idempotencyKey: input.idempotencyKey,
         receivedAt: timestamp, receivedBy: c.actor.id, createdAt: timestamp, updatedAt: timestamp,
       }).returning();
-      await tx.update(restaurantOrders).set({ paidPaise: amounts.paidPaise,
+      await tx.update(restaurantOrders).set({ paidRupees: amounts.paidRupees,
         paymentStatus: amounts.paymentStatus, settledAt: amounts.paymentStatus === 'PAID' ? timestamp : null,
       }).where(eq(restaurantOrders.id, orderId));
       await audit(tx, c, 'PAYMENT_RECEIVED', 'PAYMENT', payment.id, {
-        restaurantOrderId: orderId, amountPaise: payment.amountPaise, method: payment.method,
-        reference: payment.reference, amountReceivedPaise: input.amountPaise, changeDuePaise: amounts.changeDuePaise,
+        restaurantOrderId: orderId, amountRupees: payment.amountRupees, method: payment.method,
+        reference: payment.reference, amountReceivedRupees: input.amountRupees, changeDueRupees: amounts.changeDueRupees,
       });
       return { restaurantOrderId: orderId, paymentId: payment.id, paymentNumber: payment.paymentNumber,
-        receivedAt: payment.receivedAt, method: payment.method, amountAppliedPaise: payment.amountPaise,
-        amountReceivedPaise: input.amountPaise, changeDuePaise: amounts.changeDuePaise,
-        reference: payment.reference, orderTotalPaise: order.totalPaise, paidPaise: amounts.paidPaise,
-        outstandingPaise: amounts.outstandingPaise, paymentStatus: amounts.paymentStatus,
+        receivedAt: payment.receivedAt, method: payment.method, amountAppliedRupees: payment.amountRupees,
+        amountReceivedRupees: input.amountRupees, changeDueRupees: amounts.changeDueRupees,
+        reference: payment.reference, orderTotalRupees: order.totalRupees, paidRupees: amounts.paidRupees,
+        outstandingRupees: amounts.outstandingRupees, paymentStatus: amounts.paymentStatus,
         customerName: order.customerName, customerPhone: order.customerPhone, items };
     });
   }
@@ -811,37 +811,37 @@ export class BillingService {
               status:
                 'OPEN',
 
-              subtotalPaise:
+              subtotalRupees:
                 0,
 
-              taxPaise:
+              taxRupees:
                 0,
 
-              totalPaise:
+              totalRupees:
                 0,
 
-              discountPaise:
+              discountRupees:
                 0,
 
-              taxableAmountPaise:
+              taxableAmountRupees:
                 0,
 
-              cgstPaise:
+              cgstRupees:
                 0,
 
-              sgstPaise:
+              sgstRupees:
                 0,
 
-              igstPaise:
+              igstRupees:
                 0,
 
-              paidPaise:
+              paidRupees:
                 0,
 
-              refundedPaise:
+              refundedRupees:
                 0,
 
-              outstandingPaise:
+              outstandingRupees:
                 0,
 
               updatedAt:
@@ -1157,7 +1157,7 @@ export class BillingService {
         ) {
           const accommodationTaxRateBps =
             hotelAccommodationGstRateBps(
-              reservation.nightlyRatePaise,
+              reservation.nightlyRateRupees,
               date,
               reservation.taxRateBps,
             );
@@ -1165,7 +1165,7 @@ export class BillingService {
           const values =
             calculateLine(
               1,
-              reservation.nightlyRatePaise,
+              reservation.nightlyRateRupees,
               0,
               accommodationTaxRateBps,
               (
@@ -1201,14 +1201,14 @@ export class BillingService {
               quantity:
                 1,
 
-              unitAmountPaise:
-                reservation.nightlyRatePaise,
+              unitAmountRupees:
+                reservation.nightlyRateRupees,
 
               taxRateBps:
                 accommodationTaxRateBps,
 
-              lineTotalPaise:
-                values.totalPaise,
+              lineTotalRupees:
+                values.totalRupees,
 
               ...values,
 
@@ -1301,7 +1301,7 @@ export class BillingService {
         const values =
           calculateLine(
             input.quantity,
-            input.unitAmountPaise,
+            input.unitAmountRupees,
             0,
             input.taxRateBps ??
               profile.defaultTaxRateBps,
@@ -1335,15 +1335,15 @@ export class BillingService {
             quantity:
               input.quantity,
 
-            unitAmountPaise:
-              input.unitAmountPaise,
+            unitAmountRupees:
+              input.unitAmountRupees,
 
             taxRateBps:
               input.taxRateBps ??
               profile.defaultTaxRateBps,
 
-            lineTotalPaise:
-              values.totalPaise,
+            lineTotalRupees:
+              values.totalRupees,
 
             ...values,
 
@@ -1374,8 +1374,8 @@ export class BillingService {
             category:
               input.category,
 
-            amountPaise:
-              values.totalPaise,
+            amountRupees:
+              values.totalRupees,
           },
         );
 
@@ -1426,10 +1426,10 @@ export class BillingService {
         const discount =
           input.kind ===
           'FIXED'
-            ? input.amountPaise
+            ? input.amountRupees
             : Math.round(
                 (
-                  folio.subtotalPaise *
+                  folio.subtotalRupees *
                   input.percentageBps
                 ) /
                   10000,
@@ -1437,8 +1437,8 @@ export class BillingService {
 
         if (
           discount >
-          folio.subtotalPaise -
-            folio.discountPaise
+          folio.subtotalRupees -
+            folio.discountRupees
         ) {
           throw new DomainError(
             'DISCOUNT_EXCEEDS_CHARGES',
@@ -1486,35 +1486,35 @@ export class BillingService {
             quantity:
               1,
 
-            unitAmountPaise:
+            unitAmountRupees:
               0,
 
             taxRateBps:
               profile.defaultTaxRateBps,
 
-            lineTotalPaise:
-              -tax.totalPaise,
+            lineTotalRupees:
+              -tax.totalRupees,
 
-            subtotalPaise:
+            subtotalRupees:
               0,
 
-            discountPaise:
+            discountRupees:
               discount,
 
-            taxableAmountPaise:
+            taxableAmountRupees:
               -discount,
 
-            taxPaise:
-              -tax.taxPaise,
+            taxRupees:
+              -tax.taxRupees,
 
-            cgstPaise:
-              -tax.cgstPaise,
+            cgstRupees:
+              -tax.cgstRupees,
 
-            sgstPaise:
-              -tax.sgstPaise,
+            sgstRupees:
+              -tax.sgstRupees,
 
-            igstPaise:
-              -tax.igstPaise,
+            igstRupees:
+              -tax.igstRupees,
 
             source:
               'MANUAL',
@@ -1540,7 +1540,7 @@ export class BillingService {
           'FOLIO',
           folioId,
           {
-            amountPaise:
+            amountRupees:
               discount,
 
             reason:
@@ -1657,8 +1657,8 @@ export class BillingService {
               method:
                 input.method,
 
-              amountPaise:
-                input.amountPaise,
+              amountRupees:
+                input.amountRupees,
 
               reference:
                 input.reference,
@@ -1699,8 +1699,8 @@ export class BillingService {
           'PAYMENT',
           payment.id,
           {
-            amountPaise:
-              payment.amountPaise,
+            amountRupees:
+              payment.amountRupees,
 
             method:
               payment.method,
@@ -1797,17 +1797,17 @@ export class BillingService {
             eq(payments.organisationId, c.actor.organisationId), eq(payments.status, 'RECEIVED'),
           ));
           const refundTotals = await restaurantRefundTotals(tx, c, active);
-          const paidPaise = active.filter(row => row.id !== paymentId).reduce((sum, row) => sum + row.amountPaise - (refundTotals.totals.get(row.id) ?? 0), 0);
+          const paidRupees = active.filter(row => row.id !== paymentId).reduce((sum, row) => sum + row.amountRupees - (refundTotals.totals.get(row.id) ?? 0), 0);
           const timestamp = now();
           const [updated] = await tx.update(payments).set({ status: 'REVERSED', reversedAt: timestamp,
             reversedBy: c.actor.id, reversalReason: input.reason, updatedAt: timestamp,
           }).where(eq(payments.id, paymentId)).returning();
-          await tx.update(restaurantOrders).set({ paidPaise,
-            paymentStatus: paidPaise >= order.totalPaise ? 'PAID' : paidPaise > 0 ? 'PARTIALLY_PAID' : 'UNPAID',
-            settledAt: paidPaise >= order.totalPaise ? order.settledAt : null,
+          await tx.update(restaurantOrders).set({ paidRupees,
+            paymentStatus: paidRupees >= order.totalRupees ? 'PAID' : paidRupees > 0 ? 'PARTIALLY_PAID' : 'UNPAID',
+            settledAt: paidRupees >= order.totalRupees ? order.settledAt : null,
           }).where(eq(restaurantOrders.id, order.id));
           await audit(tx, c, 'PAYMENT_REVERSED', 'PAYMENT', paymentId, {
-            restaurantOrderId: order.id, amountPaise: payment.amountPaise, reason: input.reason,
+            restaurantOrderId: order.id, amountRupees: payment.amountRupees, reason: input.reason,
           });
           return updated;
         }
@@ -1902,8 +1902,8 @@ export class BillingService {
           'PAYMENT',
           paymentId,
           {
-            amountPaise:
-              payment.amountPaise,
+            amountRupees:
+              payment.amountRupees,
 
             reason:
               input.reason,
@@ -2022,7 +2022,7 @@ export class BillingService {
             .limit(1);
 
         if (existing) {
-          if (existing.amountPaise !== input.amountPaise || existing.reason !== input.reason ||
+          if (existing.amountRupees !== input.amountRupees || existing.reason !== input.reason ||
               (existing.reference ?? '') !== (input.reference ?? '')) {
             throw new DomainError('IDEMPOTENCY_CONFLICT', 'This refund key was used with different details.', 409);
           }
@@ -2055,14 +2055,14 @@ export class BillingService {
               row,
             ) =>
               sum +
-              row.amountPaise,
+              row.amountRupees,
             0,
           );
 
         if (
           alreadyRefunded +
-            input.amountPaise >
-          payment.amountPaise
+            input.amountRupees >
+          payment.amountRupees
         ) {
           throw new DomainError(
             'REFUND_EXCEEDS_PAYMENT',
@@ -2092,8 +2092,8 @@ export class BillingService {
 
               paymentId,
 
-              amountPaise:
-                input.amountPaise,
+              amountRupees:
+                input.amountRupees,
 
               reason:
                 input.reason,
@@ -2121,10 +2121,10 @@ export class BillingService {
             eq(payments.organisationId, c.actor.organisationId), eq(payments.status, 'RECEIVED'),
           ));
           const totals = await restaurantRefundTotals(tx, c, active);
-          const paidPaise = active.reduce((sum, row) => sum + row.amountPaise - (totals.totals.get(row.id) ?? 0), 0);
-          await tx.update(restaurantOrders).set({ paidPaise,
-            paymentStatus: paidPaise >= order.totalPaise ? 'PAID' : paidPaise > 0 ? 'PARTIALLY_PAID' : 'UNPAID',
-            settledAt: paidPaise >= order.totalPaise ? order.settledAt : null,
+          const paidRupees = active.reduce((sum, row) => sum + row.amountRupees - (totals.totals.get(row.id) ?? 0), 0);
+          await tx.update(restaurantOrders).set({ paidRupees,
+            paymentStatus: paidRupees >= order.totalRupees ? 'PAID' : paidRupees > 0 ? 'PARTIALLY_PAID' : 'UNPAID',
+            settledAt: paidRupees >= order.totalRupees ? order.settledAt : null,
           }).where(eq(restaurantOrders.id, order.id));
         } else {
           await recalculate(tx, c, payment.folioId!);
@@ -2138,8 +2138,8 @@ export class BillingService {
           refund.id,
           {
             paymentId, restaurantOrderId, reference: refund.reference,
-            amountPaise:
-              refund.amountPaise,
+            amountRupees:
+              refund.amountRupees,
 
             reason:
               refund.reason,
@@ -2382,26 +2382,26 @@ export class BillingService {
                 profile.billingAddress ??
                 profile.city,
 
-              subtotalPaise:
-                folio.subtotalPaise,
+              subtotalRupees:
+                folio.subtotalRupees,
 
-              discountPaise:
-                folio.discountPaise,
+              discountRupees:
+                folio.discountRupees,
 
-              taxableAmountPaise:
-                folio.taxableAmountPaise,
+              taxableAmountRupees:
+                folio.taxableAmountRupees,
 
-              cgstPaise:
-                folio.cgstPaise,
+              cgstRupees:
+                folio.cgstRupees,
 
-              sgstPaise:
-                folio.sgstPaise,
+              sgstRupees:
+                folio.sgstRupees,
 
-              igstPaise:
-                folio.igstPaise,
+              igstRupees:
+                folio.igstRupees,
 
-              grandTotalPaise:
-                folio.totalPaise,
+              grandTotalRupees:
+                folio.totalRupees,
 
               status:
                 'ISSUED',
@@ -2429,8 +2429,8 @@ export class BillingService {
 
             folioId,
 
-            grandTotalPaise:
-              invoice.grandTotalPaise,
+            grandTotalRupees:
+              invoice.grandTotalRupees,
           },
         );
 
@@ -3019,8 +3019,8 @@ export class BillingService {
                 current.id,
               roomId:
                 room.id,
-              outstandingPaise:
-                current.outstandingPaise,
+              outstandingRupees:
+                current.outstandingRupees,
               folioStatus:
                 'PENDING_INSPECTION',
             },
@@ -3034,8 +3034,8 @@ export class BillingService {
               current.id,
             status:
               'PENDING_INSPECTION',
-            outstandingPaise:
-              current.outstandingPaise,
+            outstandingRupees:
+              current.outstandingRupees,
           };
         }
 
@@ -3065,8 +3065,8 @@ export class BillingService {
               current.id,
             status:
               'CLOSED',
-            outstandingPaise:
-              current.outstandingPaise,
+            outstandingRupees:
+              current.outstandingRupees,
           };
         }
 
@@ -3175,13 +3175,13 @@ export class BillingService {
         }
 
         if (
-          current.outstandingPaise >
+          current.outstandingRupees >
             0 &&
           !input.allowOutstanding
         ) {
           throw new DomainError(
             'OUTSTANDING_BALANCE',
-            `Final checkout is blocked with ${current.outstandingPaise} paise outstanding.`,
+            `Final checkout is blocked with ₹${current.outstandingRupees.toFixed(2)} outstanding.`,
             409,
           );
         }
@@ -3246,8 +3246,8 @@ export class BillingService {
               inspection.id,
             inspectionOutcome:
               inspection.outcome,
-            outstandingPaise:
-              current.outstandingPaise,
+            outstandingRupees:
+              current.outstandingRupees,
             reason:
               input.overrideReason ??
               null,
@@ -3260,8 +3260,8 @@ export class BillingService {
             current.id,
           status:
             'CLOSED',
-          outstandingPaise:
-            current.outstandingPaise,
+          outstandingRupees:
+            current.outstandingRupees,
         };
       },
     );

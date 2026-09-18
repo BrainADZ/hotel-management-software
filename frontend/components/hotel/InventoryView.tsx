@@ -108,7 +108,7 @@ export function InventoryView({
                 <td>
                   {Number(item.minimumQuantity)} {String(item.unit)}
                 </td>
-                <td>{money(item.unitCostPaise)}</td>
+                <td>{money(item.unitCostRupees)}</td>
                 <td>{dateTime(item.updatedAt)}</td>
                 <td>
                   <Status
@@ -180,7 +180,7 @@ function InventoryModal({
     unit: String(item?.unit ?? "piece"),
     currentQuantity: Number(item?.currentQuantity ?? 0),
     minimumQuantity: Number(item?.minimumQuantity ?? 0),
-    unitCostRupees: Number(item?.unitCostPaise ?? 0) / 100,
+    unitCostRupees: Number(item?.unitCostRupees ?? 0),
   });
   const [busy, setBusy] = useState(false);
   async function submit(event: FormEvent) {
@@ -196,7 +196,7 @@ function InventoryModal({
         unit: form.unit,
         currentQuantity: form.currentQuantity,
         minimumQuantity: form.minimumQuantity,
-        unitCostPaise: Math.round(form.unitCostRupees * 100),
+        unitCostRupees: form.unitCostRupees,
       });
     } finally {
       setBusy(false);

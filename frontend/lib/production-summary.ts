@@ -10,7 +10,7 @@ export function productionSummary(property: Row, rooms: Row[], reservations: Row
     travelMetrics: {
       activePackages: rows('packages').filter(row => row.status === 'ACTIVE').length,
       openInquiries: openInquiries.length,
-      pipelineValuePaise: openInquiries.reduce((sum, row) => sum + Number(row.estimatedValuePaise ?? 0), 0),
+      pipelineValueRupees: openInquiries.reduce((sum, row) => sum + Number(row.estimatedValueRupees ?? 0), 0),
       customQuotes: rows('customPackages').length,
       pendingApprovals: rows('discountRequests').filter(row => row.status === 'PENDING').length,
       overdueFollowUps: rows('followUps').filter(row => row.status === 'PENDING' && Date.parse(String(row.dueAt)) < now.getTime()).length,

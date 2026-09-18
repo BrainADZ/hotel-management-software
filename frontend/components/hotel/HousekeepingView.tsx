@@ -569,7 +569,7 @@ export function DamageReviewPanel({
   async function resolve(
     report: Row,
     decision: "POST_CHARGE" | "WAIVE",
-    details: { repairCostPaise?: number; decisionNote?: string } = {},
+    details: { repairCostRupees?: number; decisionNote?: string } = {},
   ) {
     setBusyId(String(report.id));
     try {
@@ -631,7 +631,7 @@ export function DamageReviewPanel({
             <div className="damage-policy-inline">
               <span>{String(report.policyLabel ?? "Hotel damage policy")}</span>
               <strong>
-                Liability up to {money(report.policyLiabilityPaise)}
+                Liability up to {money(report.policyLiabilityRupees)}
               </strong>
             </div>
             <div className="service-actions">
@@ -686,20 +686,20 @@ export function DamageChargeModal({
   report: Row | ReservationInspectionSummary;
   onClose: () => void;
   onSave: (details: {
-    repairCostPaise: number;
+    repairCostRupees: number;
     decisionNote: string;
   }) => Promise<void>;
 }) {
-  const policyLiabilityPaise = Number(report.policyLiabilityPaise ?? 0);
+  const policyLiabilityRupees = Number(report.policyLiabilityRupees ?? 0);
   const [repairCost, setRepairCost] = useState(() =>
-    Math.max(1, Math.round(policyLiabilityPaise / 100)),
+    Math.max(1, policyLiabilityRupees),
   );
   const [decisionNote, setDecisionNote] = useState(
     "Repair estimate reviewed against hotel policy.",
   );
   const [busy, setBusy] = useState(false);
-  const repairCostPaise = Math.round(repairCost * 100);
-  const chargePreviewPaise = Math.min(repairCostPaise, policyLiabilityPaise);
+  const repairCostRupees = repairCost;
+  const chargePreviewRupees = Math.min(repairCostRupees, policyLiabilityRupees);
   const description =
     "damageDescription" in report
       ? report.damageDescription
@@ -720,7 +720,7 @@ export function DamageChargeModal({
           event.preventDefault();
           setBusy(true);
           try {
-            await onSave({ repairCostPaise, decisionNote });
+            await onSave({ repairCostRupees, decisionNote });
           } finally {
             setBusy(false);
           }
@@ -745,7 +745,7 @@ export function DamageChargeModal({
           <AppGlyph name="policy" size={34} />
           <span>
             <small>{String(report.policyLabel ?? "Hotel damage policy")}</small>
-            <strong>Liability limit {money(policyLiabilityPaise)}</strong>
+            <strong>Liability limit {money(policyLiabilityRupees)}</strong>
             <em>{String(report.severity ?? "Damage")} severity</em>
           </span>
         </div>
@@ -780,12 +780,12 @@ export function DamageChargeModal({
         <div className="charge-preview">
           <span>
             <small>Repair estimate</small>
-            <strong>{money(repairCostPaise)}</strong>
+            <strong>{money(repairCostRupees)}</strong>
           </span>
           <AppGlyph name="charge-receipt" size={28} />
           <span>
             <small>Guest charge</small>
-            <strong>{money(chargePreviewPaise)}</strong>
+            <strong>{money(chargePreviewRupees)}</strong>
           </span>
         </div>
         <div className="modal-actions">
@@ -795,7 +795,7 @@ export function DamageChargeModal({
           <button
             type="submit"
             className="primary-button"
-            disabled={busy || policyLiabilityPaise <= 0}
+            disabled={busy || policyLiabilityRupees <= 0}
           >
             {busy ? "Posting…" : "Post policy charge"}
           </button>

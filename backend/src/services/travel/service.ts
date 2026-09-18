@@ -64,35 +64,35 @@ export class TravelService {
     return db.transaction(async tx => {
       const assets = await tx.select().from(travelAssets).where(and(eq(travelAssets.organisationId, c.organisation.id), eq(travelAssets.active, true), inArray(travelAssets.id, assetIds)));
       if (assets.length !== assetIds.length) throw new DomainError('PACKAGE_ASSET_UNAVAILABLE', 'One or more selected assets are unavailable.', 409);
-      const items = assets.map(asset => ({ asset, quantity: quantities.get(asset.id)!, lineTotalPaise: asset.unitPricePaise * quantities.get(asset.id)! }));
-      const subtotal = items.reduce((sum, item) => sum + item.lineTotalPaise, 0), canPrice = roleCan(c.actor.role, 'travel.pricing.manage');
-      const base = canPrice && input.basePricePaise ? input.basePricePaise : subtotal;
-      const floor = canPrice && input.floorPricePaise !== undefined ? input.floorPricePaise : Math.round(base * .9);
+      const items = assets.map(asset => ({ asset, quantity: quantities.get(asset.id)!, lineTotalRupees: asset.unitPriceRupees * quantities.get(asset.id)! }));
+      const subtotal = items.reduce((sum, item) => sum + item.lineTotalRupees, 0), canPrice = roleCan(c.actor.role, 'travel.pricing.manage');
+      const base = canPrice && input.basePriceRupees ? input.basePriceRupees : subtotal;
+      const floor = canPrice && input.floorPriceRupees !== undefined ? input.floorPriceRupees : Math.round(base * .9);
       if (floor > base) throw new DomainError('INVALID_PACKAGE_PRICING', 'Floor price cannot exceed base price.', 400);
-      const belowFloor = input.quotedPricePaise < floor, reason = input.discountReason?.trim() ?? '';
+      const belowFloor = input.quotedPriceRupees < floor, reason = input.discountReason?.trim() ?? '';
       if (belowFloor && !canPrice && reason.length < 5) throw new DomainError('DISCOUNT_REASON_REQUIRED', 'A reason is required for a below-floor quote.', 400);
       const packageId = id(), timestamp = now(), reference = `PKG-${Date.now().toString().slice(-7)}-${id().slice(0, 3).toUpperCase()}`;
       const status = belowFloor && !canPrice ? 'DISCOUNT_REQUESTED' : 'READY_TO_SEND';
-      const record = { id: packageId, organisationId: c.organisation.id, reference, clientName: input.clientName, name: input.name, ownerId: c.actor.id, ownerName: c.actor.name, assetSubtotalPaise: subtotal, basePricePaise: base, floorPricePaise: floor, quotedPricePaise: input.quotedPricePaise, status, version: 1, createdAt: timestamp, updatedAt: timestamp };
+      const record = { id: packageId, organisationId: c.organisation.id, reference, clientName: input.clientName, name: input.name, ownerId: c.actor.id, ownerName: c.actor.name, assetSubtotalRupees: subtotal, basePriceRupees: base, floorPriceRupees: floor, quotedPriceRupees: input.quotedPriceRupees, status, version: 1, createdAt: timestamp, updatedAt: timestamp };
       await tx.insert(customTravelPackages).values(record);
-      await tx.insert(customTravelPackageItems).values(items.map(item => ({ id: id(), packageId, assetId: item.asset.id, assetName: item.asset.name, category: item.asset.category, pricingUnit: item.asset.pricingUnit, quantity: item.quantity, unitPricePaise: item.asset.unitPricePaise, lineTotalPaise: item.lineTotalPaise })));
+      await tx.insert(customTravelPackageItems).values(items.map(item => ({ id: id(), packageId, assetId: item.asset.id, assetName: item.asset.name, category: item.asset.category, pricingUnit: item.asset.pricingUnit, quantity: item.quantity, unitPriceRupees: item.asset.unitPriceRupees, lineTotalRupees: item.lineTotalRupees })));
       let discountRequestId: string | null = null;
-      if (belowFloor && !canPrice) { discountRequestId = id(); await tx.insert(travelDiscountRequests).values({ id: discountRequestId, organisationId: c.organisation.id, packageId, packageVersion: 1, requestedById: c.actor.id, requestedByName: c.actor.name, requestedPricePaise: input.quotedPricePaise, basePricePaise: base, floorPricePaise: floor, reason, status: 'PENDING', createdAt: timestamp }); }
+      if (belowFloor && !canPrice) { discountRequestId = id(); await tx.insert(travelDiscountRequests).values({ id: discountRequestId, organisationId: c.organisation.id, packageId, packageVersion: 1, requestedById: c.actor.id, requestedByName: c.actor.name, requestedPriceRupees: input.quotedPriceRupees, basePriceRupees: base, floorPriceRupees: floor, reason, status: 'PENDING', createdAt: timestamp }); }
       await audit(tx, c, 'CUSTOM_PACKAGE_CREATED', 'CUSTOM_TRAVEL_PACKAGE', packageId, null, record);
-      return { packageId, reference, status, assetSubtotalPaise: subtotal, basePricePaise: base, floorPricePaise: floor, quotedPricePaise: input.quotedPricePaise, discountRequestId };
+      return { packageId, reference, status, assetSubtotalRupees: subtotal, basePriceRupees: base, floorPriceRupees: floor, quotedPriceRupees: input.quotedPriceRupees, discountRequestId };
     });
   }
 
   async setPackagePricing(c: TravelContext, packageId: string, raw: unknown) {
     assertRoleCan(c.actor.role, 'travel.pricing.manage');
     const input = packagePricingSchema.parse(raw), db = getDb();
-    if (input.floorPricePaise > input.basePricePaise) throw new DomainError('INVALID_PACKAGE_PRICING', 'Floor price cannot exceed base price.', 400);
+    if (input.floorPriceRupees > input.basePriceRupees) throw new DomainError('INVALID_PACKAGE_PRICING', 'Floor price cannot exceed base price.', 400);
     return db.transaction(async tx => {
       const previous = (await tx.select().from(customTravelPackages).where(and(eq(customTravelPackages.id, packageId), eq(customTravelPackages.organisationId, c.organisation.id))).limit(1))[0];
       if (!previous) throw new DomainError('NOT_FOUND', 'Custom package not found.', 404);
       if (input.expectedVersion && input.expectedVersion !== previous.version) throw new DomainError('STALE_PACKAGE', 'Package pricing changed. Refresh and try again.', 409);
-      const timestamp = now(), version = previous.version + 1, status = previous.quotedPricePaise < input.floorPricePaise ? 'NEEDS_REPRICE' : 'READY_TO_SEND';
-      await tx.update(customTravelPackages).set({ basePricePaise: input.basePricePaise, floorPricePaise: input.floorPricePaise, status, version, updatedAt: timestamp }).where(and(eq(customTravelPackages.id, packageId), eq(customTravelPackages.organisationId, c.organisation.id), eq(customTravelPackages.version, previous.version)));
+      const timestamp = now(), version = previous.version + 1, status = previous.quotedPriceRupees < input.floorPriceRupees ? 'NEEDS_REPRICE' : 'READY_TO_SEND';
+      await tx.update(customTravelPackages).set({ basePriceRupees: input.basePriceRupees, floorPriceRupees: input.floorPriceRupees, status, version, updatedAt: timestamp }).where(and(eq(customTravelPackages.id, packageId), eq(customTravelPackages.organisationId, c.organisation.id), eq(customTravelPackages.version, previous.version)));
       await tx.update(travelDiscountRequests).set({ status: 'STALE', decidedAt: timestamp }).where(and(eq(travelDiscountRequests.organisationId, c.organisation.id), eq(travelDiscountRequests.packageId, packageId), eq(travelDiscountRequests.status, 'PENDING')));
       await audit(tx, c, 'PACKAGE_PRICING_SET', 'CUSTOM_TRAVEL_PACKAGE', packageId, previous, { ...input, status, version });
       return { packageId, ...input, status, version };
@@ -110,7 +110,7 @@ export class TravelService {
       if (row.request.packageVersion !== row.package.version) throw new DomainError('STALE_DISCOUNT_REQUEST', 'Package pricing changed after this request.', 409);
       const timestamp = now(), packageStatus = input.decision === 'APPROVED' ? 'READY_TO_SEND' : 'NEEDS_REPRICE';
       await tx.update(travelDiscountRequests).set({ status: input.decision, reviewedById: c.actor.id, reviewedByName: c.actor.name, decisionNote: input.decisionNote ?? null, decidedAt: timestamp }).where(and(eq(travelDiscountRequests.id, requestId), eq(travelDiscountRequests.organisationId, c.organisation.id), eq(travelDiscountRequests.status, 'PENDING')));
-      await tx.update(customTravelPackages).set({ ...(input.decision === 'APPROVED' ? { quotedPricePaise: row.request.requestedPricePaise } : {}), status: packageStatus, updatedAt: timestamp }).where(and(eq(customTravelPackages.id, row.package.id), eq(customTravelPackages.organisationId, c.organisation.id)));
+      await tx.update(customTravelPackages).set({ ...(input.decision === 'APPROVED' ? { quotedPriceRupees: row.request.requestedPriceRupees } : {}), status: packageStatus, updatedAt: timestamp }).where(and(eq(customTravelPackages.id, row.package.id), eq(customTravelPackages.organisationId, c.organisation.id)));
       await audit(tx, c, `PACKAGE_DISCOUNT_${input.decision}`, 'TRAVEL_DISCOUNT_REQUEST', requestId, row.request, { ...input, packageStatus });
       return { requestId, packageId: row.package.id, status: input.decision, packageStatus };
     });

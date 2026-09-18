@@ -1,6 +1,5 @@
 import { sql } from 'drizzle-orm';
-import { boolean, check, index, integer, jsonb, pgTable, primaryKey, text, timestamp, uniqueIndex } from 'drizzle-orm/pg-core';
-
+import { boolean, check, index, integer, numeric, jsonb, pgTable, primaryKey, text, timestamp, uniqueIndex } from 'drizzle-orm/pg-core';
 export const organisations = pgTable('organisations', {
   id: text('id').primaryKey(),
   name: text('name').notNull(),
@@ -38,10 +37,7 @@ export const properties = pgTable('properties', {
     .default('UNCONFIGURED'),
 }, (table) => [
   uniqueIndex('idx_properties_org_code').on(table.organisationId, table.code),
-  check(
-    'chk_properties_restaurant_gst_profile',
-    sql`${table.restaurantGstProfile} in ('UNCONFIGURED', 'STANDARD_5_NO_ITC', 'SPECIFIED_18_WITH_ITC')`,
-  ),
+  check('chk_properties_restaurant_gst_profile', sql`${table.restaurantGstProfile} in ('UNCONFIGURED', 'STANDARD_5_NO_ITC', 'SPECIFIED_18_WITH_ITC')`),
 ]);
 
 export const appUsers = pgTable('app_users', {
@@ -69,7 +65,9 @@ export const appUsers = pgTable('app_users', {
 
 export const userAuthIdentities = pgTable('user_auth_identities', {
   id: text('id').primaryKey(),
-  userId: text('user_id').references(() => appUsers.id, { onDelete: 'cascade' }),
+  userId: text('user_id').references(() => appUsers.id, {
+    onDelete: 'cascade'
+  }),
   provider: text('provider').notNull(),
   providerSubject: text('provider_subject').notNull(),
   email: text('email').notNull(),
@@ -77,8 +75,12 @@ export const userAuthIdentities = pgTable('user_auth_identities', {
   displayName: text('display_name'),
   avatarUrl: text('avatar_url'),
   status: text('status').notNull().default('PENDING'),
-  createdAt: timestamp('created_at', { withTimezone: true, mode: 'string' }).notNull(),
-  updatedAt: timestamp('updated_at', { withTimezone: true, mode: 'string' }).notNull(),
+  createdAt: timestamp('created_at', {
+    withTimezone: true, mode: 'string'
+  }).notNull(),
+  updatedAt: timestamp('updated_at', {
+    withTimezone: true, mode: 'string'
+  }).notNull(),
 }, (table) => [
   uniqueIndex('idx_user_auth_identity_provider_subject').on(table.provider, table.providerSubject),
   index('idx_user_auth_identity_email').on(table.email),
@@ -86,11 +88,19 @@ export const userAuthIdentities = pgTable('user_auth_identities', {
 
 export const userSessions = pgTable('user_sessions', {
   id: text('id').primaryKey(),
-  userId: text('user_id').notNull().references(() => appUsers.id, { onDelete: 'cascade' }),
+  userId: text('user_id').notNull().references(() => appUsers.id, {
+    onDelete: 'cascade'
+  }),
   tokenHash: text('token_hash').notNull(),
-  expiresAt: timestamp('expires_at', { withTimezone: true, mode: 'string' }).notNull(),
-  createdAt: timestamp('created_at', { withTimezone: true, mode: 'string' }).notNull(),
-  lastUsedAt: timestamp('last_used_at', { withTimezone: true, mode: 'string' }).notNull(),
+  expiresAt: timestamp('expires_at', {
+    withTimezone: true, mode: 'string'
+  }).notNull(),
+  createdAt: timestamp('created_at', {
+    withTimezone: true, mode: 'string'
+  }).notNull(),
+  lastUsedAt: timestamp('last_used_at', {
+    withTimezone: true, mode: 'string'
+  }).notNull(),
 }, (table) => [
   uniqueIndex('idx_user_sessions_token_hash').on(table.tokenHash),
   index('idx_user_sessions_user_expiry').on(table.userId, table.expiresAt),
@@ -102,7 +112,7 @@ export const rooms = pgTable('rooms', {
   number: text('number').notNull(),
   floor: integer('floor').notNull(),
   roomType: text('room_type').notNull(),
-  baseRatePaise: integer('base_rate_paise').notNull(),
+  baseRateRupees: numeric('base_rate_rupees', { precision: 16, scale: 2, mode: 'number' }).notNull(),
   occupancyStatus: text('occupancy_status').notNull(),
   operationalStatus: text('operational_status').notNull(),
   active: boolean('active').notNull().default(true),
@@ -111,6 +121,30 @@ export const rooms = pgTable('rooms', {
 }, (table) => [
   uniqueIndex('idx_rooms_property_number').on(table.propertyId, table.number),
   index('idx_rooms_property_status').on(table.propertyId, table.occupancyStatus, table.operationalStatus),
+]);
+
+export const ratePlans = pgTable('rate_plans', {
+  id: text('id').primaryKey(),
+  propertyId: text('property_id').notNull().references(() => properties.id),
+  code: text('code').notNull(),
+  name: text('name').notNull(),
+  roomType: text('room_type').notNull(),
+  rateRupees: numeric('rate_rupees', { precision: 16, scale: 2, mode: 'number' }).notNull(),
+  mealPlan: text('meal_plan').notNull().default('EP'),
+  refundable: boolean('refundable').notNull().default(true),
+  minStay: integer('min_stay').notNull().default(1),
+  validFrom: text('valid_from'),
+  validTo: text('valid_to'),
+  active: boolean('active').notNull().default(true),
+  version: integer('version').notNull().default(1),
+  updatedAt: text('updated_at').notNull(),
+}, (table) => [
+  uniqueIndex('idx_rate_plans_property_code').on(table.propertyId, table.code),
+  index('idx_rate_plans_property_room_type').on(table.propertyId, table.roomType, table.active),
+  check('chk_rate_plans_rate_nonnegative', sql`${table.rateRupees} >= 0`),
+  check('chk_rate_plans_min_stay', sql`${table.minStay} >= 1 and ${table.minStay} <= 365`),
+  check('chk_rate_plans_meal_plan', sql`${table.mealPlan} in ('EP', 'CP', 'MAP', 'AP')`),
+  check('chk_rate_plans_validity', sql`${table.validFrom} is null or ${table.validTo} is null or ${table.validFrom} <= ${table.validTo}`),
 ]);
 
 export const guests = pgTable('guests', {
@@ -153,7 +187,9 @@ export const reservationGuests = pgTable('reservation_guests', {
   reservationId: text('reservation_id').notNull().references(() => reservations.id),
   guestId: text('guest_id').notNull().references(() => guests.id),
   guestRole: text('guest_role').notNull().default('ACCOMPANYING'),
-  createdAt: timestamp('created_at', { withTimezone: true, mode: 'string' }).notNull(),
+  createdAt: timestamp('created_at', {
+    withTimezone: true, mode: 'string'
+  }).notNull(),
 }, (table) => [
   uniqueIndex('idx_reservation_guests_unique').on(table.reservationId, table.guestId),
   index('idx_reservation_guests_tenant').on(table.organisationId, table.propertyId, table.reservationId),
@@ -170,11 +206,19 @@ export const guestIdentityDocuments = pgTable('guest_identity_documents', {
   issuedAt: text('issued_at'),
   expiresAt: text('expires_at'),
   verified: boolean('verified').notNull().default(false),
-  verifiedAt: timestamp('verified_at', { withTimezone: true, mode: 'string' }),
+  verifiedAt: timestamp('verified_at', {
+    withTimezone: true, mode: 'string'
+  }),
   verifiedBy: text('verified_by').references(() => appUsers.id),
-  createdAt: timestamp('created_at', { withTimezone: true, mode: 'string' }).notNull(),
-  updatedAt: timestamp('updated_at', { withTimezone: true, mode: 'string' }).notNull(),
-}, (table) => [index('idx_guest_identity_tenant_guest').on(table.organisationId, table.propertyId, table.guestId)]);
+  createdAt: timestamp('created_at', {
+    withTimezone: true, mode: 'string'
+  }).notNull(),
+  updatedAt: timestamp('updated_at', {
+    withTimezone: true, mode: 'string'
+  }).notNull(),
+}, (table) => [
+  index('idx_guest_identity_tenant_guest').on(table.organisationId, table.propertyId, table.guestId)
+]);
 
 export const reservations = pgTable('reservations', {
   id: text('id').primaryKey(),
@@ -192,21 +236,27 @@ export const reservations = pgTable('reservations', {
   sourceReference: text('source_reference'),
   adults: integer('adults').notNull().default(1),
   children: integer('children').notNull().default(0),
-  nightlyRatePaise: integer('nightly_rate_paise').notNull().default(0),
+  nightlyRateRupees: numeric('nightly_rate_rupees', { precision: 16, scale: 2, mode: 'number' }).notNull().default(0),
   taxRateBps: integer('tax_rate_bps').notNull().default(0),
-  estimatedTotalPaise: integer('estimated_total_paise').notNull().default(0),
+  estimatedTotalRupees: numeric('estimated_total_rupees', { precision: 16, scale: 2, mode: 'number' }).notNull().default(0),
   specialRequests: text('special_requests'),
   internalNotes: text('internal_notes'),
-  holdUntil: timestamp('hold_until', { withTimezone: true, mode: 'string' }),
+  holdUntil: timestamp('hold_until', {
+    withTimezone: true, mode: 'string'
+  }),
   cancellationReason: text('cancellation_reason'),
-  cancelledAt: timestamp('cancelled_at', { withTimezone: true, mode: 'string' }),
+  cancelledAt: timestamp('cancelled_at', {
+    withTimezone: true, mode: 'string'
+  }),
   cancelledBy: text('cancelled_by').references(() => appUsers.id),
-  noShowAt: timestamp('no_show_at', { withTimezone: true, mode: 'string' }),
+  noShowAt: timestamp('no_show_at', {
+    withTimezone: true, mode: 'string'
+  }),
   noShowBy: text('no_show_by').references(() => appUsers.id),
   createdBy: text('created_by').notNull().references(() => appUsers.id),
   updatedBy: text('updated_by').notNull().references(() => appUsers.id),
-  totalAmountPaise: integer('total_amount_paise').notNull(),
-  balancePaise: integer('balance_paise').notNull(),
+  totalAmountRupees: numeric('total_amount_rupees', { precision: 16, scale: 2, mode: 'number' }).notNull(),
+  balanceRupees: numeric('balance_rupees', { precision: 16, scale: 2, mode: 'number' }).notNull(),
   createdWhilePropertyOffline: boolean('created_while_property_offline').notNull().default(false),
   contactStatus: text('contact_status').notNull().default('NOT_CONTACTED'),
   version: integer('version').notNull().default(1),
@@ -232,25 +282,43 @@ export const stays = pgTable('stays', {
   guestId: text('guest_id').notNull().references(() => guests.id),
   roomId: text('room_id').notNull().references(() => rooms.id),
   status: text('status').notNull().default('IN_HOUSE'),
-  plannedCheckInAt: timestamp('planned_check_in_at', { withTimezone: true, mode: 'string' }).notNull(),
-  plannedCheckOutAt: timestamp('planned_check_out_at', { withTimezone: true, mode: 'string' }).notNull(),
-  actualCheckInAt: timestamp('actual_check_in_at', { withTimezone: true, mode: 'string' }).notNull(),
-  actualCheckOutAt: timestamp('actual_check_out_at', { withTimezone: true, mode: 'string' }),
+  plannedCheckInAt: timestamp('planned_check_in_at', {
+    withTimezone: true, mode: 'string'
+  }).notNull(),
+  plannedCheckOutAt: timestamp('planned_check_out_at', {
+    withTimezone: true, mode: 'string'
+  }).notNull(),
+  actualCheckInAt: timestamp('actual_check_in_at', {
+    withTimezone: true, mode: 'string'
+  }).notNull(),
+  actualCheckOutAt: timestamp('actual_check_out_at', {
+    withTimezone: true, mode: 'string'
+  }),
   checkedInBy: text('checked_in_by').notNull().references(() => appUsers.id),
   checkedOutBy: text('checked_out_by').references(() => appUsers.id),
   earlyCheckIn: boolean('early_check_in').notNull().default(false),
   earlyCheckInOverride: boolean('early_check_in_override').notNull().default(false),
   notes: text('notes'),
   lateCheckoutStatus: text('late_checkout_status'),
-  lateCheckoutRequestedUntil: timestamp('late_checkout_requested_until', { withTimezone: true, mode: 'string' }),
-  lateCheckoutRequestedAt: timestamp('late_checkout_requested_at', { withTimezone: true, mode: 'string' }),
+  lateCheckoutRequestedUntil: timestamp('late_checkout_requested_until', {
+    withTimezone: true, mode: 'string'
+  }),
+  lateCheckoutRequestedAt: timestamp('late_checkout_requested_at', {
+    withTimezone: true, mode: 'string'
+  }),
   lateCheckoutRequestedBy: text('late_checkout_requested_by').references(() => appUsers.id),
-  lateCheckoutDecidedAt: timestamp('late_checkout_decided_at', { withTimezone: true, mode: 'string' }),
+  lateCheckoutDecidedAt: timestamp('late_checkout_decided_at', {
+    withTimezone: true, mode: 'string'
+  }),
   lateCheckoutDecidedBy: text('late_checkout_decided_by').references(() => appUsers.id),
   lateCheckoutDecisionNote: text('late_checkout_decision_note'),
   version: integer('version').notNull().default(1),
-  createdAt: timestamp('created_at', { withTimezone: true, mode: 'string' }).notNull(),
-  updatedAt: timestamp('updated_at', { withTimezone: true, mode: 'string' }).notNull(),
+  createdAt: timestamp('created_at', {
+    withTimezone: true, mode: 'string'
+  }).notNull(),
+  updatedAt: timestamp('updated_at', {
+    withTimezone: true, mode: 'string'
+  }).notNull(),
 }, (table) => [
   uniqueIndex('idx_stays_reservation').on(table.reservationId),
   index('idx_stays_tenant_status').on(table.organisationId, table.propertyId, table.status),
@@ -265,11 +333,17 @@ export const stayKeyIssues = pgTable('stay_key_issues', {
   keyLabel: text('key_label').notNull(),
   quantity: integer('quantity').notNull().default(1),
   status: text('status').notNull().default('ISSUED'),
-  issuedAt: timestamp('issued_at', { withTimezone: true, mode: 'string' }).notNull(),
+  issuedAt: timestamp('issued_at', {
+    withTimezone: true, mode: 'string'
+  }).notNull(),
   issuedBy: text('issued_by').notNull().references(() => appUsers.id),
-  returnedAt: timestamp('returned_at', { withTimezone: true, mode: 'string' }),
+  returnedAt: timestamp('returned_at', {
+    withTimezone: true, mode: 'string'
+  }),
   notes: text('notes'),
-}, (table) => [index('idx_stay_keys_tenant_stay').on(table.organisationId, table.propertyId, table.stayId)]);
+}, (table) => [
+  index('idx_stay_keys_tenant_stay').on(table.organisationId, table.propertyId, table.stayId)
+]);
 
 export const reservationEvents = pgTable('reservation_events', {
   id: text('id').primaryKey(),
@@ -281,7 +355,9 @@ export const reservationEvents = pgTable('reservation_events', {
   newStatus: text('new_status'),
   performedBy: text('performed_by').notNull().references(() => appUsers.id),
   metadata: jsonb('metadata').$type<Record<string, unknown>>(),
-  createdAt: timestamp('created_at', { withTimezone: true, mode: 'string' }).notNull(),
+  createdAt: timestamp('created_at', {
+    withTimezone: true, mode: 'string'
+  }).notNull(),
 }, (table) => [
   index('idx_reservation_events_tenant_reservation_time').on(table.organisationId, table.propertyId, table.reservationId, table.createdAt),
 ]);
@@ -295,18 +371,20 @@ export const folios = pgTable('folios', {
   guestId: text('guest_id').references(() => guests.id),
   stayId: text('stay_id').references(() => stays.id),
   status: text('status').notNull(),
-  subtotalPaise: integer('subtotal_paise').notNull(),
-  taxPaise: integer('tax_paise').notNull(),
-  totalPaise: integer('total_paise').notNull(),
-  discountPaise: integer('discount_paise').notNull().default(0),
-  taxableAmountPaise: integer('taxable_amount_paise').notNull().default(0),
-  cgstPaise: integer('cgst_paise').notNull().default(0),
-  sgstPaise: integer('sgst_paise').notNull().default(0),
-  igstPaise: integer('igst_paise').notNull().default(0),
-  paidPaise: integer('paid_paise').notNull().default(0),
-  refundedPaise: integer('refunded_paise').notNull().default(0),
-  outstandingPaise: integer('outstanding_paise').notNull().default(0),
-  closedAt: timestamp('closed_at', { withTimezone: true, mode: 'string' }),
+  subtotalRupees: numeric('subtotal_rupees', { precision: 16, scale: 2, mode: 'number' }).notNull(),
+  taxRupees: numeric('tax_rupees', { precision: 16, scale: 2, mode: 'number' }).notNull(),
+  totalRupees: numeric('total_rupees', { precision: 16, scale: 2, mode: 'number' }).notNull(),
+  discountRupees: numeric('discount_rupees', { precision: 16, scale: 2, mode: 'number' }).notNull().default(0),
+  taxableAmountRupees: numeric('taxable_amount_rupees', { precision: 16, scale: 2, mode: 'number' }).notNull().default(0),
+  cgstRupees: numeric('cgst_rupees', { precision: 16, scale: 2, mode: 'number' }).notNull().default(0),
+  sgstRupees: numeric('sgst_rupees', { precision: 16, scale: 2, mode: 'number' }).notNull().default(0),
+  igstRupees: numeric('igst_rupees', { precision: 16, scale: 2, mode: 'number' }).notNull().default(0),
+  paidRupees: numeric('paid_rupees', { precision: 16, scale: 2, mode: 'number' }).notNull().default(0),
+  refundedRupees: numeric('refunded_rupees', { precision: 16, scale: 2, mode: 'number' }).notNull().default(0),
+  outstandingRupees: numeric('outstanding_rupees', { precision: 16, scale: 2, mode: 'number' }).notNull().default(0),
+  closedAt: timestamp('closed_at', {
+    withTimezone: true, mode: 'string'
+  }),
   closedBy: text('closed_by').references(() => appUsers.id),
   version: integer('version').notNull().default(1),
   updatedAt: text('updated_at').notNull(),
@@ -324,33 +402,43 @@ export const folioLines = pgTable('folio_lines', {
   description: text('description').notNull(),
   category: text('category').notNull(),
   quantity: integer('quantity').notNull(),
-  unitAmountPaise: integer('unit_amount_paise').notNull(),
+  unitAmountRupees: numeric('unit_amount_rupees', { precision: 16, scale: 2, mode: 'number' }).notNull(),
   taxRateBps: integer('tax_rate_bps').notNull(),
-  lineTotalPaise: integer('line_total_paise').notNull(),
-  subtotalPaise: integer('subtotal_paise').notNull().default(0),
-  discountPaise: integer('discount_paise').notNull().default(0),
-  taxableAmountPaise: integer('taxable_amount_paise').notNull().default(0),
-  taxPaise: integer('tax_paise').notNull().default(0),
-  cgstPaise: integer('cgst_paise').notNull().default(0),
-  sgstPaise: integer('sgst_paise').notNull().default(0),
-  igstPaise: integer('igst_paise').notNull().default(0),
+  lineTotalRupees: numeric('line_total_rupees', { precision: 16, scale: 2, mode: 'number' }).notNull(),
+  subtotalRupees: numeric('subtotal_rupees', { precision: 16, scale: 2, mode: 'number' }).notNull().default(0),
+  discountRupees: numeric('discount_rupees', { precision: 16, scale: 2, mode: 'number' }).notNull().default(0),
+  taxableAmountRupees: numeric('taxable_amount_rupees', { precision: 16, scale: 2, mode: 'number' }).notNull().default(0),
+  taxRupees: numeric('tax_rupees', { precision: 16, scale: 2, mode: 'number' }).notNull().default(0),
+  cgstRupees: numeric('cgst_rupees', { precision: 16, scale: 2, mode: 'number' }).notNull().default(0),
+  sgstRupees: numeric('sgst_rupees', { precision: 16, scale: 2, mode: 'number' }).notNull().default(0),
+  igstRupees: numeric('igst_rupees', { precision: 16, scale: 2, mode: 'number' }).notNull().default(0),
   sourceType: text('source_type'),
   sourceId: text('source_id'),
   serviceDate: text('service_date'),
   postedBy: text('posted_by').references(() => appUsers.id),
-  voidedAt: timestamp('voided_at', { withTimezone: true, mode: 'string' }),
+  voidedAt: timestamp('voided_at', {
+    withTimezone: true, mode: 'string'
+  }),
   voidedBy: text('voided_by').references(() => appUsers.id),
   voidReason: text('void_reason'),
   source: text('source').notNull(),
   createdAt: text('created_at').notNull(),
-}, (table) => [index('idx_folio_lines_folio').on(table.folioId)]);
+}, (table) => [
+  index('idx_folio_lines_folio').on(table.folioId)
+]);
 
 export const financialSequences = pgTable('financial_sequences', {
   propertyId: text('property_id').notNull().references(() => properties.id),
   financialYear: text('financial_year').notNull(),
   sequenceType: text('sequence_type').notNull(),
   nextValue: integer('next_value').notNull().default(1),
-}, (table) => [primaryKey({ columns: [table.propertyId, table.financialYear, table.sequenceType] })]);
+}, (table) => [
+  primaryKey({
+    columns: [
+      table.propertyId, table.financialYear, table.sequenceType
+    ]
+  })
+]);
 
 export const payments = pgTable('payments', {
   id: text('id').primaryKey(),
@@ -365,7 +453,7 @@ export const payments = pgTable('payments', {
   restaurantOrderId: text('restaurant_order_id').references(() => restaurantOrders.id),
   paymentNumber: text('payment_number').notNull(),
   method: text('method').notNull(),
-  amountPaise: integer('amount_paise').notNull(),
+  amountRupees: numeric('amount_rupees', { precision: 16, scale: 2, mode: 'number' }).notNull(),
   reference: text('reference'),
   notes: text('notes'),
   status: text('status').notNull().default('RECEIVED'),
@@ -392,51 +480,37 @@ export const payments = pgTable('payments', {
     mode: 'string',
   }).notNull(),
 }, (table) => [
-  uniqueIndex('idx_payments_property_number').on(
-    table.propertyId,
-    table.paymentNumber,
-  ),
-  uniqueIndex('idx_payments_folio_idempotency').on(
-    table.folioId,
-    table.idempotencyKey,
-  ),
-  uniqueIndex('idx_payments_restaurant_idempotency').on(
-    table.restaurantOrderId,
-    table.idempotencyKey,
-  ),
-  index('idx_payments_folio_status').on(
-    table.folioId,
-    table.status,
-  ),
-  index('idx_payments_restaurant_status').on(
-    table.restaurantOrderId,
-    table.status,
-  ),
-  check(
-    'chk_payments_source',
-    sql`
-      (
-        ${table.folioId} is not null
-        and ${table.reservationId} is not null
-        and ${table.restaurantOrderId} is null
-      )
-      or
-      (
-        ${table.folioId} is null
-        and ${table.reservationId} is null
-        and ${table.restaurantOrderId} is not null
-      )
-    `,
-  ),
+  uniqueIndex('idx_payments_property_number').on(table.propertyId, table.paymentNumber),
+  uniqueIndex('idx_payments_folio_idempotency').on(table.folioId, table.idempotencyKey),
+  uniqueIndex('idx_payments_restaurant_idempotency').on(table.restaurantOrderId, table.idempotencyKey),
+  index('idx_payments_folio_status').on(table.folioId, table.status),
+  index('idx_payments_restaurant_status').on(table.restaurantOrderId, table.status),
+  check('chk_payments_source', sql`
+   (
+    ${table.folioId} is not null
+    and ${table.reservationId} is not null
+    and ${table.restaurantOrderId} is null
+   )
+   or
+   (
+    ${table.folioId} is null
+    and ${table.reservationId} is null
+    and ${table.restaurantOrderId} is not null
+   )
+  `),
 ]);
 
 export const paymentRefunds = pgTable('payment_refunds', {
   id: text('id').primaryKey(), organisationId: text('organisation_id').notNull().references(() => organisations.id),
   propertyId: text('property_id').notNull().references(() => properties.id), folioId: text('folio_id').references(() => folios.id),
-  paymentId: text('payment_id').notNull().references(() => payments.id), amountPaise: integer('amount_paise').notNull(), reason: text('reason').notNull(),
+  paymentId: text('payment_id').notNull().references(() => payments.id), amountRupees: numeric('amount_rupees', { precision: 16, scale: 2, mode: 'number' }).notNull(), reason: text('reason').notNull(),
   reference: text('reference'), status: text('status').notNull().default('RECORDED'), idempotencyKey: text('idempotency_key').notNull(),
-  processedAt: timestamp('processed_at', { withTimezone: true, mode: 'string' }).notNull(), processedBy: text('processed_by').notNull().references(() => appUsers.id),
-}, (table) => [uniqueIndex('idx_refunds_payment_idempotency').on(table.paymentId, table.idempotencyKey), index('idx_refunds_folio').on(table.folioId)]);
+  processedAt: timestamp('processed_at', {
+    withTimezone: true, mode: 'string'
+  }).notNull(), processedBy: text('processed_by').notNull().references(() => appUsers.id),
+}, (table) => [
+  uniqueIndex('idx_refunds_payment_idempotency').on(table.paymentId, table.idempotencyKey), index('idx_refunds_folio').on(table.folioId)
+]);
 
 export const invoices = pgTable('invoices', {
   id: text('id').primaryKey(), organisationId: text('organisation_id').notNull().references(() => organisations.id), propertyId: text('property_id').notNull().references(() => properties.id),
@@ -444,10 +518,18 @@ export const invoices = pgTable('invoices', {
   invoiceNumber: text('invoice_number').notNull(), financialYear: text('financial_year').notNull(), invoiceDate: text('invoice_date').notNull(),
   customerNameSnapshot: text('customer_name_snapshot').notNull(), customerCompanySnapshot: text('customer_company_snapshot'), customerGstinSnapshot: text('customer_gstin_snapshot'), billingAddressSnapshot: text('billing_address_snapshot'), customerStateSnapshot: text('customer_state_snapshot'),
   propertyLegalNameSnapshot: text('property_legal_name_snapshot').notNull(), propertyGstinSnapshot: text('property_gstin_snapshot'), propertyAddressSnapshot: text('property_address_snapshot'),
-  subtotalPaise: integer('subtotal_paise').notNull(), discountPaise: integer('discount_paise').notNull(), taxableAmountPaise: integer('taxable_amount_paise').notNull(), cgstPaise: integer('cgst_paise').notNull(), sgstPaise: integer('sgst_paise').notNull(), igstPaise: integer('igst_paise').notNull(), grandTotalPaise: integer('grand_total_paise').notNull(),
-  status: text('status').notNull().default('ISSUED'), issuedAt: timestamp('issued_at', { withTimezone: true, mode: 'string' }).notNull(), issuedBy: text('issued_by').notNull().references(() => appUsers.id),
-  cancelledAt: timestamp('cancelled_at', { withTimezone: true, mode: 'string' }), cancelledBy: text('cancelled_by').references(() => appUsers.id), cancelReason: text('cancel_reason'), createdAt: timestamp('created_at', { withTimezone: true, mode: 'string' }).notNull(),
-}, (table) => [uniqueIndex('idx_invoices_property_number').on(table.propertyId, table.invoiceNumber), uniqueIndex('idx_invoices_folio_issued').on(table.folioId).where(sql`${table.status} = 'ISSUED'`)]);
+  subtotalRupees: numeric('subtotal_rupees', { precision: 16, scale: 2, mode: 'number' }).notNull(), discountRupees: numeric('discount_rupees', { precision: 16, scale: 2, mode: 'number' }).notNull(), taxableAmountRupees: numeric('taxable_amount_rupees', { precision: 16, scale: 2, mode: 'number' }).notNull(), cgstRupees: numeric('cgst_rupees', { precision: 16, scale: 2, mode: 'number' }).notNull(), sgstRupees: numeric('sgst_rupees', { precision: 16, scale: 2, mode: 'number' }).notNull(), igstRupees: numeric('igst_rupees', { precision: 16, scale: 2, mode: 'number' }).notNull(), grandTotalRupees: numeric('grand_total_rupees', { precision: 16, scale: 2, mode: 'number' }).notNull(),
+  status: text('status').notNull().default('ISSUED'), issuedAt: timestamp('issued_at', {
+    withTimezone: true, mode: 'string'
+  }).notNull(), issuedBy: text('issued_by').notNull().references(() => appUsers.id),
+  cancelledAt: timestamp('cancelled_at', {
+    withTimezone: true, mode: 'string'
+  }), cancelledBy: text('cancelled_by').references(() => appUsers.id), cancelReason: text('cancel_reason'), createdAt: timestamp('created_at', {
+    withTimezone: true, mode: 'string'
+  }).notNull(),
+}, (table) => [
+  uniqueIndex('idx_invoices_property_number').on(table.propertyId, table.invoiceNumber), uniqueIndex('idx_invoices_folio_issued').on(table.folioId).where(sql`${table.status} = 'ISSUED'`)
+]);
 
 export const offlineBills = pgTable('offline_bills', {
   id: text('id').primaryKey(),
@@ -458,9 +540,9 @@ export const offlineBills = pgTable('offline_bills', {
   guestId: text('guest_id').notNull().references(() => guests.id),
   deviceId: text('device_id').notNull(),
   generatedBy: text('generated_by').notNull(),
-  localAmountPaise: integer('local_amount_paise').notNull(),
-  taxPaise: integer('tax_paise').notNull(),
-  cloudAmountPaise: integer('cloud_amount_paise'),
+  localAmountRupees: numeric('local_amount_rupees', { precision: 16, scale: 2, mode: 'number' }).notNull(),
+  taxRupees: numeric('tax_rupees', { precision: 16, scale: 2, mode: 'number' }).notNull(),
+  cloudAmountRupees: numeric('cloud_amount_rupees', { precision: 16, scale: 2, mode: 'number' }),
   currency: text('currency').notNull().default('INR'),
   status: text('status').notNull(),
   documentHash: text('document_hash').notNull(),
@@ -499,7 +581,9 @@ export const housekeepingTasks = pgTable('housekeeping_tasks', {
   roomId: text('room_id').notNull().references(() => rooms.id),
   reservationId: text('reservation_id').references(() => reservations.id),
   assignedTo: text('assigned_to'),
-  assignedUserId: text('assigned_user_id').references(() => appUsers.id, { onDelete: 'set null' }),
+  assignedUserId: text('assigned_user_id').references(() => appUsers.id, {
+    onDelete: 'set null'
+  }),
   taskType: text('task_type').notNull().default('STAY_SERVICE'),
   priority: text('priority').notNull(),
   status: text('status').notNull(),
@@ -539,7 +623,7 @@ export const damagePolicyRules = pgTable('damage_policy_rules', {
   propertyId: text('property_id').notNull().references(() => properties.id),
   severity: text('severity').notNull(),
   label: text('label').notNull(),
-  liabilityCapPaise: integer('liability_cap_paise').notNull(),
+  liabilityCapRupees: numeric('liability_cap_rupees', { precision: 16, scale: 2, mode: 'number' }).notNull(),
   roomImpact: text('room_impact').notNull(),
   active: boolean('active').notNull().default(true),
   version: integer('version').notNull().default(1),
@@ -560,9 +644,9 @@ export const damageReports = pgTable('damage_reports', {
   status: text('status').notNull(),
   policyRuleId: text('policy_rule_id').references(() => damagePolicyRules.id),
   policyLabel: text('policy_label'),
-  policyLiabilityPaise: integer('policy_liability_paise'),
-  repairCostPaise: integer('repair_cost_paise'),
-  chargeAmountPaise: integer('charge_amount_paise'),
+  policyLiabilityRupees: numeric('policy_liability_rupees', { precision: 16, scale: 2, mode: 'number' }),
+  repairCostRupees: numeric('repair_cost_rupees', { precision: 16, scale: 2, mode: 'number' }),
+  chargeAmountRupees: numeric('charge_amount_rupees', { precision: 16, scale: 2, mode: 'number' }),
   folioLineId: text('folio_line_id'),
   decisionNote: text('decision_note'),
   reportedBy: text('reported_by').notNull(),
@@ -586,7 +670,9 @@ export const maintenanceTickets = pgTable('maintenance_tickets', {
   assignedTo: text('assigned_to'),
   status: text('status').notNull(),
   openedAt: text('opened_at').notNull(),
-}, (table) => [index('idx_maintenance_property_status').on(table.propertyId, table.status)]);
+}, (table) => [
+  index('idx_maintenance_property_status').on(table.propertyId, table.status)
+]);
 
 export const inventoryItems = pgTable('inventory_items', {
   id: text('id').primaryKey(),
@@ -597,9 +683,11 @@ export const inventoryItems = pgTable('inventory_items', {
   unit: text('unit').notNull(),
   currentQuantity: integer('current_quantity').notNull(),
   minimumQuantity: integer('minimum_quantity').notNull(),
-  unitCostPaise: integer('unit_cost_paise').notNull(),
+  unitCostRupees: numeric('unit_cost_rupees', { precision: 16, scale: 2, mode: 'number' }).notNull(),
   updatedAt: text('updated_at').notNull(),
-}, (table) => [index('idx_inventory_property_category').on(table.propertyId, table.category)]);
+}, (table) => [
+  index('idx_inventory_property_category').on(table.propertyId, table.category)
+]);
 
 export const restaurantOrders = pgTable('restaurant_orders', {
   version: integer('version').notNull().default(1),
@@ -618,9 +706,11 @@ export const restaurantOrders = pgTable('restaurant_orders', {
   specialInstructions: text('special_instructions'),
   customerName: text('customer_name'),
   customerPhone: text('customer_phone'),
-  totalPaise: integer('total_paise').notNull(),
-  paidPaise: integer('paid_paise').notNull().default(0),
-  settledAt: timestamp('settled_at', { withTimezone: true, mode: 'string' }),
+  totalRupees: numeric('total_rupees', { precision: 16, scale: 2, mode: 'number' }).notNull(),
+  paidRupees: numeric('paid_rupees', { precision: 16, scale: 2, mode: 'number' }).notNull().default(0),
+  settledAt: timestamp('settled_at', {
+    withTimezone: true, mode: 'string'
+  }),
   paymentStatus: text('payment_status').notNull(),
   createdAt: text('created_at').notNull(),
 }, (table) => [
@@ -628,14 +718,8 @@ export const restaurantOrders = pgTable('restaurant_orders', {
   index('idx_restaurant_property_kot').on(table.propertyId, table.kotStatus),
   index('idx_restaurant_property_table').on(table.propertyId, table.tableNumber),
   index('idx_restaurant_property_waiter').on(table.propertyId, table.waiterUserId),
-  check(
-    'chk_restaurant_orders_covers',
-    sql`${table.covers} is null or (${table.covers} >= 1 and ${table.covers} <= 100)`,
-  ),
-  check(
-    'chk_restaurant_orders_paid_paise',
-    sql`${table.paidPaise} >= 0 and ${table.paidPaise} <= ${table.totalPaise}`,
-  ),
+  check('chk_restaurant_orders_covers', sql`${table.covers} is null or (${table.covers} >= 1 and ${table.covers} <= 100)`),
+  check('chk_restaurant_orders_paid_rupees', sql`${table.paidRupees} >= 0 and ${table.paidRupees} <= ${table.totalRupees}`),
 ]);
 
 export const restaurantOrderItems = pgTable('restaurant_order_items', {
@@ -643,20 +727,22 @@ export const restaurantOrderItems = pgTable('restaurant_order_items', {
   propertyId: text('property_id').notNull().references(() => properties.id),
   orderId: text('order_id')
     .notNull()
-    .references(() => restaurantOrders.id, { onDelete: 'cascade' }),
+    .references(() => restaurantOrders.id, {
+    onDelete: 'cascade'
+  }),
   menuItemId: text('menu_item_id').notNull(),
   itemName: text('item_name').notNull(),
   category: text('category').notNull(),
   quantity: integer('quantity').notNull(),
-  unitPricePaise: integer('unit_price_paise').notNull(),
+  unitPriceRupees: numeric('unit_price_rupees', { precision: 16, scale: 2, mode: 'number' }).notNull(),
   taxRateBps: integer('tax_rate_bps').notNull(),
-  subtotalPaise: integer('subtotal_paise').notNull(),
-  taxableAmountPaise: integer('taxable_amount_paise').notNull(),
-  taxPaise: integer('tax_paise').notNull(),
-  cgstPaise: integer('cgst_paise').notNull().default(0),
-  sgstPaise: integer('sgst_paise').notNull().default(0),
-  igstPaise: integer('igst_paise').notNull().default(0),
-  totalPaise: integer('total_paise').notNull(),
+  subtotalRupees: numeric('subtotal_rupees', { precision: 16, scale: 2, mode: 'number' }).notNull(),
+  taxableAmountRupees: numeric('taxable_amount_rupees', { precision: 16, scale: 2, mode: 'number' }).notNull(),
+  taxRupees: numeric('tax_rupees', { precision: 16, scale: 2, mode: 'number' }).notNull(),
+  cgstRupees: numeric('cgst_rupees', { precision: 16, scale: 2, mode: 'number' }).notNull().default(0),
+  sgstRupees: numeric('sgst_rupees', { precision: 16, scale: 2, mode: 'number' }).notNull().default(0),
+  igstRupees: numeric('igst_rupees', { precision: 16, scale: 2, mode: 'number' }).notNull().default(0),
+  totalRupees: numeric('total_rupees', { precision: 16, scale: 2, mode: 'number' }).notNull(),
   createdAt: text('created_at').notNull(),
 }, (table) => [
   index('idx_restaurant_order_items_order').on(table.orderId),
@@ -687,9 +773,11 @@ export const travelPackages = pgTable('travel_packages', {
   locations: text('locations').notNull(),
   capacity: integer('capacity').notNull(),
   booked: integer('booked').notNull(),
-  sellingPricePaise: integer('selling_price_paise').notNull(),
+  sellingPriceRupees: numeric('selling_price_rupees', { precision: 16, scale: 2, mode: 'number' }).notNull(),
   status: text('status').notNull(),
-}, (table) => [index('idx_packages_org_status').on(table.organisationId, table.status)]);
+}, (table) => [
+  index('idx_packages_org_status').on(table.organisationId, table.status)
+]);
 
 export const travelAssets = pgTable('travel_assets', {
   id: text('id').primaryKey(),
@@ -698,10 +786,12 @@ export const travelAssets = pgTable('travel_assets', {
   category: text('category').notNull(),
   description: text('description').notNull(),
   pricingUnit: text('pricing_unit').notNull(),
-  unitPricePaise: integer('unit_price_paise').notNull(),
+  unitPriceRupees: numeric('unit_price_rupees', { precision: 16, scale: 2, mode: 'number' }).notNull(),
   active: boolean('active').notNull().default(true),
   updatedAt: text('updated_at').notNull(),
-}, (table) => [index('idx_travel_assets_org_active').on(table.organisationId, table.active, table.category)]);
+}, (table) => [
+  index('idx_travel_assets_org_active').on(table.organisationId, table.active, table.category)
+]);
 
 export const customTravelPackages = pgTable('custom_travel_packages', {
   id: text('id').primaryKey(),
@@ -711,10 +801,10 @@ export const customTravelPackages = pgTable('custom_travel_packages', {
   name: text('name').notNull(),
   ownerId: text('owner_id').notNull(),
   ownerName: text('owner_name').notNull(),
-  assetSubtotalPaise: integer('asset_subtotal_paise').notNull(),
-  basePricePaise: integer('base_price_paise').notNull(),
-  floorPricePaise: integer('floor_price_paise').notNull(),
-  quotedPricePaise: integer('quoted_price_paise').notNull(),
+  assetSubtotalRupees: numeric('asset_subtotal_rupees', { precision: 16, scale: 2, mode: 'number' }).notNull(),
+  basePriceRupees: numeric('base_price_rupees', { precision: 16, scale: 2, mode: 'number' }).notNull(),
+  floorPriceRupees: numeric('floor_price_rupees', { precision: 16, scale: 2, mode: 'number' }).notNull(),
+  quotedPriceRupees: numeric('quoted_price_rupees', { precision: 16, scale: 2, mode: 'number' }).notNull(),
   status: text('status').notNull(),
   version: integer('version').notNull().default(1),
   createdAt: text('created_at').notNull(),
@@ -732,9 +822,11 @@ export const customTravelPackageItems = pgTable('custom_travel_package_items', {
   category: text('category').notNull(),
   pricingUnit: text('pricing_unit').notNull(),
   quantity: integer('quantity').notNull(),
-  unitPricePaise: integer('unit_price_paise').notNull(),
-  lineTotalPaise: integer('line_total_paise').notNull(),
-}, (table) => [index('idx_custom_package_items_package').on(table.packageId)]);
+  unitPriceRupees: numeric('unit_price_rupees', { precision: 16, scale: 2, mode: 'number' }).notNull(),
+  lineTotalRupees: numeric('line_total_rupees', { precision: 16, scale: 2, mode: 'number' }).notNull(),
+}, (table) => [
+  index('idx_custom_package_items_package').on(table.packageId)
+]);
 
 export const travelDiscountRequests = pgTable('travel_discount_requests', {
   id: text('id').primaryKey(),
@@ -743,9 +835,9 @@ export const travelDiscountRequests = pgTable('travel_discount_requests', {
   packageVersion: integer('package_version').notNull(),
   requestedById: text('requested_by_id').notNull(),
   requestedByName: text('requested_by_name').notNull(),
-  requestedPricePaise: integer('requested_price_paise').notNull(),
-  basePricePaise: integer('base_price_paise').notNull(),
-  floorPricePaise: integer('floor_price_paise').notNull(),
+  requestedPriceRupees: numeric('requested_price_rupees', { precision: 16, scale: 2, mode: 'number' }).notNull(),
+  basePriceRupees: numeric('base_price_rupees', { precision: 16, scale: 2, mode: 'number' }).notNull(),
+  floorPriceRupees: numeric('floor_price_rupees', { precision: 16, scale: 2, mode: 'number' }).notNull(),
   reason: text('reason').notNull(),
   status: text('status').notNull(),
   reviewedById: text('reviewed_by_id'),
@@ -766,7 +858,7 @@ export const inquiries = pgTable('inquiries', {
   source: text('source').notNull(),
   owner: text('owner').notNull(),
   service: text('service').notNull(),
-  estimatedValuePaise: integer('estimated_value_paise').notNull(),
+  estimatedValueRupees: numeric('estimated_value_rupees', { precision: 16, scale: 2, mode: 'number' }).notNull(),
   status: text('status').notNull(),
   followUpAt: text('follow_up_at'),
   notes: text('notes'),

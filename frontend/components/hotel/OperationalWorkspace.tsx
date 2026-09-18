@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { apiFetch } from '@/lib/api/client';
+import { rupeeInputValue, parseRupees } from '../../lib/rupee-input';
 import { clearPendingRestaurantPayment, loadPendingRestaurantPayment, savePendingRestaurantPayment } from '@/lib/restaurant-payment-recovery';
 import { clearRestaurantRefund, loadRestaurantRefund, saveRestaurantRefund, type PendingRestaurantRefund } from '@/lib/restaurant-refund-recovery';
 import { roleCan, type Permission } from '@hotel/shared/domain';
@@ -90,7 +91,7 @@ export function WorkflowForm({
     Object.fromEntries(
       fields.map((field) => [
         field.key,
-        initial[field.key] ?? (field.type === 'checkbox' ? true : ''),
+        field.key.endsWith('Rupees') ? rupeeInputValue(initial[field.key]) : initial[field.key] ?? (field.type === 'checkbox' ? true : ''),
       ]),
     ),
   );
@@ -113,7 +114,8 @@ export function WorkflowForm({
 
       for (const field of fields) {
         if (field.type === 'number') {
-          parsed[field.key] = Number(values[field.key]);
+          parsed[field.key] = field.key.endsWith('Rupees') && values[field.key] !== ''
+            ? parseRupees(values[field.key]) : Number(values[field.key]);
         }
 
         if (
@@ -217,12 +219,12 @@ export function WorkflowForm({
                   required={field.required !== false}
                   min={
                     field.type === 'number'
-                      ? field.min ?? 0
+                      ? (field.min ?? 0)
                       : undefined
                   }
                   step={
                     field.type === 'number'
-                      ? 1
+                      ? field.key.endsWith('Rupees') ? 0.01 : 1
                       : undefined
                   }
                   autoComplete={
@@ -321,12 +323,12 @@ function RestaurantOrderComposer({
   );
   const effectiveOrderType = fixedOrderType ?? orderType;
 
-  const subtotalPaise = lines.reduce((total, line) => {
+  const subtotalRupees = lines.reduce((total, line) => {
     const item = menuById.get(line.menuItemId);
-    const pricePaise = Number(item?.pricePaise ?? 0);
+    const priceRupees = Number(item?.priceRupees ?? 0);
     const quantity = Number.isFinite(line.quantity) ? line.quantity : 0;
 
-    return total + pricePaise * Math.max(0, quantity);
+    return total + priceRupees * Math.max(0, quantity);
   }, 0);
 
   const updateLine = (
@@ -674,7 +676,7 @@ function RestaurantOrderComposer({
             <tbody>
               {lines.map((line) => {
                 const item = menuById.get(line.menuItemId);
-                const pricePaise = Number(item?.pricePaise ?? 0);
+                const priceRupees = Number(item?.priceRupees ?? 0);
 
                 return (
                   <tr key={line.key}>
@@ -700,7 +702,7 @@ function RestaurantOrderComposer({
                             value={String(menuItem.id)}
                           >
                             {String(menuItem.name)} ·{' '}
-                            {money(menuItem.pricePaise)}
+                            {money(menuItem.priceRupees)}
                           </option>
                         ))}
                       </select>
@@ -736,7 +738,7 @@ function RestaurantOrderComposer({
                         whiteSpace: 'nowrap',
                       }}
                     >
-                      {money(pricePaise)}
+                      {money(priceRupees)}
                     </td>
                     <td
                       style={{
@@ -744,7 +746,7 @@ function RestaurantOrderComposer({
                         whiteSpace: 'nowrap',
                       }}
                     >
-                      {money(pricePaise * line.quantity)}
+                      {money(priceRupees * line.quantity)}
                     </td>
                     <td
                       style={{
@@ -784,7 +786,7 @@ function RestaurantOrderComposer({
             Add item
           </button>
           <strong>
-            Menu subtotal: {money(subtotalPaise)}
+            Menu subtotal: {money(subtotalRupees)}
           </strong>
         </div>
 
@@ -904,14 +906,14 @@ function RestaurantSettlement({ order, propertyId, userId, canReverse, canRefund
   const [recovery] = useState(() => {
     try {
       const body = loadPendingRestaurantPayment(window.sessionStorage, { orderId, propertyId, userId });
-      const pending = body ? JSON.parse(body) as { method: 'CASH' | 'CARD' | 'UPI'; amountPaise: number; reference?: string } : null;
+      const pending = body ? JSON.parse(body) as { method: 'CASH' | 'CARD' | 'UPI'; amountRupees: number; reference?: string } : null;
       return { body, pending, ready: true, error: '' };
     } catch (cause) {
       return { body: null, pending: null, ready: false, error: cause instanceof Error ? cause.message : 'Payment recovery storage is unavailable.' };
     }
   });
   const [method, setMethod] = useState<'CASH' | 'CARD' | 'UPI'>(recovery.pending?.method ?? 'CASH');
-  const [amount, setAmount] = useState(recovery.pending ? String(recovery.pending.amountPaise / 100) : '');
+  const [amount, setAmount] = useState(recovery.pending ? String(recovery.pending.amountRupees) : '');
   const [reference, setReference] = useState(recovery.pending?.reference ?? '');
   const [key, setKey] = useState(() => crypto.randomUUID());
   const [result, setResult] = useState<Row | null>(null);
@@ -926,14 +928,14 @@ function RestaurantSettlement({ order, propertyId, userId, canReverse, canRefund
   });
   const [pendingRefund, setPendingRefund] = useState<PendingRestaurantRefund | null>(refundRecovery.pending);
   const [refundPayment, setRefundPayment] = useState<Row | null>(refundRecovery.pending ? { paymentId: refundRecovery.pending.paymentId } : null);
-  const [refundAmount, setRefundAmount] = useState(refundRecovery.pending ? String(refundRecovery.pending.amountPaise / 100) : '');
+  const [refundAmount, setRefundAmount] = useState(refundRecovery.pending ? String(refundRecovery.pending.amountRupees) : '');
   const [refundReason, setRefundReason] = useState(refundRecovery.pending?.reason ?? '');
   const [refundReference, setRefundReference] = useState(refundRecovery.pending?.reference ?? '');
   const refundBlocked = Boolean(refundPayment || pendingRefund || refundRecovery.error);
-  const refundPaise = Math.round(Number(refundAmount) * 100);
+  const refundRupees = Number(refundAmount);
   const recordRefund = async () => {
     if (inFlight.current || !canRefund || !refundPayment || refundRecovery.error) return;
-    const request = pendingRefund ?? { paymentId: String(refundPayment.paymentId), amountPaise: refundPaise,
+    const request = pendingRefund ?? { paymentId: String(refundPayment.paymentId), amountRupees: refundRupees,
       reason: refundReason.trim(), reference: refundReference.trim() || undefined, idempotencyKey: crypto.randomUUID() };
     inFlight.current = true; setBusy(true); setError('');
     try {
@@ -961,17 +963,17 @@ function RestaurantSettlement({ order, propertyId, userId, canReverse, canRefund
   const inFlight = useRef(false);
   const [retryBody, setRetryBody] = useState<string | null>(recovery.body);
   const recoveryReady = recovery.ready;
-  const paid = Number(history?.paidPaise ?? result?.paidPaise ?? order.paidPaise ?? 0);
-  const outstanding = Math.max(0, Number(history?.outstandingPaise ?? result?.outstandingPaise ?? (Number(order.totalPaise ?? 0) - paid)));
+  const paid = Number(history?.paidRupees ?? result?.paidRupees ?? order.paidRupees ?? 0);
+  const outstanding = Math.max(0, Number(history?.outstandingRupees ?? result?.outstandingRupees ?? (Number(order.totalRupees ?? 0) - paid)));
   const postedToFolio = (history?.paymentStatus ?? order.paymentStatus) === 'POSTED_TO_FOLIO';
   const paymentRows = (history?.payments ?? []) as Row[];
-  const received = Math.round(Number(amount) * 100);
+  const received = Number(amount);
   const change = method === 'CASH' ? Math.max(0, received - outstanding) : 0;
   const pay = async (event: React.FormEvent) => {
     event.preventDefault();
     if (inFlight.current || correction || refundBlocked || !recoveryReady || (!retryBody && (!history || historyError || postedToFolio))) return;
     inFlight.current = true; setBusy(true); setError('');
-    const body = retryBody ?? JSON.stringify({ method, amountPaise: received, reference: reference.trim() || undefined, idempotencyKey: key });
+    const body = retryBody ?? JSON.stringify({ method, amountRupees: received, reference: reference.trim() || undefined, idempotencyKey: key });
     try {
       savePendingRestaurantPayment(window.sessionStorage, { orderId, propertyId, userId }, body);
       setRetryBody(body);
@@ -1025,7 +1027,7 @@ function RestaurantSettlement({ order, propertyId, userId, canReverse, canRefund
   };
   return <div className="modal-backdrop"><form role="dialog" aria-modal="true" aria-label="Settle restaurant order" className="modal-card" onSubmit={pay}>
     <div className="modal-heading"><div><p className="section-kicker">Restaurant POS</p><h2>Payments & receipts</h2></div><button type="button" className="icon-button" disabled={busy || Boolean(retryBody) || correctionPending || Boolean(pendingRefund)} onClick={onClose}>×</button></div>
-    <p>Order total: {money(order.totalPaise)} · Paid: {money(paid)} · Outstanding: {money(outstanding)}</p>
+    <p>Order total: {money(order.totalRupees)} · Paid: {money(paid)} · Outstanding: {money(outstanding)}</p>
     <p><Status value={String(history?.paymentStatus ?? result?.paymentStatus ?? order.paymentStatus ?? 'UNPAID')} /></p>
     {error && <p role="alert" className="error-banner">{error}</p>}
     <section aria-label="Recorded payments">
@@ -1038,14 +1040,14 @@ function RestaurantSettlement({ order, propertyId, userId, canReverse, canRefund
         <tbody>{paymentRows.map(payment => <tr key={String(payment.paymentId)}>
           <td>{String(payment.paymentNumber)}<br /><small>{new Date(String(payment.receivedAt)).toLocaleString('en-IN')}</small></td>
           <td>{String(payment.method)}<br /><small>{String(payment.reference ?? '—')}</small></td>
-          <td>{money(payment.amountAppliedPaise)}<br /><small>Refunded: {money(payment.refundedPaise ?? 0)}</small>
-            {((payment.refunds ?? []) as Row[]).map(refund => <div key={String(refund.id)}><small>{money(refund.amountPaise)} ? {String(refund.reason)} ? {String(refund.reference ?? 'No reference')} ? {new Date(String(refund.processedAt)).toLocaleString('en-IN')}</small></div>)}
-          </td><td>{payment.amountReceivedPaise == null ? 'Unavailable' : money(payment.amountReceivedPaise)}</td>
-          <td>{payment.changeDuePaise == null ? 'Unavailable' : money(payment.changeDuePaise)}</td><td><Status value={String(payment.status)} /></td>
+          <td>{money(payment.amountAppliedRupees)}<br /><small>Refunded: {money(payment.refundedRupees ?? 0)}</small>
+            {((payment.refunds ?? []) as Row[]).map(refund => <div key={String(refund.id)}><small>{money(refund.amountRupees)} ? {String(refund.reason)} ? {String(refund.reference ?? 'No reference')} ? {new Date(String(refund.processedAt)).toLocaleString('en-IN')}</small></div>)}
+          </td><td>{payment.amountReceivedRupees == null ? 'Unavailable' : money(payment.amountReceivedRupees)}</td>
+          <td>{payment.changeDueRupees == null ? 'Unavailable' : money(payment.changeDueRupees)}</td><td><Status value={String(payment.status)} /></td>
           <td>{payment.receiptAvailable ? <button type="button" className="text-button" onClick={() => void downloadReceipt(payment)}>Download / reprint</button> : <small>{String(payment.receiptUnavailableReason)}</small>}
             {Boolean(payment.reversalReason) && <small>Reason: {String(payment.reversalReason)}</small>}
-            {canReverse && !postedToFolio && !Number(payment.refundedPaise) && payment.status === 'RECEIVED' && <button type="button" className="text-button" disabled={busy || refundBlocked || Boolean(retryBody) || Boolean(correction)} onClick={() => { setCorrection(payment); setCorrectionReason(''); }}>Reverse mistaken entry</button>}
-            {canRefund && !postedToFolio && Number(payment.refundablePaise) > 0 && <button type="button" className="text-button" disabled={busy || refundBlocked || Boolean(retryBody) || Boolean(correction)} onClick={() => { setRefundPayment(payment); setRefundAmount(''); setRefundReason(''); setRefundReference(''); }}>Record refund</button>}
+            {canReverse && !postedToFolio && !Number(payment.refundedRupees) && payment.status === 'RECEIVED' && <button type="button" className="text-button" disabled={busy || refundBlocked || Boolean(retryBody) || Boolean(correction)} onClick={() => { setCorrection(payment); setCorrectionReason(''); }}>Reverse mistaken entry</button>}
+            {canRefund && !postedToFolio && Number(payment.refundableRupees) > 0 && <button type="button" className="text-button" disabled={busy || refundBlocked || Boolean(retryBody) || Boolean(correction)} onClick={() => { setRefundPayment(payment); setRefundAmount(''); setRefundReason(''); setRefundReference(''); }}>Record refund</button>}
           </td>
         </tr>)}</tbody>
       </table></div>}
@@ -1056,23 +1058,23 @@ function RestaurantSettlement({ order, propertyId, userId, canReverse, canRefund
       <h3>Record refund: {String(refundPayment.paymentNumber ?? refundPayment.paymentId)}</h3>
       <p>Record money already returned to the customer. This does not send a bank, card or UPI refund. The order balance will reopen; it does not cancel food charges.</p>
       <fieldset disabled={busy || Boolean(pendingRefund)}>
-        <label>Refund amount (INR)<input type="number" min="0.01" step="0.01" value={refundAmount} onChange={event => setRefundAmount(event.target.value)} /></label>
+        <label>Refund amount (₹)<input type="number" min="0.01" step="0.01" value={refundAmount} onChange={event => setRefundAmount(event.target.value)} /></label>
         <label>Reason<textarea maxLength={500} value={refundReason} onChange={event => setRefundReason(event.target.value)} /></label>
         <label>Refund transaction / cash reference<input maxLength={100} value={refundReference} onChange={event => setRefundReference(event.target.value)} /></label>
       </fieldset>
       {pendingRefund && <p role="status">Unconfirmed record. Retry this record only; do not return the money again.</p>}
-      <button type="button" disabled={!canRefund || busy || (!pendingRefund && (!Number.isSafeInteger(refundPaise) || refundPaise <= 0 || refundPaise > Number(refundPayment.refundablePaise) || refundReason.trim().length < 3))} onClick={() => void recordRefund()}>{pendingRefund ? 'Retry same refund record' : 'Confirm money returned'}</button>
+      <button type="button" disabled={!canRefund || busy || (!pendingRefund && (!Number.isSafeInteger(refundRupees) || refundRupees <= 0 || refundRupees > Number(refundPayment.refundableRupees) || refundReason.trim().length < 3))} onClick={() => void recordRefund()}>{pendingRefund ? 'Retry same refund record' : 'Confirm money returned'}</button>
       <button type="button" disabled={busy || Boolean(pendingRefund)} onClick={() => setRefundPayment(null)}>Cancel</button>
     </section>}
     {correction && <section aria-label="Reverse mistaken payment">
-      <h3>Reverse {String(correction.paymentNumber)} — {money(correction.amountAppliedPaise)}</h3>
+      <h3>Reverse {String(correction.paymentNumber)} — {money(correction.amountAppliedRupees)}</h3>
       <p>Use this for an incorrectly recorded payment. It reopens the order balance and keeps an audit record. It does not return money to the customer.</p>
       <label>Reason<textarea maxLength={500} disabled={busy || correctionPending} value={correctionReason} onChange={event => setCorrectionReason(event.target.value)} /></label>
       {correctionPending && <p role="status">Result unconfirmed. Retry this reversal; an already reversed payment will not be reversed again.</p>}
       <button type="button" disabled={busy || correctionReason.trim().length < 3} onClick={() => void reverse()}>{correctionPending ? 'Retry reversal' : 'Confirm reversal'}</button>
       <button type="button" disabled={busy || correctionPending} onClick={() => setCorrection(null)}>Cancel</button>
     </section>}
-    {result && <p role="status">Receipt {String(result.paymentNumber)} · Applied {money(result.amountAppliedPaise)} · Received {money(result.amountReceivedPaise)} · Change {money(result.changeDuePaise)} · Remaining {money(result.outstandingPaise)}</p>}
+    {result && <p role="status">Receipt {String(result.paymentNumber)} · Applied {money(result.amountAppliedRupees)} · Received {money(result.amountReceivedRupees)} · Change {money(result.changeDueRupees)} · Remaining {money(result.outstandingRupees)}</p>}
     {retryBody && !busy && <p role="status">Payment result is not confirmed. Retry the same payment to check its result.</p>}
     {!postedToFolio && outstanding > 0 && <fieldset disabled={busy || refundBlocked || Boolean(correction) || Boolean(retryBody) || !history || Boolean(historyError)} className="form-grid">
       <label><span>Payment method</span><select value={method} onChange={(event) => setMethod(event.target.value as 'CASH' | 'CARD' | 'UPI')}><option>CASH</option><option>CARD</option><option>UPI</option></select></label>
@@ -1430,7 +1432,7 @@ function KitchenBoard({
                           alignItems: 'center',
                         }}
                       >
-                        <span>{money(order.totalPaise)}</span>
+                        <span>{money(order.totalRupees)}</span>
                         {onPayments && !order.reservationId && order.paymentStatus !== 'POSTED_TO_FOLIO' && (
                           <button type="button" className="secondary-button" disabled={!online || busy} onClick={() => onPayments(order)}>Payments & receipts</button>
                         )}
@@ -1498,6 +1500,87 @@ export function OperationalWorkspace(
   const stays = rows('serviceStays');
   const restaurantStaff = rows('restaurantStaff');
   const restaurantItems = rows('restaurantOrderItems');
+  const ratePlans = rows('ratePlans');
+  const roomTypes = Array.from(
+    new Set(
+      rooms
+        .filter((room) => Boolean(room.active ?? true))
+        .map((room) => String(room.roomType ?? '').trim())
+        .filter(Boolean),
+    ),
+  ).sort((left, right) => left.localeCompare(right));
+
+  const ratePlanFields: Field[] = [
+    { key: 'code', label: 'Plan code' },
+    { key: 'name', label: 'Plan name' },
+    {
+      key: 'roomType',
+      label: 'Room type',
+      options: roomTypes.map((roomType) => ({
+        value: roomType,
+        label: roomType,
+      })),
+    },
+    {
+      key: 'rateRupees',
+      label: 'Nightly rate (₹)',
+      type: 'number',
+      min: 0,
+    },
+    {
+      key: 'mealPlan',
+      label: 'Meal plan',
+      options: [
+        { value: 'EP', label: 'EP · Room only' },
+        { value: 'CP', label: 'CP · Breakfast included' },
+        { value: 'MAP', label: 'MAP · Breakfast + one major meal' },
+        { value: 'AP', label: 'AP · All major meals' },
+      ],
+    },
+    {
+      key: 'refundable',
+      label: 'Refundable',
+      type: 'checkbox',
+    },
+    {
+      key: 'minStay',
+      label: 'Minimum stay (nights)',
+      type: 'number',
+      min: 1,
+    },
+    {
+      key: 'validFrom',
+      label: 'Valid from',
+      type: 'date',
+      required: false,
+    },
+    {
+      key: 'validTo',
+      label: 'Valid to',
+      type: 'date',
+      required: false,
+    },
+    {
+      key: 'active',
+      label: 'Active',
+      type: 'checkbox',
+    },
+  ];
+
+  const ratePlanRows: Row[] = ratePlans.map(
+  (plan): Row => ({
+    ...plan,
+    validity:
+      plan.validFrom || plan.validTo
+        ? `${String(plan.validFrom ?? 'Any date')} → ${String(
+            plan.validTo ?? 'No end date',
+          )}`
+        : 'Always',
+    status: Boolean(plan.active)
+      ? 'ACTIVE'
+      : 'INACTIVE',
+  }),
+);
 
   const itemsByOrder = new Map<string, Row[]>();
 
@@ -1544,7 +1627,7 @@ export function OperationalWorkspace(
       columns: [
         ['name', 'Item'],
         ['category', 'Category'],
-        ['pricePaise', 'Price'],
+        ['priceRupees', 'Price'],
         ['available', 'Available'],
       ],
       permission: 'restaurant.manage',
@@ -1561,8 +1644,8 @@ export function OperationalWorkspace(
           label: 'Category',
         },
         {
-          key: 'pricePaise',
-          label: 'Price (paise)',
+          key: 'priceRupees',
+          label: 'Price (₹)',
           type: 'number',
           min: 1,
         },
@@ -1706,13 +1789,13 @@ export function OperationalWorkspace(
     'Room Types & Rates': {
       title: 'Rooms, types & rates',
       description:
-        'Manage room inventory and rates used for new reservations. Existing booked rates remain on each stay.',
+        'Manage physical rooms and persistent selling rate plans. Existing reservations keep the nightly rate stored on the booking.',
       rows: rooms,
       columns: [
         ['number', 'Room'],
         ['roomType', 'Type'],
         ['floor', 'Floor'],
-        ['baseRatePaise', 'Base rate'],
+        ['baseRateRupees', 'Base rate'],
         ['operationalStatus', 'Status'],
       ],
       permission: 'rooms.manage',
@@ -1734,8 +1817,8 @@ export function OperationalWorkspace(
           type: 'number',
         },
         {
-          key: 'baseRatePaise',
-          label: 'Nightly rate (paise)',
+          key: 'baseRateRupees',
+          label: 'Nightly rate (₹)',
           type: 'number',
         },
       ],
@@ -1872,7 +1955,7 @@ export function OperationalWorkspace(
         ['roomNumber', 'Room'],
         ['itemSummary', 'Items'],
         ['itemCount', 'Qty'],
-        ['totalPaise', 'Total'],
+        ['totalRupees', 'Total'],
         ['status', 'Status'],
         ['kotStatus', 'KOT'],
         ['paymentStatus', 'Payment'],
@@ -2128,7 +2211,7 @@ export function OperationalWorkspace(
                       ([key]) => (
                         <td key={key}>
                           {key.endsWith(
-                            'Paise',
+                            'Rupees',
                           ) ? (
                             money(row[key])
                           ) : key ===
@@ -2235,6 +2318,121 @@ export function OperationalWorkspace(
             </div>
           )}
         </div>
+      )}
+
+      {view === 'Room Types & Rates' && (
+        <section
+          className="glass-card"
+          style={{ marginTop: 18 }}
+          aria-label="Rate plans"
+        >
+          <div
+            className="service-actions"
+            style={{
+              justifyContent: 'space-between',
+              alignItems: 'center',
+              marginBottom: 14,
+            }}
+          >
+            <div>
+              <p className="section-kicker">Selling rates</p>
+              <h2 style={{ margin: 0 }}>Rate plans</h2>
+              <p style={{ marginBottom: 0 }}>
+                Persistent property-scoped plans mapped to room types. Create BAR,
+                corporate, advance-purchase or meal-inclusive selling rates here.
+              </p>
+            </div>
+
+            {canEdit && (
+              <button
+                type="button"
+                className="primary-button"
+                disabled={!online || roomTypes.length === 0}
+                title={
+                  roomTypes.length === 0
+                    ? 'Add at least one room type first.'
+                    : !online
+                      ? 'Requires an online connection.'
+                      : undefined
+                }
+                onClick={() =>
+                  open(
+                    {
+                      mealPlan: 'EP',
+                      refundable: true,
+                      minStay: 1,
+                      active: true,
+                    },
+                    'SAVE_RATE_PLAN',
+                    ratePlanFields,
+                    'Create rate plan',
+                  )
+                }
+              >
+                Create rate plan
+              </button>
+            )}
+          </div>
+
+          <div className="table-card">
+            <table>
+              <thead>
+                <tr>
+                  <th>Code</th>
+                  <th>Plan</th>
+                  <th>Room type</th>
+                  <th>Nightly rate</th>
+                  <th>Meal</th>
+                  <th>Refundable</th>
+                  <th>Min stay</th>
+                  <th>Validity</th>
+                  <th>Status</th>
+                  {canEdit && <th>Actions</th>}
+                </tr>
+              </thead>
+              <tbody>
+                {ratePlanRows.map((plan, index) => (
+                  <tr key={String(plan.id ?? index)}>
+                    <td><strong>{String(plan.code ?? '—')}</strong></td>
+                    <td>{String(plan.name ?? '—')}</td>
+                    <td>{String(plan.roomType ?? '—')}</td>
+                    <td>{money(plan.rateRupees)}</td>
+                    <td>{String(plan.mealPlan ?? 'EP')}</td>
+                    <td>{Boolean(plan.refundable) ? 'Yes' : 'No'}</td>
+                    <td>{String(plan.minStay ?? 1)} night{Number(plan.minStay ?? 1) === 1 ? '' : 's'}</td>
+                    <td>{String(plan.validity)}</td>
+                    <td><Status value={String(plan.status)} /></td>
+                    {canEdit && (
+                      <td>
+                        <button
+                          type="button"
+                          className="text-button"
+                          disabled={!online}
+                          onClick={() =>
+                            open(
+                              plan,
+                              'SAVE_RATE_PLAN',
+                              ratePlanFields,
+                              'Edit rate plan',
+                            )
+                          }
+                        >
+                          Edit
+                        </button>
+                      </td>
+                    )}
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+            {ratePlanRows.length === 0 && (
+              <div className="empty-state">
+                No rate plans yet. Create BAR or another selling plan to make
+                pricing visible here.
+              </div>
+            )}
+          </div>
+        </section>
       )}
 
       {restaurantOrderOpen && restaurantOrderView && (

@@ -68,6 +68,7 @@ import {
   type FeatureView,
 } from "@/lib/navigation";
 
+import { customIconSources } from "../lib/custom-icons";
 import { usePathname, useRouter } from "next/navigation";
 import {
   AlertTriangle,
@@ -172,9 +173,9 @@ type Metrics = {
   departuresToday: number;
   inHouseGuests: number;
   pendingPayments: number;
-  revenuePaise: number;
-  adrPaise: number;
-  revParPaise: number;
+  revenueRupees: number;
+  adrRupees: number;
+  revParRupees: number;
   lowStockCount: number;
   unresolvedMaintenance: number;
   overdueFollowUps: number;
@@ -207,9 +208,9 @@ export type ReservationInspectionSummary = {
   damageDescription?: string | null;
   policyRuleId?: string | null;
   policyLabel?: string | null;
-  policyLiabilityPaise?: number | null;
-  repairCostPaise?: number | null;
-  chargeAmountPaise?: number | null;
+  policyLiabilityRupees?: number | null;
+  repairCostRupees?: number | null;
+  chargeAmountRupees?: number | null;
   decisionNote?: string | null;
   reportedBy?: string | null;
   reportedAt?: string | null;
@@ -236,7 +237,7 @@ export type DemoState = {
   travelMetrics: {
     activePackages: number;
     openInquiries: number;
-    pipelineValuePaise: number;
+    pipelineValueRupees: number;
     customQuotes: number;
     pendingApprovals: number;
     overdueFollowUps: number;
@@ -313,70 +314,6 @@ export type AppGlyphName =
   | "offline-billing"
   | "receipt-verification";
 
-type AppGlyphDefinition = Readonly<{
-  column: number;
-  row: number;
-  grid: 4 | 5;
-  atlas: string;
-}>;
-
-const primaryGlyph = (column: number, row: number): AppGlyphDefinition => ({
-  column,
-  row,
-  grid: 5,
-  atlas: "/icons/brainadz-hospitality-atlas-v2.png",
-});
-const statusGlyph = (column: number, row: number): AppGlyphDefinition => ({
-  column,
-  row,
-  grid: 4,
-  atlas: "/icons/brainadz-hospitality-status-atlas-v2.png",
-});
-
-const appGlyphCells: Record<AppGlyphName, AppGlyphDefinition> = {
-  occupancy: primaryGlyph(0, 0),
-  "booking-calendar": primaryGlyph(1, 0),
-  "front-desk": primaryGlyph(2, 0),
-  guest: primaryGlyph(3, 0),
-  folio: primaryGlyph(4, 0),
-  housekeeping: primaryGlyph(0, 1),
-  maintenance: primaryGlyph(1, 1),
-  inventory: primaryGlyph(2, 1),
-  restaurant: primaryGlyph(3, 1),
-  travel: primaryGlyph(4, 1),
-  inquiry: primaryGlyph(0, 2),
-  offline: primaryGlyph(1, 2),
-  policy: primaryGlyph(2, 2),
-  payment: primaryGlyph(3, 2),
-  integrations: primaryGlyph(4, 2),
-  reports: primaryGlyph(0, 3),
-  audit: primaryGlyph(1, 3),
-  "cloud-network": primaryGlyph(2, 3),
-  hotel: primaryGlyph(3, 3),
-  breakfast: primaryGlyph(4, 3),
-  brunch: primaryGlyph(0, 4),
-  lunch: primaryGlyph(1, 4),
-  "high-tea": primaryGlyph(2, 4),
-  dinner: primaryGlyph(3, 4),
-  supper: primaryGlyph(4, 4),
-  "room-ready": statusGlyph(0, 0),
-  "booking-feed": statusGlyph(1, 0),
-  "arrivals-departures": statusGlyph(2, 0),
-  staff: statusGlyph(3, 0),
-  "wallet-alert": statusGlyph(0, 1),
-  "damage-alert": statusGlyph(1, 1),
-  "charge-receipt": statusGlyph(2, 1),
-  "waived-charge": statusGlyph(3, 1),
-  "device-status": statusGlyph(0, 2),
-  "phone-chat": statusGlyph(1, 2),
-  email: statusGlyph(2, 2),
-  "channel-sync": statusGlyph(3, 2),
-  "smart-lock": statusGlyph(0, 3),
-  "attention-queue": statusGlyph(1, 3),
-  "offline-billing": statusGlyph(2, 3),
-  "receipt-verification": statusGlyph(3, 3),
-};
-
 const navGlyphs: Record<ViewName, AppGlyphName> = {
   Overview: "occupancy",
   Reservations: "booking-calendar",
@@ -425,17 +362,17 @@ export function AppGlyph({
   size?: number;
   className?: string;
 }) {
-  const { column, row, grid, atlas } = appGlyphCells[name];
-  const step = 100 / (grid - 1);
+  const source = customIconSources[name];
   return (
     <span
-      className={`app-glyph ${className}`.trim()}
+      className={`app-glyph ${source ? "" : "app-glyph-placeholder"} ${className}`.trim()}
+      data-icon={name}
       style={{
         width: size,
         height: size,
-        backgroundImage: `url(${atlas})`,
-        backgroundSize: `${grid * 100}% ${grid * 100}%`,
-        backgroundPosition: `${column * step}% ${row * step}%`,
+        backgroundImage: source ? `url(${source})` : undefined,
+        backgroundSize: "contain",
+        backgroundPosition: "center",
       }}
       aria-hidden="true"
     />
@@ -474,12 +411,12 @@ export function mealLabel(value: unknown) {
   );
 }
 
-export function money(paise: unknown) {
+export function money(rupees: unknown) {
   return new Intl.NumberFormat("en-IN", {
     style: "currency",
     currency: "INR",
     maximumFractionDigits: 0,
-  }).format(Number(paise ?? 0) / 100);
+  }).format(Number(rupees ?? 0));
 }
 
 export function shortDate(value: unknown) {
@@ -678,8 +615,8 @@ async function syncDeviceQueues(
         id: bill.id,
         offlineReference: bill.offlineReference,
         bookingReference: bill.bookingReference,
-        localAmountPaise: bill.totalPaise,
-        taxPaise: bill.taxPaise,
+        localAmountRupees: bill.totalRupees,
+        taxRupees: bill.taxRupees,
         documentHash: bill.documentHash,
         generatedAt: bill.generatedAt,
         documentBase64: await blobToBase64(document),
@@ -2457,10 +2394,10 @@ export function MoneyInput({
           type="number"
           min="0"
           step="1"
-          value={value / 100}
+          value={value}
           disabled={disabled}
           onChange={(event) =>
-            onChange(Math.max(0, Math.round(Number(event.target.value) * 100)))
+            onChange(Math.max(0, Number(event.target.value)))
           }
         />
       </div>
@@ -2502,7 +2439,7 @@ export function inspectionPresentation(
     summary.inspectionStatus === "DAMAGE_CHARGED"
   ) {
     return {
-      label: `Damage charged · ${money(summary.chargeAmountPaise)}`,
+      label: `Damage charged · ${money(summary.chargeAmountRupees)}`,
       tone: "charged",
       glyph: "charge-receipt" as AppGlyphName,
     };

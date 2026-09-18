@@ -17,7 +17,7 @@ await db.insert(appUsers).values({ id: userId, organisationId, propertyId, name:
   .onConflictDoUpdate({ target: appUsers.id, set: { name: 'BrainADZ Demo Owner', displayName: 'BrainADZ Demo Owner', email, authProvider: 'local-session', authSubject: email, passwordHash, role: 'OWNER', active: true, propertyId, updatedAt: timestamp } });
 for (let index = 1; index <= 8; index += 1) {
   const number = String(100 + index), roomType = index <= 4 ? 'Deluxe' : index <= 7 ? 'Executive' : 'Suite';
-  await db.insert(rooms).values({ id: `00000000-0000-4000-8000-${String(100 + index).padStart(12, '0')}`, propertyId, number, floor: 1, roomType, baseRatePaise: roomType === 'Deluxe' ? 450000 : roomType === 'Executive' ? 650000 : 900000, occupancyStatus: 'VACANT', operationalStatus: 'CLEAN', active: true, version: 1, updatedAt: timestamp })
+  await db.insert(rooms).values({ id: `00000000-0000-4000-8000-${String(100 + index).padStart(12, '0')}`, propertyId, number, floor: 1, roomType, baseRateRupees: roomType === 'Deluxe' ? 4500 : roomType === 'Executive' ? 6500 : 9000, occupancyStatus: 'VACANT', operationalStatus: 'CLEAN', active: true, version: 1, updatedAt: timestamp })
     .onConflictDoNothing();
 }
 console.log(JSON.stringify({ seeded: true, organisationId, propertyId, userId, email, rooms: 8 }));

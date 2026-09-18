@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { clearRestaurantRefund, loadRestaurantRefund, saveRestaurantRefund } from './restaurant-refund-recovery';
 const scope = { propertyId: 'property', userId: 'staff', orderId: 'order' };
-const refund = { paymentId: 'payment-1', amountPaise: 20000, reason: 'Cash returned', reference: 'cash-ref', idempotencyKey: 'original-refund-key' };
+const refund = { paymentId: 'payment-1', amountRupees: 200, reason: 'Cash returned', reference: 'cash-ref', idempotencyKey: 'original-refund-key' };
 const storage = () => {
   const data = new Map<string, string>();
   return { getItem: (key: string) => data.get(key) ?? null, setItem: (key: string, value: string) => { data.set(key, value); }, removeItem: (key: string) => { data.delete(key); } };
@@ -17,7 +17,7 @@ describe('restaurant refund recovery', () => {
     expect(loadRestaurantRefund(store, { ...scope, [field]: 'other' })).toBeNull();
   });
   it('preserves corrupt records and blocks a fresh refund', () => {
-    const store = storage(); saveRestaurantRefund(store, scope, { ...refund, amountPaise: -1 });
+    const store = storage(); saveRestaurantRefund(store, scope, { ...refund, amountRupees: -0.01 });
     expect(() => loadRestaurantRefund(store, scope)).toThrow('Ask accounts');
     expect(() => loadRestaurantRefund(store, scope)).toThrow('Ask accounts');
   });

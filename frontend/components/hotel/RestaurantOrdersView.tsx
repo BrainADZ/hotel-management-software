@@ -86,7 +86,7 @@ export function RestaurantOrdersView({
                 </td>
 
                 <td>
-                  {money(order.totalPaise)}
+                  {money(order.totalRupees)}
                 </td>
 
                 <td>

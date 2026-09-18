@@ -1,10 +1,10 @@
 import { z } from 'zod';
 
-const paise = z
+const rupees = z
   .number()
-  .int()
+  .multipleOf(0.01)
   .positive()
-  .max(100_000_000_00);
+  .max(100000000);
 
 const reason = z
   .string()
@@ -45,7 +45,7 @@ export const manualChargeSchema = z.object({
     .min(1)
     .max(1000),
 
-  unitAmountPaise: paise,
+  unitAmountRupees: rupees,
 
   taxRateBps: z
     .number()
@@ -77,7 +77,7 @@ export const discountSchema =
     z.object({
       kind: z.literal('FIXED'),
 
-      amountPaise: paise,
+      amountRupees: rupees,
 
       reason,
 
@@ -111,7 +111,7 @@ export const paymentSchema = z
       'OTHER',
     ]),
 
-    amountPaise: paise,
+    amountRupees: rupees,
 
     reference: z
       .string()
@@ -141,7 +141,7 @@ export const reversalSchema =
 
 export const refundSchema =
   z.object({
-    amountPaise: paise,
+    amountRupees: rupees,
 
     reason,
 

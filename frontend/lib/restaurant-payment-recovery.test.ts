@@ -6,7 +6,7 @@ function storage() {
   return { getItem: (key: string) => values.get(key) ?? null, setItem: (key: string, value: string) => { values.set(key, value); }, removeItem: (key: string) => { values.delete(key); } };
 }
 const scope = { orderId: 'order-1', propertyId: 'property-1', userId: 'cashier-1' };
-const body = JSON.stringify({ method: 'CASH', amountPaise: 100000, reference: 'counter-1', idempotencyKey: 'same-payment-key' });
+const body = JSON.stringify({ method: 'CASH', amountRupees: 1000, reference: 'counter-1', idempotencyKey: 'same-payment-key' });
 
 describe('restaurant payment recovery', () => {
   it('restores the exact request and key after a component reload', () => {
@@ -24,7 +24,7 @@ describe('restaurant payment recovery', () => {
     const store = storage(); savePendingRestaurantPayment(store, scope, body);
     clearPendingRestaurantPayment(store, scope);
     expect(loadPendingRestaurantPayment(store, scope)).toBeNull();
-    const next = JSON.stringify({ method: 'UPI', amountPaise: 20000, idempotencyKey: 'next-payment-key' });
+    const next = JSON.stringify({ method: 'UPI', amountRupees: 200, idempotencyKey: 'next-payment-key' });
     savePendingRestaurantPayment(store, scope, next);
     expect(loadPendingRestaurantPayment(store, scope)).toBe(next);
   });

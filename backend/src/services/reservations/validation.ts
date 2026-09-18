@@ -9,16 +9,16 @@ export const reservationCreateSchema = z.object({
   phone: optionalText(32), roomId: entityIdSchema, roomType: z.string().trim().min(1).max(80),
   arrivalDate: date, departureDate: date, adults: z.number().int().min(1).max(20), children: z.number().int().min(0).max(20),
   status: z.enum(['PENDING', 'HOLD', 'CONFIRMED']).default('CONFIRMED'), source: z.enum(reservationSources), sourceReference: optionalText(100),
-  nightlyRatePaise: z.number().int().min(0).max(100_000_000), taxRateBps: z.number().int().min(0).max(10_000).default(0),
+  nightlyRateRupees: z.number().multipleOf(0.01).min(0).max(1000000), taxRateBps: z.number().int().min(0).max(10_000).default(0),
   specialRequests: optionalText(2000), internalNotes: optionalText(2000), holdUntil: z.iso.datetime().optional(),
 });
 export const reservationEditSchema = reservationCreateSchema.pick({ guestName: true, email: true, phone: true, adults: true, children: true,
-  source: true, sourceReference: true, nightlyRatePaise: true, taxRateBps: true, specialRequests: true, internalNotes: true }).partial().strict()
+  source: true, sourceReference: true, nightlyRateRupees: true, taxRateBps: true, specialRequests: true, internalNotes: true }).partial().strict()
   .refine((value) => Object.keys(value).length > 0, 'At least one editable field is required.');
 export const reservationActionSchema = z.discriminatedUnion('type', [
   z.object({ type: z.literal('CHANGE_DATES'), arrivalDate: date, departureDate: date }),
   z.object({ type: z.enum(['EXTEND_STAY', 'SHORTEN_STAY']), departureDate: date }),
-  z.object({ type: z.enum(['CHANGE_ROOM', 'UPGRADE_ROOM']), roomId: entityIdSchema, roomType: z.string().min(1).max(80), nightlyRatePaise: z.number().int().min(0).max(100_000_000).optional() }),
+  z.object({ type: z.enum(['CHANGE_ROOM', 'UPGRADE_ROOM']), roomId: entityIdSchema, roomType: z.string().min(1).max(80), nightlyRateRupees: z.number().multipleOf(0.01).min(0).max(1000000).optional() }),
   z.object({ type: z.literal('PLACE_HOLD'), holdUntil: z.iso.datetime().optional() }),
   z.object({ type: z.enum(['RELEASE_HOLD', 'RESTORE', 'CHECK_IN', 'CHECK_OUT']) }),
   z.object({ type: z.literal('CANCEL'), reason: z.string().trim().min(3).max(500) }),

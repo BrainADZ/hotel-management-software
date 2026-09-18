@@ -73,12 +73,12 @@ export type ExtraFeatureProps = {
   notify: (message: string) => void;
 };
 
-export const money = (paise: unknown) =>
+export const money = (rupees: unknown) =>
   new Intl.NumberFormat("en-IN", {
     style: "currency",
     currency: "INR",
     maximumFractionDigits: 0,
-  }).format(Number(paise ?? 0) / 100);
+  }).format(Number(rupees ?? 0));
 export const shortDate = (value: unknown) =>
   value
     ? new Intl.DateTimeFormat("en-IN", {

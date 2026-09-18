@@ -16,17 +16,17 @@ import {
 } from './domain';
 
 describe('billing calculations', () => {
-  it('keeps financial values in integer paise', () => {
-    expect(calculateBill(935_000, 1_800)).toEqual({
-      subtotalPaise: 935_000,
-      taxPaise: 168_300,
-      totalPaise: 1_103_300,
+  it('keeps financial values in integer rupees', () => {
+    expect(calculateBill(9350, 1_800)).toEqual({
+      subtotalRupees: 9350,
+      taxRupees: 1683,
+      totalRupees: 11033,
     });
   });
 
   it('rejects invalid money and tax inputs', () => {
-    expect(() => calculateBill(-1, 1_800)).toThrow(DomainError);
-    expect(() => calculateBill(100, 10_001)).toThrow('Tax rate must be between');
+    expect(() => calculateBill(-0.01, 1_800)).toThrow(DomainError);
+    expect(() => calculateBill(1, 10_001)).toThrow('Tax rate must be between');
   });
 });
 
@@ -47,13 +47,13 @@ describe('offline continuity', () => {
   });
 
   it('never treats a missing or mismatched cloud folio as verified', () => {
-    expect(reconcileOfflineBill({ localBookingReference: 'BH-100', localAmountPaise: 10_000 })).toBe('MASTER_RECORD_NOT_FOUND');
-    expect(reconcileOfflineBill({ localBookingReference: 'BH-100', localAmountPaise: 10_000, cloudBookingReference: 'BH-100', cloudAmountPaise: 9_999 })).toBe('AMOUNT_MISMATCH');
-    expect(reconcileOfflineBill({ localBookingReference: 'BH-100', localAmountPaise: 10_000, cloudBookingReference: 'BH-101', cloudAmountPaise: 10_000 })).toBe('BOOKING_MISMATCH');
+    expect(reconcileOfflineBill({ localBookingReference: 'BH-100', localAmountRupees: 100 })).toBe('MASTER_RECORD_NOT_FOUND');
+    expect(reconcileOfflineBill({ localBookingReference: 'BH-100', localAmountRupees: 100, cloudBookingReference: 'BH-100', cloudAmountRupees: 99.99 })).toBe('AMOUNT_MISMATCH');
+    expect(reconcileOfflineBill({ localBookingReference: 'BH-100', localAmountRupees: 100, cloudBookingReference: 'BH-101', cloudAmountRupees: 100 })).toBe('BOOKING_MISMATCH');
   });
 
   it('only marks an exact comparison as matched', () => {
-    expect(reconcileOfflineBill({ localBookingReference: 'BH-100', localAmountPaise: 10_000, cloudBookingReference: 'BH-100', cloudAmountPaise: 10_000 })).toBe('MATCHED');
+    expect(reconcileOfflineBill({ localBookingReference: 'BH-100', localAmountRupees: 100, cloudBookingReference: 'BH-100', cloudAmountRupees: 100 })).toBe('MATCHED');
   });
 });
 
@@ -108,10 +108,10 @@ describe('damage policy', () => {
   });
 
   it('caps the recorded repair cost at the snapshotted policy liability', () => {
-    expect(calculatePolicyDamageCharge(175_000, 250_000)).toBe(175_000);
-    expect(calculatePolicyDamageCharge(900_000, 250_000)).toBe(250_000);
-    expect(() => calculatePolicyDamageCharge(0, 250_000)).toThrow('Repair cost must be a positive');
-    expect(() => calculatePolicyDamageCharge(100_000_001, 250_000)).toThrow('up to ₹10,00,000');
-    expect(() => calculatePolicyDamageCharge(100_000, 0)).toThrow('no valid liability limit');
+    expect(calculatePolicyDamageCharge(1750, 2500)).toBe(1750);
+    expect(calculatePolicyDamageCharge(9000, 2500)).toBe(2500);
+    expect(() => calculatePolicyDamageCharge(0, 2500)).toThrow('Repair cost must be a positive');
+    expect(() => calculatePolicyDamageCharge(1000000.01, 2500)).toThrow('up to ₹10,00,000');
+    expect(() => calculatePolicyDamageCharge(1000, 0)).toThrow('no valid liability limit');
   });
 });

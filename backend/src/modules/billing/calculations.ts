@@ -1,36 +1,36 @@
 import type { FolioTotals, MoneyLine, TaxMode } from './types';
 
-function safePaise(value: number, field: string) {
-  if (!Number.isSafeInteger(value) || value < 0) throw new Error(`${field} must be non-negative integer paise.`);
+function safeRupees(value: number, field: string) {
+  if (!Number.isSafeInteger(value) || value < 0) throw new Error(`${field} must be non-negative integer rupees.`);
   return value;
 }
-export function calculateLine(quantity: number, unitAmountPaise: number, discountPaise: number, taxRateBps: number, taxMode: TaxMode): MoneyLine {
+export function calculateLine(quantity: number, unitAmountRupees: number, discountRupees: number, taxRateBps: number, taxMode: TaxMode): MoneyLine {
   if (!Number.isSafeInteger(quantity) || quantity < 1 || quantity > 1000) throw new Error('Quantity must be a positive integer.');
-  safePaise(unitAmountPaise, 'Unit amount'); safePaise(discountPaise, 'Discount');
+  safeRupees(unitAmountRupees, 'Unit amount'); safeRupees(discountRupees, 'Discount');
   if (!Number.isSafeInteger(taxRateBps) || taxRateBps < 0 || taxRateBps > 10000) throw new Error('Tax rate is invalid.');
-  const subtotalPaise = quantity * unitAmountPaise;
-  if (!Number.isSafeInteger(subtotalPaise) || discountPaise > subtotalPaise) throw new Error('Discount exceeds the charge.');
-  const taxableAmountPaise = subtotalPaise - discountPaise;
-  const taxPaise = taxMode === 'EXEMPT' ? 0 : Math.round(taxableAmountPaise * taxRateBps / 10000);
-  const cgstPaise = taxMode === 'CGST_SGST' ? Math.floor(taxPaise / 2) : 0;
-  const sgstPaise = taxMode === 'CGST_SGST' ? taxPaise - cgstPaise : 0;
-  const igstPaise = taxMode === 'IGST' ? taxPaise : 0;
-  return { subtotalPaise, discountPaise, taxableAmountPaise, taxPaise, cgstPaise, sgstPaise, igstPaise, totalPaise: taxableAmountPaise + taxPaise };
+  const subtotalRupees = quantity * unitAmountRupees;
+  if (!Number.isSafeInteger(subtotalRupees) || discountRupees > subtotalRupees) throw new Error('Discount exceeds the charge.');
+  const taxableAmountRupees = subtotalRupees - discountRupees;
+  const taxRupees = taxMode === 'EXEMPT' ? 0 : Math.round(taxableAmountRupees * taxRateBps / 10000);
+  const cgstRupees = taxMode === 'CGST_SGST' ? Math.floor(taxRupees / 2) : 0;
+  const sgstRupees = taxMode === 'CGST_SGST' ? taxRupees - cgstRupees : 0;
+  const igstRupees = taxMode === 'IGST' ? taxRupees : 0;
+  return { subtotalRupees, discountRupees, taxableAmountRupees, taxRupees, cgstRupees, sgstRupees, igstRupees, totalRupees: taxableAmountRupees + taxRupees };
 }
 export function calculateFolio(lines: MoneyLine[], received: number[], reversed: number[], refunds: number[]): FolioTotals {
-  const sum = (items: number[]) => items.reduce((total, value) => total + safePaise(value, 'Ledger amount'), 0);
+  const sum = (items: number[]) => items.reduce((total, value) => total + safeRupees(value, 'Ledger amount'), 0);
   const lineSum = (select: (line: MoneyLine) => number) => lines.reduce((total, line) => total + select(line), 0);
-  const subtotalPaise = lineSum(line => line.subtotalPaise);
-  const discountPaise = lineSum(line => line.discountPaise);
-  const taxableAmountPaise = lineSum(line => line.taxableAmountPaise);
-  const taxPaise = lineSum(line => line.taxPaise);
-  const cgstPaise = lineSum(line => line.cgstPaise);
-  const sgstPaise = lineSum(line => line.sgstPaise);
-  const igstPaise = lineSum(line => line.igstPaise);
-  const totalPaise = taxableAmountPaise + taxPaise;
-  const paymentsPaise = sum(received) - sum(reversed);
-  const refundsPaise = sum(refunds);
-  return { grossChargesPaise: subtotalPaise, subtotalPaise, discountPaise, taxableAmountPaise, taxPaise, cgstPaise, sgstPaise, igstPaise, totalPaise, paymentsPaise, refundsPaise, outstandingPaise: totalPaise - paymentsPaise + refundsPaise };
+  const subtotalRupees = lineSum(line => line.subtotalRupees);
+  const discountRupees = lineSum(line => line.discountRupees);
+  const taxableAmountRupees = lineSum(line => line.taxableAmountRupees);
+  const taxRupees = lineSum(line => line.taxRupees);
+  const cgstRupees = lineSum(line => line.cgstRupees);
+  const sgstRupees = lineSum(line => line.sgstRupees);
+  const igstRupees = lineSum(line => line.igstRupees);
+  const totalRupees = taxableAmountRupees + taxRupees;
+  const paymentsRupees = sum(received) - sum(reversed);
+  const refundsRupees = sum(refunds);
+  return { grossChargesRupees: subtotalRupees, subtotalRupees, discountRupees, taxableAmountRupees, taxRupees, cgstRupees, sgstRupees, igstRupees, totalRupees, paymentsRupees, refundsRupees, outstandingRupees: totalRupees - paymentsRupees + refundsRupees };
 }
 export function financialYear(date: Date): string {
   const year = date.getUTCFullYear() - (date.getUTCMonth() < 3 ? 1 : 0);

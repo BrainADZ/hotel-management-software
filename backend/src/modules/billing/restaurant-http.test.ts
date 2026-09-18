@@ -12,16 +12,16 @@ const context: ReservationContext = {
   actor: { id: 'staff', name: 'Cashier', email: 'cashier@example.test', role: 'OWNER', organisationId: 'org', propertyId: 'property' },
   property: { id: 'property', organisationId: 'org', name: 'Hotel', code: 'HTL', timezone: 'Asia/Kolkata' },
 };
-const order = { id: 'order', propertyId: 'property', reservationId: null, paymentStatus: 'UNPAID', totalPaise: 85000, paidPaise: 0, orderType: 'TAKEAWAY', customerName: 'Asha' };
+const order = { id: 'order', propertyId: 'property', reservationId: null, paymentStatus: 'UNPAID', totalRupees: 850, paidRupees: 0, orderType: 'TAKEAWAY', customerName: 'Asha' };
 const payment = { id: '11111111-1111-4111-8111-111111111111', restaurantOrderId: 'order', folioId: null,
-  reservationId: null, method: 'CASH', amountPaise: 85000, reference: null,
+  reservationId: null, method: 'CASH', amountRupees: 850, reference: null,
   status: 'RECEIVED', paymentNumber: 'RCT/2026-27/000001', receivedAt: '2026-09-17T10:00:00Z' };
 const profile = { id: 'property', organisationId: 'org', name: 'Hotel', receiptPrefix: 'RCT' };
-const input = { method: 'CASH', amountPaise: 100000, idempotencyKey: 'payment-request-1' };
+const input = { method: 'CASH', amountRupees: 1000, idempotencyKey: 'payment-request-1' };
 
 // Exercise the real HTTP registry, route, validation, BillingService and PDF renderer.
 // Database query results are controlled; these tests never connect to business data.
-function database(selects: unknown[][], refundTotals: Array<{ paymentId: string; amountPaise: number }> = []) {
+function database(selects: unknown[][], refundTotals: Array<{ paymentId: string; amountRupees: number }> = []) {
   const writes: Array<{ table: string; value: Record<string, unknown> }> = [];
   const updates: Array<{ table: string; value: Record<string, unknown> }> = [];
   const db = {
@@ -37,7 +37,7 @@ function database(selects: unknown[][], refundTotals: Array<{ paymentId: string;
     },
     insert: (table: Parameters<typeof getTableName>[0]) => ({ values: (value: Record<string, unknown>) => {
       const name = getTableName(table); writes.push({ table: name, value });
-      if (name === 'payment_refunds') refundTotals.push({ paymentId: String(value.paymentId), amountPaise: Number(value.amountPaise) });
+      if (name === 'payment_refunds') refundTotals.push({ paymentId: String(value.paymentId), amountRupees: Number(value.amountRupees) });
       const query = Object.assign(Promise.resolve(), {
         onConflictDoUpdate: () => query,
         returning: async () => name === 'financial_sequences' ? [{ nextValue: 2 }] : [{ ...payment, ...value }],
@@ -63,37 +63,37 @@ beforeEach(() => { vi.clearAllMocks(); mocks.context.mockResolvedValue(context);
 
 describe('restaurant payment HTTP flow', () => {
   it('loads persisted payment history and balances without writing financial records', async () => {
-    const card = { ...payment, id: 'card-payment', method: 'CARD', amountPaise: 30000, reference: 'card-ref', idempotencyKey: 'private-key' };
-    const cash = { ...payment, amountPaise: 55000 };
-    const db = database([[{ ...order, paidPaise: 0 }], [cash, card], [{ entityId: payment.id, newValue: JSON.stringify({ amountReceivedPaise: 60000 }) }]]);
+    const card = { ...payment, id: 'card-payment', method: 'CARD', amountRupees: 300, reference: 'card-ref', idempotencyKey: 'private-key' };
+    const cash = { ...payment, amountRupees: 550 };
+    const db = database([[{ ...order, paidRupees: 0 }], [cash, card], [{ entityId: payment.id, newValue: JSON.stringify({ amountReceivedRupees: 600 }) }]]);
     const response = await request(undefined, '/api/restaurant-orders/order/payments', 'GET');
     expect(response.statusCode).toBe(200);
     expect(response.headers['cache-control']).toContain('no-store');
-    expect(response.json()).toMatchObject({ paidPaise: 85000, outstandingPaise: 0, paymentStatus: 'PAID', payments: [
-      { paymentId: payment.id, amountAppliedPaise: 55000, amountReceivedPaise: 60000, changeDuePaise: 5000, receiptAvailable: true },
-      { paymentId: 'card-payment', reference: 'card-ref', amountReceivedPaise: 30000, changeDuePaise: 0 },
+    expect(response.json()).toMatchObject({ paidRupees: 850, outstandingRupees: 0, paymentStatus: 'PAID', payments: [
+      { paymentId: payment.id, amountAppliedRupees: 550, amountReceivedRupees: 600, changeDueRupees: 50, receiptAvailable: true },
+      { paymentId: 'card-payment', reference: 'card-ref', amountReceivedRupees: 300, changeDueRupees: 0 },
     ] });
     expect(response.body).not.toContain('private-key');
     expect(db.writes).toHaveLength(0); expect(db.updates).toHaveLength(0);
   });
   it('excludes reversed payments from the balance but keeps them in history', async () => {
-    database([[order], [{ ...payment, method: 'CARD', amountPaise: 20000 }, { ...payment, id: 'reversed', method: 'UPI', status: 'REVERSED' }], []]);
+    database([[order], [{ ...payment, method: 'CARD', amountRupees: 200 }, { ...payment, id: 'reversed', method: 'UPI', status: 'REVERSED' }], []]);
     const response = await request(undefined, '/api/restaurant-orders/order/payments', 'GET');
-    expect(response.json()).toMatchObject({ paidPaise: 20000, outstandingPaise: 65000, paymentStatus: 'PARTIALLY_PAID' });
+    expect(response.json()).toMatchObject({ paidRupees: 200, outstandingRupees: 650, paymentStatus: 'PARTIALLY_PAID' });
     expect(response.json().payments).toHaveLength(2);
   });
   it('shows missing cash tender as unavailable instead of fabricating a receipt', async () => {
     database([[order], [payment], []]);
     const response = await request(undefined, '/api/restaurant-orders/order/payments', 'GET');
-    expect(response.json().payments[0]).toMatchObject({ amountReceivedPaise: null, changeDuePaise: null, receiptAvailable: false });
+    expect(response.json().payments[0]).toMatchObject({ amountReceivedRupees: null, changeDueRupees: null, receiptAvailable: false });
   });
   it('shows an unpaid order with an empty history', async () => {
     database([[order], []]);
-    expect((await request(undefined, '/api/restaurant-orders/order/payments', 'GET')).json()).toMatchObject({ paidPaise: 0, outstandingPaise: 85000, paymentStatus: 'UNPAID', payments: [] });
+    expect((await request(undefined, '/api/restaurant-orders/order/payments', 'GET')).json()).toMatchObject({ paidRupees: 0, outstandingRupees: 850, paymentStatus: 'UNPAID', payments: [] });
   });
   it('preserves folio posting status in payment history', async () => {
     database([[{ ...order, reservationId: 'stay', paymentStatus: 'POSTED_TO_FOLIO' }], []]);
-    expect((await request(undefined, '/api/restaurant-orders/order/payments', 'GET')).json()).toMatchObject({ outstandingPaise: null, paymentStatus: 'POSTED_TO_FOLIO' });
+    expect((await request(undefined, '/api/restaurant-orders/order/payments', 'GET')).json()).toMatchObject({ outstandingRupees: null, paymentStatus: 'POSTED_TO_FOLIO' });
   });
   it.each(['RESTAURANT', 'ACCOUNTS'])('permits %s to read history', async role => {
     mocks.context.mockResolvedValue({ ...context, actor: { ...context.actor, role } });
@@ -113,27 +113,27 @@ describe('restaurant payment HTTP flow', () => {
     const db = database([[order], [], [], [], [profile]]);
     const response = await request(input);
     expect(response.statusCode).toBe(201);
-    expect(response.json()).toMatchObject({ amountAppliedPaise: 85000, amountReceivedPaise: 100000, changeDuePaise: 15000, paidPaise: 85000, outstandingPaise: 0, paymentStatus: 'PAID' });
+    expect(response.json()).toMatchObject({ amountAppliedRupees: 850, amountReceivedRupees: 1000, changeDueRupees: 150, paidRupees: 850, outstandingRupees: 0, paymentStatus: 'PAID' });
     expect(db.writes.map(row => row.table)).toEqual(['financial_sequences', 'payments', 'audit_logs']);
-    expect(db.writes[1].value).toMatchObject({ folioId: null, reservationId: null, restaurantOrderId: 'order', amountPaise: 85000 });
-    expect(JSON.parse(String(db.writes[2].value.newValue))).toMatchObject({ amountReceivedPaise: 100000, changeDuePaise: 15000 });
-    expect(db.updates[0].value).toMatchObject({ paidPaise: 85000, paymentStatus: 'PAID' });
+    expect(db.writes[1].value).toMatchObject({ folioId: null, reservationId: null, restaurantOrderId: 'order', amountRupees: 850 });
+    expect(JSON.parse(String(db.writes[2].value.newValue))).toMatchObject({ amountReceivedRupees: 1000, changeDueRupees: 150 });
+    expect(db.updates[0].value).toMatchObject({ paidRupees: 850, paymentStatus: 'PAID' });
   });
   it.each(['CARD', 'UPI'])('supports %s partial payments using active payment totals', async method => {
-    database([[{ ...order, paidPaise: 123 }], [], [], [{ amountPaise: 20000 }], [profile]]);
-    const response = await request({ ...input, method, amountPaise: 30000, reference: 'transaction-123' });
-    expect(response.json()).toMatchObject({ paidPaise: 50000, outstandingPaise: 35000, paymentStatus: 'PARTIALLY_PAID', reference: 'transaction-123' });
+    database([[{ ...order, paidRupees: 1.23 }], [], [], [{ amountRupees: 200 }], [profile]]);
+    const response = await request({ ...input, method, amountRupees: 300, reference: 'transaction-123' });
+    expect(response.json()).toMatchObject({ paidRupees: 500, outstandingRupees: 350, paymentStatus: 'PARTIALLY_PAID', reference: 'transaction-123' });
   });
   it('replays the original cash receipt without writing another payment', async () => {
-    const db = database([[{ ...order, paidPaise: 85000 }], [payment], [], [payment], [{ newValue: JSON.stringify({ amountReceivedPaise: 100000 }) }]]);
+    const db = database([[{ ...order, paidRupees: 850 }], [payment], [], [payment], [{ newValue: JSON.stringify({ amountReceivedRupees: 1000 }) }]]);
     const response = await request(input);
     expect(response.statusCode).toBe(201);
-    expect(response.json()).toMatchObject({ paymentId: payment.id, changeDuePaise: 15000 });
+    expect(response.json()).toMatchObject({ paymentId: payment.id, changeDueRupees: 150 });
     expect(db.writes).toHaveLength(0);
   });
   it('rejects changed cash tender on the same key even when applied amount would match', async () => {
-    const db = database([[order], [payment], [], [payment], [{ newValue: JSON.stringify({ amountReceivedPaise: 100000 }) }]]);
-    const response = await request({ ...input, amountPaise: 110000 });
+    const db = database([[order], [payment], [], [payment], [{ newValue: JSON.stringify({ amountReceivedRupees: 1000 }) }]]);
+    const response = await request({ ...input, amountRupees: 1100 });
     expect(response.statusCode).toBe(409);
     expect(response.json().error.code).toBe('IDEMPOTENCY_CONFLICT');
     expect(db.writes).toHaveLength(0);
@@ -144,11 +144,11 @@ describe('restaurant payment HTTP flow', () => {
     expect(db.writes).toHaveLength(0);
   });
   it('replays an earlier partial payment after another payment settles the bill', async () => {
-    const partial = { ...payment, amountPaise: 30000, method: 'CARD' };
-    const db = database([[{ ...order, paidPaise: 85000 }], [partial], [], [partial, { amountPaise: 55000 }], []]);
-    const response = await request({ ...input, method: 'CARD', amountPaise: 30000 });
+    const partial = { ...payment, amountRupees: 300, method: 'CARD' };
+    const db = database([[{ ...order, paidRupees: 850 }], [partial], [], [partial, { amountRupees: 550 }], []]);
+    const response = await request({ ...input, method: 'CARD', amountRupees: 300 });
     expect(response.statusCode).toBe(201);
-    expect(response.json()).toMatchObject({ amountAppliedPaise: 30000, paidPaise: 85000, outstandingPaise: 0 });
+    expect(response.json()).toMatchObject({ amountAppliedRupees: 300, paidRupees: 850, outstandingRupees: 0 });
     expect(db.writes).toHaveLength(0);
   });
   it.each(['CARD', 'UPI'])('rejects %s overpayment before allocating a receipt', async method => {
@@ -176,89 +176,89 @@ describe('restaurant payment HTTP flow', () => {
     expect((await request(input)).json().error.code).toBe('ORDER_ALREADY_PAID');
     expect(db.writes).toHaveLength(0);
   });
-  it.each([25000, 85000])('records restaurant refund %s and recalculates net balance', async amountPaise => {
+  it.each([25000, 85000])('records restaurant refund %s and recalculates net balance', async amountRupees => {
     const db = database([[payment], [order], [], [], [payment]]);
-    const response = await request({ amountPaise, reason: 'Customer money returned', reference: 'refund-ref', idempotencyKey: 'refund-key-123' }, `/api/payments/${payment.id}/refund`);
+    const response = await request({ amountRupees, reason: 'Customer money returned', reference: 'refund-ref', idempotencyKey: 'refund-key-123' }, `/api/payments/${payment.id}/refund`);
     expect(response.statusCode).toBe(201);
-    expect(db.writes[0]).toMatchObject({ table: 'payment_refunds', value: { paymentId: payment.id, folioId: null, amountPaise, reference: 'refund-ref' } });
+    expect(db.writes[0]).toMatchObject({ table: 'payment_refunds', value: { paymentId: payment.id, folioId: null, amountRupees, reference: 'refund-ref' } });
     expect(db.writes[1]).toMatchObject({ table: 'audit_logs', value: { action: 'REFUND_RECORDED' } });
-    expect(db.updates).toEqual([{ table: 'restaurant_orders', value: { paidPaise: 85000 - amountPaise, paymentStatus: amountPaise === 85000 ? 'UNPAID' : 'PARTIALLY_PAID', settledAt: null } }]);
+    expect(db.updates).toEqual([{ table: 'restaurant_orders', value: { paidRupees: 85000 - amountRupees, paymentStatus: amountRupees === 85000 ? 'UNPAID' : 'PARTIALLY_PAID', settledAt: null } }]);
   });
   it('replays an identical refund without further writes', async () => {
-    const refund = { amountPaise: 20000, reason: 'Cash returned', reference: 'cash', idempotencyKey: 'refund-key-123' };
+    const refund = { amountRupees: 200, reason: 'Cash returned', reference: 'cash', idempotencyKey: 'refund-key-123' };
     const db = database([[payment], [order], [refund]]);
     expect((await request(refund, `/api/payments/${payment.id}/refund`)).statusCode).toBe(201);
     expect(db.writes).toHaveLength(0); expect(db.updates).toHaveLength(0);
   });
-  it.each(['amountPaise', 'reason', 'reference'])('rejects changed refund replay %s', async field => {
-    const refund = { amountPaise: 20000, reason: 'Cash returned', reference: 'cash', idempotencyKey: 'refund-key-123' };
+  it.each(['amountRupees', 'reason', 'reference'])('rejects changed refund replay %s', async field => {
+    const refund = { amountRupees: 200, reason: 'Cash returned', reference: 'cash', idempotencyKey: 'refund-key-123' };
     const db = database([[payment], [order], [refund]]);
-    const response = await request({ ...refund, [field]: field === 'amountPaise' ? 30000 : 'Different value' }, `/api/payments/${payment.id}/refund`);
+    const response = await request({ ...refund, [field]: field === 'amountRupees' ? 30000 : 'Different value' }, `/api/payments/${payment.id}/refund`);
     expect(response.statusCode).toBe(409); expect(response.json().error.code).toBe('IDEMPOTENCY_CONFLICT');
     expect(db.writes).toHaveLength(0);
   });
   it.each([
-    { rows: [[payment], [order], [], [{ amountPaise: 84000 }]], code: 'REFUND_EXCEEDS_PAYMENT' },
+    { rows: [[payment], [order], [], [{ amountRupees: 840 }]], code: 'REFUND_EXCEEDS_PAYMENT' },
     { rows: [[{ ...payment, status: 'REVERSED' }], [order]], code: 'PAYMENT_NOT_REFUNDABLE' },
     { rows: [[payment], [{ ...order, reservationId: 'guest' }]], code: 'ORDER_POSTED_TO_FOLIO' },
   ])('blocks unsafe refund: $code', async ({ rows, code }) => {
     const db = database(rows);
-    const response = await request({ amountPaise: 2000, reason: 'Cash returned', idempotencyKey: 'refund-key-123' }, `/api/payments/${payment.id}/refund`);
+    const response = await request({ amountRupees: 20, reason: 'Cash returned', idempotencyKey: 'refund-key-123' }, `/api/payments/${payment.id}/refund`);
     expect(response.statusCode).toBe(409); expect(response.json().error.code).toBe(code);
     expect(db.writes).toHaveLength(0); expect(db.updates).toHaveLength(0);
   });
   it('blocks refund by restaurant staff before accessing data', async () => {
     mocks.context.mockResolvedValue({ ...context, actor: { ...context.actor, role: 'RESTAURANT' } });
-    expect((await request({ amountPaise: 2000, reason: 'Cash returned', idempotencyKey: 'refund-key-123' }, `/api/payments/${payment.id}/refund`)).statusCode).toBe(403);
+    expect((await request({ amountRupees: 20, reason: 'Cash returned', idempotencyKey: 'refund-key-123' }, `/api/payments/${payment.id}/refund`)).statusCode).toBe(403);
     expect(mocks.db).not.toHaveBeenCalled();
   });
   it('shows refunded totals and remaining refundable amount in history', async () => {
-    database([[order], [{ ...payment, method: 'CARD' }], []], [{ paymentId: payment.id, amountPaise: 20000 }]);
+    database([[order], [{ ...payment, method: 'CARD' }], []], [{ paymentId: payment.id, amountRupees: 200 }]);
     const response = await request(undefined, '/api/restaurant-orders/order/payments', 'GET');
-    expect(response.json()).toMatchObject({ paidPaise: 65000, outstandingPaise: 20000, payments: [{ refundedPaise: 20000, refundablePaise: 65000 }] });
+    expect(response.json()).toMatchObject({ paidRupees: 650, outstandingRupees: 200, payments: [{ refundedRupees: 200, refundableRupees: 650 }] });
   });
   it('renders refund and net totals on the original receipt', async () => {
     const renderer = vi.spyOn(documents, 'premiumPaymentReceiptPdf');
     try {
-      database([[payment], [order], [profile], [{ newValue: JSON.stringify({ amountReceivedPaise: 100000 }) }]],
-        [{ paymentId: payment.id, amountPaise: 20000 }]);
+      database([[payment], [order], [profile], [{ newValue: JSON.stringify({ amountReceivedRupees: 1000 }) }]],
+        [{ paymentId: payment.id, amountRupees: 200 }]);
       const response = await request(undefined, `/api/payments/${payment.id}/receipt`, 'GET');
       expect(response.statusCode).toBe(200);
       expect(renderer).toHaveBeenCalledWith(expect.objectContaining({
         receipt: expect.objectContaining({ number: payment.paymentNumber }),
-        amounts: { receivedPaise: 85000, refundedPaise: 20000, netPaise: 65000 },
+        amounts: { receivedRupees: 850, refundedRupees: 200, netRupees: 650 },
       }));
     } finally { renderer.mockRestore(); }
   });
-  it.each([0, -1, 1.5])('rejects invalid refund amount %s before database access', async amountPaise => {
-    expect((await request({ amountPaise, reason: 'Cash returned', idempotencyKey: 'refund-key-123' }, `/api/payments/${payment.id}/refund`)).statusCode).toBe(400);
+  it.each([0, -1, 1.5])('rejects invalid refund amount %s before database access', async amountRupees => {
+    expect((await request({ amountRupees, reason: 'Cash returned', idempotencyKey: 'refund-key-123' }, `/api/payments/${payment.id}/refund`)).statusCode).toBe(400);
     expect(mocks.db).not.toHaveBeenCalled();
   });
   it('returns 404 for a payment outside the selected scope without writing', async () => {
     const db = database([[]]);
-    expect((await request({ amountPaise: 100, reason: 'Cash returned', idempotencyKey: 'refund-key-123' }, `/api/payments/${payment.id}/refund`)).statusCode).toBe(404);
+    expect((await request({ amountRupees: 1, reason: 'Cash returned', idempotencyKey: 'refund-key-123' }, `/api/payments/${payment.id}/refund`)).statusCode).toBe(404);
     expect(db.writes).toHaveLength(0); expect(db.updates).toHaveLength(0);
   });
   it('accepts a replacement payment against the refunded balance', async () => {
-    const db = database([[order], [], [], [payment], [profile]], [{ paymentId: payment.id, amountPaise: 20000 }]);
-    const response = await request({ method: 'CARD', amountPaise: 20000, idempotencyKey: 'replacement-key' });
+    const db = database([[order], [], [], [payment], [profile]], [{ paymentId: payment.id, amountRupees: 200 }]);
+    const response = await request({ method: 'CARD', amountRupees: 200, idempotencyKey: 'replacement-key' });
     expect(response.statusCode).toBe(201);
-    expect(response.json()).toMatchObject({ paidPaise: 85000, outstandingPaise: 0, paymentStatus: 'PAID' });
+    expect(response.json()).toMatchObject({ paidRupees: 850, outstandingRupees: 0, paymentStatus: 'PAID' });
     expect(db.writes.filter(row => row.table === 'payments')).toHaveLength(1);
   });
   it('preserves refunds on other payments when reversing a mistaken entry', async () => {
-    const other = { ...payment, id: 'other', amountPaise: 20000 };
-    const db = database([[payment], [order], [], [payment, other]], [{ paymentId: 'other', amountPaise: 5000 }]);
+    const other = { ...payment, id: 'other', amountRupees: 200 };
+    const db = database([[payment], [order], [], [payment, other]], [{ paymentId: 'other', amountRupees: 50 }]);
     expect((await request({ reason: 'Incorrect entry' }, `/api/payments/${payment.id}/reverse`)).statusCode).toBe(200);
-    expect(db.updates[1].value).toMatchObject({ paidPaise: 15000, paymentStatus: 'PARTIALLY_PAID' });
+    expect(db.updates[1].value).toMatchObject({ paidRupees: 150, paymentStatus: 'PARTIALLY_PAID' });
   });
   it.each([0, 20000])('reverses a mistaken payment and recalculates remaining paid amount %s', async remaining => {
-    const db = database([[payment], [order], [], [payment, ...(remaining ? [{ ...payment, id: 'other', amountPaise: remaining }] : [])]]);
+    const db = database([[payment], [order], [], [payment, ...(remaining ? [{ ...payment, id: 'other', amountRupees: remaining }] : [])]]);
     const response = await request({ reason: 'Incorrect cash entry' }, `/api/payments/${payment.id}/reverse`);
     expect(response.statusCode).toBe(200);
     expect(db.updates).toEqual([
       { table: 'payments', value: expect.objectContaining({ status: 'REVERSED', reversalReason: 'Incorrect cash entry', reversedBy: 'staff' }) },
-      { table: 'restaurant_orders', value: { paidPaise: remaining, paymentStatus: remaining ? 'PARTIALLY_PAID' : 'UNPAID', settledAt: null } },
+      { table: 'restaurant_orders', value: { paidRupees: remaining, paymentStatus: remaining ? 'PARTIALLY_PAID' : 'UNPAID', settledAt: null } },
     ]);
     expect(db.writes).toHaveLength(1);
     expect(db.writes[0]).toMatchObject({ table: 'audit_logs', value: { action: 'PAYMENT_REVERSED', entityId: payment.id } });
@@ -272,7 +272,7 @@ describe('restaurant payment HTTP flow', () => {
     { rows: [[], [], []], code: 'PAYMENT_NOT_FOUND', status: 404 },
     { rows: [[payment], [], []], code: 'ORDER_NOT_FOUND', status: 404 },
     { rows: [[payment], [{ ...order, reservationId: 'guest' }], []], code: 'ORDER_POSTED_TO_FOLIO', status: 409 },
-    { rows: [[payment], [order], [{ amountPaise: 100 }]], code: 'PAYMENT_HAS_REFUNDS', status: 409 },
+    { rows: [[payment], [order], [{ amountRupees: 1 }]], code: 'PAYMENT_HAS_REFUNDS', status: 409 },
   ])('rejects unsafe reversal: $code', async ({ rows, code, status }) => {
     const db = database(rows);
     const response = await request({ reason: 'Incorrect entry' }, `/api/payments/${payment.id}/reverse`);
@@ -290,14 +290,14 @@ describe('restaurant payment HTTP flow', () => {
   });
   it('downloads a restaurant receipt through the shared PDF endpoint', async () => {
     mocks.context.mockResolvedValue({ ...context, actor: { ...context.actor, role: 'RESTAURANT' } });
-    database([[payment], [order], [profile], [{ newValue: JSON.stringify({ amountReceivedPaise: 100000 }) }]]);
+    database([[payment], [order], [profile], [{ newValue: JSON.stringify({ amountReceivedRupees: 1000 }) }]]);
     const response = await request(undefined, `/api/payments/${payment.id}/receipt`, 'GET');
     expect(response.statusCode).toBe(200);
     expect(response.headers['content-type']).toBe('application/pdf');
     expect(response.body.startsWith('%PDF-')).toBe(true);
   });
   it('reprints the same persisted receipt without a new payment or receipt number', async () => {
-    const receiptRows = [[payment], [order], [profile], [{ newValue: JSON.stringify({ amountReceivedPaise: 100000 }) }]];
+    const receiptRows = [[payment], [order], [profile], [{ newValue: JSON.stringify({ amountReceivedRupees: 1000 }) }]];
     const db = database([...receiptRows, ...receiptRows]);
     const first = await request(undefined, `/api/payments/${payment.id}/receipt`, 'GET');
     const second = await request(undefined, `/api/payments/${payment.id}/receipt`, 'GET');

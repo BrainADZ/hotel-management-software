@@ -48,7 +48,7 @@ export function TravelOverviewView({ state, setView }: PlatformViewProps) {
         <Kpi
           icon={<AppGlyph name="folio" size={31} />}
           label="Pipeline value"
-          value={money(state.travelMetrics.pipelineValuePaise)}
+          value={money(state.travelMetrics.pipelineValueRupees)}
           detail={`${state.travelMetrics.customQuotes} custom quotes`}
           meta="Calculated from live inquiries"
           tone="emerald"
@@ -87,7 +87,7 @@ export function TravelOverviewView({ state, setView }: PlatformViewProps) {
                     </small>
                   </span>
                   <span>
-                    <b>{money(item.quotedPricePaise)}</b>
+                    <b>{money(item.quotedPriceRupees)}</b>
                     <Status value={String(item.status)} />
                   </span>
                 </div>
@@ -117,13 +117,13 @@ export function TravelOverviewView({ state, setView }: PlatformViewProps) {
                     <strong>{String(request.packageName)}</strong>
                     <small>
                       {String(request.requestedByName)} requested{" "}
-                      {money(request.requestedPricePaise)}
+                      {money(request.requestedPriceRupees)}
                     </small>
                   </span>
                   <em>
                     {money(
-                      Number(request.floorPricePaise) -
-                        Number(request.requestedPricePaise),
+                      Number(request.floorPriceRupees) -
+                        Number(request.requestedPriceRupees),
                     )}{" "}
                     below floor
                   </em>

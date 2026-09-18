@@ -28,10 +28,10 @@ export function ParticipantsView(props: ExtraFeatureProps) {
                 `TOUR-${2601 + (index % Math.max(state.packages.length, 1))}`,
                 index % 3 === 0 ? "Single" : "Double",
                 index % 2 ? "Received" : "Pending",
-                money(item.estimatedValuePaise),
+                money(item.estimatedValueRupees),
                 money(
                   Math.round(
-                    Number(item.estimatedValuePaise) * (index % 2 ? 0 : 0.35),
+                    Number(item.estimatedValueRupees) * (index % 2 ? 0 : 0.35),
                   ),
                 ),
               ])}

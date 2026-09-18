@@ -89,7 +89,7 @@ export class OfflineSyncService {
       let room = null;
       for (const candidate of candidates) if ((await service.availability(context, candidate.id, arrivalDate, departureDate)).available) { room = candidate; break; }
       if (!room) throw new DomainError('ROOM_NOT_AVAILABLE', 'No room of the requested type is currently available. Review this walk-in.', 409);
-      const reservation = await service.create(context, { guestName: String(payload.guestName ?? ''), email: String(payload.email ?? ''), phone: String(payload.phone ?? ''), roomId: room.id, roomType, arrivalDate, departureDate, adults: Number(payload.guestCount ?? 1), children: 0, status: 'CONFIRMED', source: 'WALK_IN', sourceReference: String(payload.localReference ?? mutation.clientMutationId), nightlyRatePaise: room.baseRatePaise, taxRateBps: 0, specialRequests: String(payload.dietaryRequirements ?? '') });
+      const reservation = await service.create(context, { guestName: String(payload.guestName ?? ''), email: String(payload.email ?? ''), phone: String(payload.phone ?? ''), roomId: room.id, roomType, arrivalDate, departureDate, adults: Number(payload.guestCount ?? 1), children: 0, status: 'CONFIRMED', source: 'WALK_IN', sourceReference: String(payload.localReference ?? mutation.clientMutationId), nightlyRateRupees: room.baseRateRupees, taxRateBps: 0, specialRequests: String(payload.dietaryRequirements ?? '') });
       await new BillingService().ensureFolio(context, reservation.id);
       return { serverEntityId: reservation.id, result: { reservationId: reservation.id, reference: reservation.reference } };
     }

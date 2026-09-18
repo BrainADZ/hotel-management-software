@@ -21,12 +21,12 @@ export function RoomTypesRatesView({ state }: { state: FeatureState }) {
       const current = all[type] ?? {
         type,
         rooms: 0,
-        rate: Number(room.baseRatePaise),
+        rate: Number(room.baseRateRupees),
         adults: type.includes("Suite") ? 3 : 2,
         children: type.includes("Suite") ? 2 : 1,
       };
       current.rooms += 1;
-      current.rate = Math.min(current.rate, Number(room.baseRatePaise));
+      current.rate = Math.min(current.rate, Number(room.baseRateRupees));
       all[type] = current;
       return all;
     }, {}),

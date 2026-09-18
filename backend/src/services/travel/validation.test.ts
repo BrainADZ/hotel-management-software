@@ -3,13 +3,13 @@ import { createFollowUpSchema, createInquirySchema, createPackageSchema, discoun
 
 describe('Travel production contracts', () => {
   it('validates persisted inquiry creation and pipeline updates', () => {
-    expect(createInquirySchema.parse({ customerName: 'Rhea Sharma', source: 'Website', owner: 'Neha', service: 'Rajasthan tour', estimatedValuePaise: 4800000, status: 'NEW' }).estimatedValuePaise).toBe(4800000);
+    expect(createInquirySchema.parse({ customerName: 'Rhea Sharma', source: 'Website', owner: 'Neha', service: 'Rajasthan tour', estimatedValueRupees: 48000, status: 'NEW' }).estimatedValueRupees).toBe(48000);
     expect(updateInquirySchema.parse({ status: 'NEGOTIATION' }).status).toBe('NEGOTIATION');
   });
-  it('validates package creation and whole-paise pricing', () => {
-    expect(createPackageSchema.parse({ clientName: 'Rhea Sharma', name: 'Rajasthan Escape', quotedPricePaise: 500000, assetSelections: [{ assetId: 'asset-1', quantity: 2 }] }).assetSelections).toHaveLength(1);
-    expect(packagePricingSchema.parse({ basePricePaise: 500000, floorPricePaise: 450000 })).toMatchObject({ floorPricePaise: 450000 });
-    expect(() => packagePricingSchema.parse({ basePricePaise: 10.5, floorPricePaise: 5 })).toThrow();
+  it('validates package creation and whole-rupees pricing', () => {
+    expect(createPackageSchema.parse({ clientName: 'Rhea Sharma', name: 'Rajasthan Escape', quotedPriceRupees: 5000, assetSelections: [{ assetId: 'asset-1', quantity: 2 }] }).assetSelections).toHaveLength(1);
+    expect(packagePricingSchema.parse({ basePriceRupees: 5000, floorPriceRupees: 4500 })).toMatchObject({ floorPriceRupees: 4500 });
+    expect(() => packagePricingSchema.parse({ basePriceRupees: 0.105, floorPriceRupees: 0.05 })).toThrow();
   });
   it('validates discount decisions', () => expect(discountDecisionSchema.parse({ decision: 'APPROVED' }).decision).toBe('APPROVED'));
   it('validates follow-up creation and versioned completion', () => {

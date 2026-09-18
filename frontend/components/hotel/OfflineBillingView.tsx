@@ -70,22 +70,22 @@ export function OfflineBillingView({
       setAmounts({
         room: stay.lines
           .filter((line) => line.category === "ROOM")
-          .reduce((sum, line) => sum + line.lineTotalPaise, 0),
+          .reduce((sum, line) => sum + line.lineTotalRupees, 0),
         restaurant: stay.lines
           .filter((line) =>
             ["RESTAURANT", "ROOM_SERVICE"].includes(line.category),
           )
-          .reduce((sum, line) => sum + line.lineTotalPaise, 0),
+          .reduce((sum, line) => sum + line.lineTotalRupees, 0),
         other: stay.lines
           .filter(
             (line) =>
               !["ROOM", "RESTAURANT", "ROOM_SERVICE"].includes(line.category),
           )
-          .reduce((sum, line) => sum + line.lineTotalPaise, 0),
+          .reduce((sum, line) => sum + line.lineTotalRupees, 0),
         taxRate:
-          stay.folio.subtotalPaise > 0
+          stay.folio.subtotalRupees > 0
             ? Math.round(
-                (stay.folio.taxPaise / stay.folio.subtotalPaise) * 10_000,
+                (stay.folio.taxRupees / stay.folio.subtotalRupees) * 10_000,
               )
             : 1800,
       });
@@ -99,9 +99,9 @@ export function OfflineBillingView({
         const bill = await generateOfflineBill({
           reservationId: selected.id,
           generatedBy: state.actor.name,
-          roomChargesPaise: amounts.room,
-          restaurantPaise: amounts.restaurant,
-          otherPaise: amounts.other,
+          roomChargesRupees: amounts.room,
+          restaurantRupees: amounts.restaurant,
+          otherRupees: amounts.other,
           taxRateBps: amounts.taxRate,
         });
         downloadBlob(bill.documentBlob, `${bill.offlineReference}.pdf`);
@@ -123,9 +123,9 @@ export function OfflineBillingView({
           .map((line) => ({
             description: String(line.description),
             quantity: Number(line.quantity),
-            unitAmountPaise: Number(line.unitAmountPaise),
+            unitAmountRupees: Number(line.unitAmountRupees),
             taxRateBps: Number(line.taxRateBps),
-            lineTotalPaise: Number(line.lineTotalPaise),
+            lineTotalRupees: Number(line.lineTotalRupees),
           }));
         const pdf = createOnlineFolioPdf({
           bookingReference: String(reservation.reference),
@@ -136,9 +136,9 @@ export function OfflineBillingView({
           arrivalDate: String(reservation.arrivalDate),
           departureDate: String(reservation.departureDate),
           folioStatus: String(folio.status),
-          subtotalPaise: Number(folio.subtotalPaise),
-          taxPaise: Number(folio.taxPaise),
-          totalPaise: Number(folio.totalPaise),
+          subtotalRupees: Number(folio.subtotalRupees),
+          taxRupees: Number(folio.taxRupees),
+          totalRupees: Number(folio.totalRupees),
           lines,
         });
         downloadBlob(pdf.blob, pdf.filename);
@@ -423,7 +423,7 @@ export function OfflineBillingView({
                       )}
                     </td>
                     <td>
-                      <strong>{money(bill.totalPaise)}</strong>
+                      <strong>{money(bill.totalRupees)}</strong>
                     </td>
                     <td>
                       <Status value={bill.status} />

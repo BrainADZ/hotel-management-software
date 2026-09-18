@@ -28,20 +28,20 @@ export async function restaurantReceipt(context: ReservationContext, paymentId: 
   )).limit(1);
   if (!order || !profile) throw new DomainError('RECEIPT_NOT_FOUND', 'Receipt details were not found.', 404);
   const tender = restaurantTender(payment, audit?.newValue);
-  const refunds = await db.select({ paymentId: paymentRefunds.paymentId, amountPaise: paymentRefunds.amountPaise }).from(paymentRefunds).where(and(
+  const refunds = await db.select({ paymentId: paymentRefunds.paymentId, amountRupees: paymentRefunds.amountRupees }).from(paymentRefunds).where(and(
     eq(paymentRefunds.paymentId, payment.id), eq(paymentRefunds.propertyId, context.property.id),
     eq(paymentRefunds.organisationId, context.actor.organisationId), eq(paymentRefunds.status, 'RECORDED'),
   ));
-  const refundedPaise = refunds.reduce((sum, row) => sum + row.amountPaise, 0);
-  const rupees = (value: number) => `INR ${(value / 100).toFixed(2)}`;
+  const refundedRupees = refunds.reduce((sum, row) => sum + row.amountRupees, 0);
+  const rupees = (value: number) => `₹${value.toFixed(2)}`;
   const pdf = premiumPaymentReceiptPdf({
     source: 'RESTAURANT',
     property: { name: profile.legalName || profile.name, address: profile.billingAddress, gstin: profile.gstin },
     receipt: { number: payment.paymentNumber, status: payment.status, receivedAt: payment.receivedAt,
       method: payment.method, reference: payment.reference,
-      notes: `Tender ${rupees(tender)}; change ${rupees(tender - payment.amountPaise)}` },
+      notes: `Tender ${rupees(tender)}; change ${rupees(tender - payment.amountRupees)}` },
     guest: { name: order.customerName || 'Walk-in customer', reservation: order.id, room: order.orderType },
-    amounts: { receivedPaise: payment.amountPaise, refundedPaise, netPaise: payment.status === 'RECEIVED' ? payment.amountPaise - refundedPaise : 0 },
+    amounts: { receivedRupees: payment.amountRupees, refundedRupees, netRupees: payment.status === 'RECEIVED' ? payment.amountRupees - refundedRupees : 0 },
     reversal: payment.reversedAt ? { reversedAt: payment.reversedAt, reason: payment.reversalReason } : null,
   });
   return new Response(Buffer.from(pdf), { headers: {

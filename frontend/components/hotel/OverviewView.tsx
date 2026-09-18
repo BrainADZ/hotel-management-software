@@ -702,13 +702,13 @@ export function OverviewView({
           }
           label="Folio charges (including tax)"
           value={money(
-            state.metrics.revenuePaise,
+            state.metrics.revenueRupees,
           )}
           detail={`ADR ${money(
-            state.metrics.adrPaise,
+            state.metrics.adrRupees,
           )}`}
           meta={`RevPAR ${money(
-            state.metrics.revParPaise,
+            state.metrics.revParRupees,
           )}`}
           tone="emerald"
         />

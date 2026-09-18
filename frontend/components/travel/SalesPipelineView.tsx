@@ -24,7 +24,7 @@ export function SalesPipelineView(props: ExtraFeatureProps) {
                     <p>{String(item.service)}</p>
                     <div>
                       <small>{String(item.owner)}</small>
-                      <b>{money(item.estimatedValuePaise)}</b>
+                      <b>{money(item.estimatedValueRupees)}</b>
                     </div>
                   </article>
                 ))}

@@ -20,6 +20,7 @@ import {
   maintenanceTickets,
   offlineBills,
   properties,
+  ratePlans,
   reservations,
   restaurantMealBookings,
   restaurantOrderItems,
@@ -54,7 +55,7 @@ export const workflowSchemas = {
     expectedVersion: version.optional(),
     name: label,
     category: label,
-    pricePaise: z.number().int().positive().max(100_000_000),
+    priceRupees: z.number().multipleOf(0.01).positive().max(1000000),
     available: z.boolean(),
   }),
   RECORD_LOST_ITEM: z.object({
@@ -84,8 +85,40 @@ export const workflowSchemas = {
     number: z.string().trim().min(1).max(30),
     roomType: label,
     floor: z.number().int().min(0).max(200),
-    baseRatePaise: z.number().int().nonnegative().max(100_000_000),
+    baseRateRupees: z.number().multipleOf(0.01).nonnegative().max(1000000),
   }),
+  SAVE_RATE_PLAN: z
+    .object({
+      id: id.optional(),
+      expectedVersion: version.optional(),
+      code: z
+        .string()
+        .trim()
+        .min(2)
+        .max(30)
+        .transform((value) => value.toUpperCase())
+        .refine((value) => /^[A-Z0-9][A-Z0-9_-]*$/.test(value), {
+          message: 'Rate plan code may use letters, numbers, hyphens and underscores.',
+        }),
+      name: label,
+      roomType: label,
+      rateRupees: z.number().multipleOf(0.01).nonnegative().max(1000000),
+      mealPlan: z.enum(['EP', 'CP', 'MAP', 'AP']),
+      refundable: z.boolean(),
+      minStay: z.number().int().min(1).max(365),
+      validFrom: z.iso.date().optional(),
+      validTo: z.iso.date().optional(),
+      active: z.boolean(),
+    })
+    .superRefine((value, ctx) => {
+      if (value.validFrom && value.validTo && value.validFrom > value.validTo) {
+        ctx.addIssue({
+          code: 'custom',
+          message: 'Valid to date must be on or after valid from date.',
+          path: ['validTo'],
+        });
+      }
+    }),
   CREATE_HOUSEKEEPING_TASK: z.object({
     roomId: id,
     taskType: z.enum(['STAY_SERVICE', 'CHECKOUT_CLEANING']),
@@ -297,6 +330,7 @@ export async function operationalSnapshot(c: ReservationContext) {
     invoiceRows,
     billRows,
     restaurantItemRows,
+    ratePlanRows,
   ] = await Promise.all([
     roleCan(c.actor.role, 'restaurant.manage')
       ? db
@@ -450,6 +484,14 @@ export async function operationalSnapshot(c: ReservationContext) {
           .orderBy(desc(restaurantOrderItems.createdAt))
           .limit(2000)
       : [],
+    roleCan(c.actor.role, 'rooms.manage')
+      ? db
+          .select()
+          .from(ratePlans)
+          .where(eq(ratePlans.propertyId, c.property.id))
+          .orderBy(ratePlans.roomType, ratePlans.code)
+          .limit(500)
+      : [],
   ]);
 
   let dashboardMetrics;
@@ -481,7 +523,7 @@ export async function operationalSnapshot(c: ReservationContext) {
           departureDate: reservations.departureDate,
           adults: reservations.adults,
           children: reservations.children,
-          nightlyRatePaise: reservations.nightlyRatePaise,
+          nightlyRateRupees: reservations.nightlyRateRupees,
         })
         .from(reservations)
         .where(
@@ -492,8 +534,8 @@ export async function operationalSnapshot(c: ReservationContext) {
         ),
       db
         .select({
-          totalPaise: folios.totalPaise,
-          outstandingPaise: folios.outstandingPaise,
+          totalRupees: folios.totalRupees,
+          outstandingRupees: folios.outstandingRupees,
         })
         .from(folios)
         .where(
@@ -548,6 +590,7 @@ export async function operationalSnapshot(c: ReservationContext) {
     restaurantStaff,
     invoices: invoiceRows,
     restaurantOrderItems: restaurantItemRows,
+    ratePlans: ratePlanRows,
   };
 }
 
@@ -573,6 +616,7 @@ export async function mutateWorkflow(
     RELEASE_LOST_ITEM: 'lostfound.manage',
     MOVE_STOCK: 'inventory.write',
     SAVE_ROOM: 'rooms.manage',
+    SAVE_RATE_PLAN: 'rooms.manage',
     CREATE_HOUSEKEEPING_TASK: 'housekeeping.assign',
     CREATE_RESTAURANT_ORDER: 'restaurant.manage',
     UPDATE_RESTAURANT_ORDER: 'restaurant.manage',
@@ -598,7 +642,7 @@ export async function mutateWorkflow(
           .set({
             name: p.name,
             category: p.category,
-            pricePaise: p.pricePaise,
+            priceRupees: p.priceRupees,
             available: p.available,
             version: sql`${menuItems.version} + 1`,
             updatedAt: now,
@@ -621,7 +665,7 @@ export async function mutateWorkflow(
           propertyId: c.property.id,
           name: p.name,
           category: p.category,
-          pricePaise: p.pricePaise,
+          priceRupees: p.priceRupees,
           available: p.available,
           updatedAt: now,
         });
@@ -629,7 +673,7 @@ export async function mutateWorkflow(
 
       await audit(tx, c, action, recordId, {
         name: p.name,
-        pricePaise: p.pricePaise,
+        priceRupees: p.priceRupees,
         available: p.available,
       });
 
@@ -850,7 +894,7 @@ export async function mutateWorkflow(
             number: p.number,
             roomType: p.roomType,
             floor: p.floor,
-            baseRatePaise: p.baseRatePaise,
+            baseRateRupees: p.baseRateRupees,
             version: sql`${rooms.version} + 1`,
             updatedAt: now,
           })
@@ -873,7 +917,7 @@ export async function mutateWorkflow(
           number: p.number,
           roomType: p.roomType,
           floor: p.floor,
-          baseRatePaise: p.baseRatePaise,
+          baseRateRupees: p.baseRateRupees,
           occupancyStatus: 'VACANT',
           operationalStatus: 'CLEAN',
           updatedAt: now,
@@ -882,7 +926,110 @@ export async function mutateWorkflow(
 
       await audit(tx, c, action, recordId, {
         number: p.number,
-        baseRatePaise: p.baseRatePaise,
+        baseRateRupees: p.baseRateRupees,
+      });
+
+      return { id: recordId };
+    }
+
+    if (action === 'SAVE_RATE_PLAN') {
+      const p = workflowSchemas.SAVE_RATE_PLAN.parse(raw);
+      const recordId = p.id ?? crypto.randomUUID();
+
+      await tx.execute(
+        sql`select pg_advisory_xact_lock(hashtext(${`rate-plan-code:${c.property.id}`}))`,
+      );
+
+      const roomTypeExists = await tx
+        .select({ id: rooms.id })
+        .from(rooms)
+        .where(
+          and(
+            eq(rooms.propertyId, c.property.id),
+            eq(rooms.roomType, p.roomType),
+            eq(rooms.active, true),
+          ),
+        )
+        .limit(1);
+
+      if (!roomTypeExists.length) {
+        throw new DomainError(
+          'ROOM_TYPE_NOT_FOUND',
+          'Choose a room type that exists in this property.',
+          409,
+        );
+      }
+
+      const duplicate = await tx
+        .select({ id: ratePlans.id })
+        .from(ratePlans)
+        .where(
+          and(
+            eq(ratePlans.propertyId, c.property.id),
+            eq(ratePlans.code, p.code),
+          ),
+        );
+
+      if (duplicate.some((plan) => plan.id !== p.id)) {
+        throw new DomainError(
+          'DUPLICATE_RATE_PLAN',
+          'A rate plan with this code already exists for the property.',
+          409,
+        );
+      }
+
+      const values = {
+        code: p.code,
+        name: p.name,
+        roomType: p.roomType,
+        rateRupees: p.rateRupees,
+        mealPlan: p.mealPlan,
+        refundable: p.refundable,
+        minStay: p.minStay,
+        validFrom: p.validFrom ?? null,
+        validTo: p.validTo ?? null,
+        active: p.active,
+        updatedAt: now,
+      };
+
+      if (p.id) {
+        const updated = await tx
+          .update(ratePlans)
+          .set({
+            ...values,
+            version: sql`${ratePlans.version} + 1`,
+          })
+          .where(
+            and(
+              eq(ratePlans.id, p.id),
+              eq(ratePlans.propertyId, c.property.id),
+              eq(ratePlans.version, p.expectedVersion ?? 0),
+            ),
+          )
+          .returning({ id: ratePlans.id });
+
+        if (!updated.length) {
+          throw conflict();
+        }
+      } else {
+        await tx.insert(ratePlans).values({
+          id: recordId,
+          propertyId: c.property.id,
+          ...values,
+        });
+      }
+
+      await audit(tx, c, action, recordId, {
+        code: p.code,
+        name: p.name,
+        roomType: p.roomType,
+        rateRupees: p.rateRupees,
+        mealPlan: p.mealPlan,
+        refundable: p.refundable,
+        minStay: p.minStay,
+        validFrom: p.validFrom ?? null,
+        validTo: p.validTo ?? null,
+        active: p.active,
       });
 
       return { id: recordId };
@@ -1307,7 +1454,7 @@ export async function mutateWorkflow(
 
         const values = calculateLine(
           requested.quantity,
-          menu.pricePaise,
+          menu.priceRupees,
           0,
           restaurantTaxRateBps,
           profile.defaultTaxMode as 'CGST_SGST' | 'IGST' | 'EXEMPT',
@@ -1323,27 +1470,27 @@ export async function mutateWorkflow(
 
       const totals = calculatedItems.reduce(
         (sum, item) => ({
-          subtotalPaise: sum.subtotalPaise + item.values.subtotalPaise,
-          taxableAmountPaise:
-            sum.taxableAmountPaise + item.values.taxableAmountPaise,
-          taxPaise: sum.taxPaise + item.values.taxPaise,
-          cgstPaise: sum.cgstPaise + item.values.cgstPaise,
-          sgstPaise: sum.sgstPaise + item.values.sgstPaise,
-          igstPaise: sum.igstPaise + item.values.igstPaise,
-          totalPaise: sum.totalPaise + item.values.totalPaise,
+          subtotalRupees: sum.subtotalRupees + item.values.subtotalRupees,
+          taxableAmountRupees:
+            sum.taxableAmountRupees + item.values.taxableAmountRupees,
+          taxRupees: sum.taxRupees + item.values.taxRupees,
+          cgstRupees: sum.cgstRupees + item.values.cgstRupees,
+          sgstRupees: sum.sgstRupees + item.values.sgstRupees,
+          igstRupees: sum.igstRupees + item.values.igstRupees,
+          totalRupees: sum.totalRupees + item.values.totalRupees,
         }),
         {
-          subtotalPaise: 0,
-          taxableAmountPaise: 0,
-          taxPaise: 0,
-          cgstPaise: 0,
-          sgstPaise: 0,
-          igstPaise: 0,
-          totalPaise: 0,
+          subtotalRupees: 0,
+          taxableAmountRupees: 0,
+          taxRupees: 0,
+          cgstRupees: 0,
+          sgstRupees: 0,
+          igstRupees: 0,
+          totalRupees: 0,
         },
       );
 
-      if (folio && folio.totalPaise + totals.totalPaise > 2_000_000_000) {
+      if (folio && folio.totalRupees + totals.totalRupees > 2_000_000_000) {
         throw new DomainError(
           'AMOUNT_TOO_LARGE',
           'Order exceeds the supported folio amount.',
@@ -1379,7 +1526,7 @@ export async function mutateWorkflow(
         specialInstructions: p.specialInstructions || null,
         customerName: p.customerName || null,
         customerPhone: p.customerPhone || null,
-        totalPaise: totals.totalPaise,
+        totalRupees: totals.totalRupees,
         paymentStatus,
         createdAt: now,
       });
@@ -1393,15 +1540,15 @@ export async function mutateWorkflow(
           itemName: item.menu.name,
           category: item.menu.category,
           quantity: item.quantity,
-          unitPricePaise: item.menu.pricePaise,
+          unitPriceRupees: item.menu.priceRupees,
           taxRateBps: restaurantTaxRateBps,
-          subtotalPaise: item.values.subtotalPaise,
-          taxableAmountPaise: item.values.taxableAmountPaise,
-          taxPaise: item.values.taxPaise,
-          cgstPaise: item.values.cgstPaise,
-          sgstPaise: item.values.sgstPaise,
-          igstPaise: item.values.igstPaise,
-          totalPaise: item.values.totalPaise,
+          subtotalRupees: item.values.subtotalRupees,
+          taxableAmountRupees: item.values.taxableAmountRupees,
+          taxRupees: item.values.taxRupees,
+          cgstRupees: item.values.cgstRupees,
+          sgstRupees: item.values.sgstRupees,
+          igstRupees: item.values.igstRupees,
+          totalRupees: item.values.totalRupees,
           createdAt: now,
         })),
       );
@@ -1416,9 +1563,9 @@ export async function mutateWorkflow(
             description: `${p.orderType}: ${item.menu.name}`,
             category: p.orderType,
             quantity: item.quantity,
-            unitAmountPaise: item.menu.pricePaise,
+            unitAmountRupees: item.menu.priceRupees,
             taxRateBps: restaurantTaxRateBps,
-            lineTotalPaise: item.values.totalPaise,
+            lineTotalRupees: item.values.totalRupees,
             ...item.values,
             source: 'RESTAURANT',
             sourceType: 'RESTAURANT_ORDER',
@@ -1435,19 +1582,19 @@ export async function mutateWorkflow(
           .update(folios)
           .set({
             status:
-              folio.outstandingPaise + totals.totalPaise > 0
+              folio.outstandingRupees + totals.totalRupees > 0
                 ? 'OPEN'
                 : 'SETTLED',
-            subtotalPaise: folio.subtotalPaise + totals.subtotalPaise,
-            taxableAmountPaise:
-              folio.taxableAmountPaise + totals.taxableAmountPaise,
-            taxPaise: folio.taxPaise + totals.taxPaise,
-            cgstPaise: folio.cgstPaise + totals.cgstPaise,
-            sgstPaise: folio.sgstPaise + totals.sgstPaise,
-            igstPaise: folio.igstPaise + totals.igstPaise,
-            totalPaise: folio.totalPaise + totals.totalPaise,
-            outstandingPaise:
-              folio.outstandingPaise + totals.totalPaise,
+            subtotalRupees: folio.subtotalRupees + totals.subtotalRupees,
+            taxableAmountRupees:
+              folio.taxableAmountRupees + totals.taxableAmountRupees,
+            taxRupees: folio.taxRupees + totals.taxRupees,
+            cgstRupees: folio.cgstRupees + totals.cgstRupees,
+            sgstRupees: folio.sgstRupees + totals.sgstRupees,
+            igstRupees: folio.igstRupees + totals.igstRupees,
+            totalRupees: folio.totalRupees + totals.totalRupees,
+            outstandingRupees:
+              folio.outstandingRupees + totals.totalRupees,
             version: folio.version + 1,
             updatedAt: now,
           })
@@ -1471,7 +1618,7 @@ export async function mutateWorkflow(
         restaurantGstProfile,
         taxRateBps: restaurantTaxRateBps,
         paymentStatus,
-        totalPaise: totals.totalPaise,
+        totalRupees: totals.totalRupees,
       });
 
       return {
@@ -1480,7 +1627,7 @@ export async function mutateWorkflow(
           (sum, item) => sum + item.quantity,
           0,
         ),
-        totalPaise: totals.totalPaise,
+        totalRupees: totals.totalRupees,
         kotStatus: 'NEW',
         paymentStatus,
       };

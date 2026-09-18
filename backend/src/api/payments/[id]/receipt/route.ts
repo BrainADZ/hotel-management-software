@@ -109,8 +109,8 @@ export async function GET(
           method:
             payments.method,
 
-          amountPaise:
-            payments.amountPaise,
+          amountRupees:
+            payments.amountRupees,
 
           reference:
             payments.reference,
@@ -220,8 +220,8 @@ export async function GET(
     ] = await Promise.all([
       db
         .select({
-          amountPaise:
-            paymentRefunds.amountPaise,
+          amountRupees:
+            paymentRefunds.amountRupees,
 
           status:
             paymentRefunds.status,
@@ -277,7 +277,7 @@ export async function GET(
     const receiver =
       receiverRows[0];
 
-    const refundedPaise =
+    const refundedRupees =
       refunds.reduce(
         (sum, refund) =>
           sum +
@@ -287,19 +287,19 @@ export async function GET(
             ).toUpperCase() ===
             "RECORDED"
               ? Number(
-                  refund.amountPaise,
+                  refund.amountRupees,
                 )
               : 0
           ),
         0,
       );
 
-    const receivedPaise =
+    const receivedRupees =
       Number(
-        payment.amountPaise,
+        payment.amountRupees,
       );
 
-    const netPaise =
+    const netRupees =
       String(
         payment.status,
       ).toUpperCase() ===
@@ -307,8 +307,8 @@ export async function GET(
         ? 0
         : Math.max(
             0,
-            receivedPaise -
-              refundedPaise,
+            receivedRupees -
+              refundedRupees,
           );
 
     const managerName =
@@ -391,9 +391,9 @@ export async function GET(
         },
 
         amounts: {
-          receivedPaise,
-          refundedPaise,
-          netPaise,
+          receivedRupees,
+          refundedRupees,
+          netRupees,
         },
 
         reversal:

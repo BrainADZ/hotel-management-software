@@ -18,7 +18,7 @@ export function ReportsView({ state, notify, businessUnit }: PlatformViewProps) 
       },
       {
         metric: "Pipeline value",
-        value: money(state.travelMetrics.pipelineValuePaise),
+        value: money(state.travelMetrics.pipelineValueRupees),
       },
       {
         metric: "Custom quotes",
@@ -111,9 +111,9 @@ export function ReportsView({ state, notify, businessUnit }: PlatformViewProps) 
   }
   const reportRows = [
     { metric: "Occupancy", value: `${state.metrics.occupancyPercent}%` },
-    { metric: "ADR", value: money(state.metrics.adrPaise) },
-    { metric: "RevPAR", value: money(state.metrics.revParPaise) },
-    { metric: "Folio charges (including tax)", value: money(state.metrics.revenuePaise) },
+    { metric: "ADR", value: money(state.metrics.adrRupees) },
+    { metric: "RevPAR", value: money(state.metrics.revParRupees) },
+    { metric: "Folio charges (including tax)", value: money(state.metrics.revenueRupees) },
     { metric: "Arrivals", value: String(state.metrics.arrivalsToday) },
     { metric: "Departures", value: String(state.metrics.departuresToday) },
     { metric: "Low-stock items", value: String(state.metrics.lowStockCount) },
@@ -173,16 +173,16 @@ export function ReportsView({ state, notify, businessUnit }: PlatformViewProps) 
             <div>
               <span>ADR</span>
               <i>
-                <b style={{ width: `${Math.max(0, state.metrics.adrPaise) / Math.max(1, state.metrics.adrPaise, state.metrics.revParPaise) * 100}%` }} />
+                <b style={{ width: `${Math.max(0, state.metrics.adrRupees) / Math.max(1, state.metrics.adrRupees, state.metrics.revParRupees) * 100}%` }} />
               </i>
-              <strong>{money(state.metrics.adrPaise)}</strong>
+              <strong>{money(state.metrics.adrRupees)}</strong>
             </div>
             <div>
               <span>RevPAR</span>
               <i>
-                <b style={{ width: `${Math.max(0, state.metrics.revParPaise) / Math.max(1, state.metrics.adrPaise, state.metrics.revParPaise) * 100}%` }} />
+                <b style={{ width: `${Math.max(0, state.metrics.revParRupees) / Math.max(1, state.metrics.adrRupees, state.metrics.revParRupees) * 100}%` }} />
               </i>
-              <strong>{money(state.metrics.revParPaise)}</strong>
+              <strong>{money(state.metrics.revParRupees)}</strong>
             </div>
           </div>
         </article>

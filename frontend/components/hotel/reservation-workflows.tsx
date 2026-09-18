@@ -64,7 +64,7 @@ export function ReservationModal({
     departureDate: propertyTomorrow,
     roomId: String(firstRoom?.id ?? ""),
     roomType: String(firstRoom?.roomType ?? "Deluxe"),
-    nightlyRatePaise: Number(firstRoom?.baseRatePaise ?? 0),
+    nightlyRateRupees: Number(firstRoom?.baseRateRupees ?? 0),
     taxRateBps: 0,
     source: "DIRECT",
     specialRequests: "",
@@ -244,7 +244,7 @@ export function ReservationModal({
                       ...form,
                       roomId: event.target.value,
                       roomType: String(room?.roomType ?? ""),
-                      nightlyRatePaise: Number(room?.baseRatePaise ?? 0),
+                      nightlyRateRupees: Number(room?.baseRateRupees ?? 0),
                     });
                   }}
                 >
@@ -262,13 +262,13 @@ export function ReservationModal({
     type="number"
     min="0"
     step="1"
-    value={Number(form.nightlyRatePaise ?? 0) / 100}
+    value={Number(form.nightlyRateRupees ?? 0)}
     onChange={(event) => {
       const rupees = Number(event.target.value || 0);
 
       setForm({
         ...form,
-        nightlyRatePaise: Math.round(rupees * 100),
+        nightlyRateRupees: rupees,
       });
     }}
   />
@@ -504,21 +504,21 @@ export function StayDrawer({
             <section className="drawer-folio">
               <div className="card-heading">
                 <h3>Guest folio</h3>
-                <strong>{money(folio.totalPaise)}</strong>
+                <strong>{money(folio.totalRupees)}</strong>
               </div>
               {lines.map((line) => (
                 <div key={String(line.id)}>
                   <span>{String(line.description)}</span>
-                  <strong>{money(line.lineTotalPaise)}</strong>
+                  <strong>{money(line.lineTotalRupees)}</strong>
                 </div>
               ))}
               <div className="folio-total">
                 <span>Tax</span>
-                <strong>{money(folio.taxPaise)}</strong>
+                <strong>{money(folio.taxRupees)}</strong>
               </div>
               <div className="folio-total grand">
                 <span>Total</span>
-                <strong>{money(folio.totalPaise)}</strong>
+                <strong>{money(folio.totalRupees)}</strong>
               </div>
             </section>
           )}
@@ -526,7 +526,7 @@ export function StayDrawer({
             <section className="drawer-folio">
               <div className="card-heading">
                 <h3>Reservation details</h3>
-                <strong>{money(reservation.estimatedTotalPaise)}</strong>
+                <strong>{money(reservation.estimatedTotalRupees)}</strong>
               </div>
               <div>
                 <span>Guests</span>
@@ -537,7 +537,7 @@ export function StayDrawer({
               </div>
               <div>
                 <span>Nightly rate</span>
-                <strong>{money(reservation.nightlyRatePaise)}</strong>
+                <strong>{money(reservation.nightlyRateRupees)}</strong>
               </div>
               <div>
                 <span>Source</span>
@@ -629,7 +629,7 @@ export function StayDrawer({
                       {
                         action: "POST_RESTAURANT",
                         reservationId: reservation.id,
-                        amountPaise: 135000,
+                        amountRupees: 1350,
                         surface,
                       },
                       "Room-service charge posted to the current folio.",
@@ -1599,19 +1599,19 @@ function ReservationInspectionCard({
             </span>
             <span>
               <small>Policy liability</small>
-              <strong>{money(summary?.policyLiabilityPaise)}</strong>
+              <strong>{money(summary?.policyLiabilityRupees)}</strong>
             </span>
-            {summary?.repairCostPaise != null && (
+            {summary?.repairCostRupees != null && (
               <span>
                 <small>Repair estimate</small>
-                <strong>{money(summary.repairCostPaise)}</strong>
+                <strong>{money(summary.repairCostRupees)}</strong>
               </span>
             )}
             <span>
               <small>Decision</small>
               <strong>
                 {summary?.damageStatus === "CHARGED"
-                  ? `Charged ${money(summary.chargeAmountPaise)}`
+                  ? `Charged ${money(summary.chargeAmountRupees)}`
                   : summary?.damageStatus === "WAIVED"
                     ? "No guest charge"
                     : "Awaiting manager review"}

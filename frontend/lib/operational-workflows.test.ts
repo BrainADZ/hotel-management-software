@@ -30,8 +30,8 @@ describe('operational alerts and permissions', () => {
 
 describe('live operating data', () => {
   it('counts vacant clean rooms separately from dirty and maintenance rooms', () => {
-    const result=operatingMetrics([{occupancyStatus:'OCCUPIED',operationalStatus:'CLEAN'},{occupancyStatus:'VACANT',operationalStatus:'CLEAN'},{occupancyStatus:'VACANT',operationalStatus:'VACANT_DIRTY'},{occupancyStatus:'VACANT',operationalStatus:'MAINTENANCE'}],[{status:'CHECKED_IN',arrivalDate:'2026-09-11',departureDate:'2026-09-12',adults:2,children:1,nightlyRatePaise:200000},{status:'CANCELLED',arrivalDate:'2026-09-11'}],[{totalPaise:500000,outstandingPaise:200000}],{},'2026-09-11');
-    expect(result).toMatchObject({totalRooms:4,occupiedRooms:1,occupancyPercent:25,readyRooms:1,dirtyRooms:1,maintenanceRooms:1,inHouseGuests:3,arrivalsToday:1,pendingPayments:1,adrPaise:200000,revParPaise:50000});
+    const result=operatingMetrics([{occupancyStatus:'OCCUPIED',operationalStatus:'CLEAN'},{occupancyStatus:'VACANT',operationalStatus:'CLEAN'},{occupancyStatus:'VACANT',operationalStatus:'VACANT_DIRTY'},{occupancyStatus:'VACANT',operationalStatus:'MAINTENANCE'}],[{status:'CHECKED_IN',arrivalDate:'2026-09-11',departureDate:'2026-09-12',adults:2,children:1,nightlyRateRupees:2000},{status:'CANCELLED',arrivalDate:'2026-09-11'}],[{totalRupees:5000,outstandingRupees:2000}],{},'2026-09-11');
+    expect(result).toMatchObject({totalRooms:4,occupiedRooms:1,occupancyPercent:25,readyRooms:1,dirtyRooms:1,maintenanceRooms:1,inHouseGuests:3,arrivalsToday:1,pendingPayments:1,adrRupees:2000,revParRupees:500});
   });
   it('loads reservations beyond the first page', async () => {
     const api=vi.fn().mockResolvedValueOnce({items:Array.from({length:100},(_,id)=>({id})),total:102}).mockResolvedValueOnce({items:[{id:100},{id:101}],total:102});

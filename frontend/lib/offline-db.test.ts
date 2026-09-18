@@ -28,16 +28,16 @@ describe("folio PDF generation", () => {
       arrivalDate: "2026-08-24",
       departureDate: "2026-08-26",
       folioStatus: "OPEN",
-      subtotalPaise: 935_000,
-      taxPaise: 168_300,
-      totalPaise: 1_103_300,
+      subtotalRupees: 9350,
+      taxRupees: 1683,
+      totalRupees: 11033,
       lines: [
         {
           description: "Room charges",
           quantity: 1,
-          unitAmountPaise: 935_000,
+          unitAmountRupees: 9350,
           taxRateBps: 1_800,
-          lineTotalPaise: 935_000,
+          lineTotalRupees: 9350,
         },
       ],
     });

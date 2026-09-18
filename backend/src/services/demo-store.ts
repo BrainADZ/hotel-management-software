@@ -30,26 +30,26 @@ const schemaStatements = [
   `CREATE TABLE IF NOT EXISTS organisations (id TEXT PRIMARY KEY, name TEXT NOT NULL, created_at TEXT NOT NULL)`,
   `CREATE TABLE IF NOT EXISTS properties (id TEXT PRIMARY KEY, organisation_id TEXT NOT NULL, code TEXT NOT NULL, name TEXT NOT NULL, city TEXT NOT NULL, timezone TEXT NOT NULL, connection_status TEXT NOT NULL DEFAULT 'ONLINE', last_sync_at TEXT NOT NULL, version INTEGER NOT NULL DEFAULT 1, FOREIGN KEY (organisation_id) REFERENCES organisations(id))`,
   `CREATE TABLE IF NOT EXISTS app_users (id TEXT PRIMARY KEY, organisation_id TEXT NOT NULL, property_id TEXT, name TEXT NOT NULL, email TEXT NOT NULL, role TEXT NOT NULL, active INTEGER NOT NULL DEFAULT 1, created_at TEXT NOT NULL)`,
-  `CREATE TABLE IF NOT EXISTS rooms (id TEXT PRIMARY KEY, property_id TEXT NOT NULL, number TEXT NOT NULL, floor INTEGER NOT NULL, room_type TEXT NOT NULL, base_rate_paise INTEGER NOT NULL, occupancy_status TEXT NOT NULL, operational_status TEXT NOT NULL, version INTEGER NOT NULL DEFAULT 1, updated_at TEXT NOT NULL)`,
+  `CREATE TABLE IF NOT EXISTS rooms (id TEXT PRIMARY KEY, property_id TEXT NOT NULL, number TEXT NOT NULL, floor INTEGER NOT NULL, room_type TEXT NOT NULL, base_rate_rupees INTEGER NOT NULL, occupancy_status TEXT NOT NULL, operational_status TEXT NOT NULL, version INTEGER NOT NULL DEFAULT 1, updated_at TEXT NOT NULL)`,
   `CREATE TABLE IF NOT EXISTS guests (id TEXT PRIMARY KEY, property_id TEXT NOT NULL, full_name TEXT NOT NULL, email TEXT, phone TEXT, city TEXT, preferences TEXT, dietary_requirements TEXT, loyalty_tier TEXT, created_at TEXT NOT NULL, updated_at TEXT NOT NULL)`,
-  `CREATE TABLE IF NOT EXISTS reservations (id TEXT PRIMARY KEY, property_id TEXT NOT NULL, reference TEXT NOT NULL, guest_id TEXT NOT NULL, room_id TEXT, room_type TEXT NOT NULL, arrival_date TEXT NOT NULL, departure_date TEXT NOT NULL, status TEXT NOT NULL, source TEXT NOT NULL, total_amount_paise INTEGER NOT NULL, balance_paise INTEGER NOT NULL, created_while_property_offline INTEGER NOT NULL DEFAULT 0, contact_status TEXT NOT NULL DEFAULT 'NOT_CONTACTED', version INTEGER NOT NULL DEFAULT 1, created_at TEXT NOT NULL, updated_at TEXT NOT NULL)`,
-  `CREATE TABLE IF NOT EXISTS folios (id TEXT PRIMARY KEY, property_id TEXT NOT NULL, reservation_id TEXT NOT NULL, status TEXT NOT NULL, subtotal_paise INTEGER NOT NULL, tax_paise INTEGER NOT NULL, total_paise INTEGER NOT NULL, version INTEGER NOT NULL DEFAULT 1, updated_at TEXT NOT NULL)`,
-  `CREATE TABLE IF NOT EXISTS folio_lines (id TEXT PRIMARY KEY, folio_id TEXT NOT NULL, description TEXT NOT NULL, category TEXT NOT NULL, quantity INTEGER NOT NULL, unit_amount_paise INTEGER NOT NULL, tax_rate_bps INTEGER NOT NULL, line_total_paise INTEGER NOT NULL, source TEXT NOT NULL, created_at TEXT NOT NULL)`,
-  `CREATE TABLE IF NOT EXISTS offline_bills (id TEXT PRIMARY KEY, property_id TEXT NOT NULL, offline_reference TEXT NOT NULL, reservation_id TEXT NOT NULL, booking_reference TEXT NOT NULL, guest_id TEXT NOT NULL, device_id TEXT NOT NULL, generated_by TEXT NOT NULL, local_amount_paise INTEGER NOT NULL, tax_paise INTEGER NOT NULL, cloud_amount_paise INTEGER, currency TEXT NOT NULL DEFAULT 'INR', status TEXT NOT NULL, document_hash TEXT NOT NULL, notes TEXT, generated_at TEXT NOT NULL, verified_at TEXT, verified_by TEXT)`,
+  `CREATE TABLE IF NOT EXISTS reservations (id TEXT PRIMARY KEY, property_id TEXT NOT NULL, reference TEXT NOT NULL, guest_id TEXT NOT NULL, room_id TEXT, room_type TEXT NOT NULL, arrival_date TEXT NOT NULL, departure_date TEXT NOT NULL, status TEXT NOT NULL, source TEXT NOT NULL, total_amount_rupees INTEGER NOT NULL, balance_rupees INTEGER NOT NULL, created_while_property_offline INTEGER NOT NULL DEFAULT 0, contact_status TEXT NOT NULL DEFAULT 'NOT_CONTACTED', version INTEGER NOT NULL DEFAULT 1, created_at TEXT NOT NULL, updated_at TEXT NOT NULL)`,
+  `CREATE TABLE IF NOT EXISTS folios (id TEXT PRIMARY KEY, property_id TEXT NOT NULL, reservation_id TEXT NOT NULL, status TEXT NOT NULL, subtotal_rupees INTEGER NOT NULL, tax_rupees INTEGER NOT NULL, total_rupees INTEGER NOT NULL, version INTEGER NOT NULL DEFAULT 1, updated_at TEXT NOT NULL)`,
+  `CREATE TABLE IF NOT EXISTS folio_lines (id TEXT PRIMARY KEY, folio_id TEXT NOT NULL, description TEXT NOT NULL, category TEXT NOT NULL, quantity INTEGER NOT NULL, unit_amount_rupees INTEGER NOT NULL, tax_rate_bps INTEGER NOT NULL, line_total_rupees INTEGER NOT NULL, source TEXT NOT NULL, created_at TEXT NOT NULL)`,
+  `CREATE TABLE IF NOT EXISTS offline_bills (id TEXT PRIMARY KEY, property_id TEXT NOT NULL, offline_reference TEXT NOT NULL, reservation_id TEXT NOT NULL, booking_reference TEXT NOT NULL, guest_id TEXT NOT NULL, device_id TEXT NOT NULL, generated_by TEXT NOT NULL, local_amount_rupees INTEGER NOT NULL, tax_rupees INTEGER NOT NULL, cloud_amount_rupees INTEGER, currency TEXT NOT NULL DEFAULT 'INR', status TEXT NOT NULL, document_hash TEXT NOT NULL, notes TEXT, generated_at TEXT NOT NULL, verified_at TEXT, verified_by TEXT)`,
   `CREATE TABLE IF NOT EXISTS housekeeping_tasks (id TEXT PRIMARY KEY, property_id TEXT NOT NULL, room_id TEXT NOT NULL, reservation_id TEXT, assigned_to TEXT, task_type TEXT NOT NULL DEFAULT 'STAY_SERVICE', priority TEXT NOT NULL, status TEXT NOT NULL, outcome TEXT, scheduled_at TEXT NOT NULL, deferred_until TEXT, completed_at TEXT, updated_at TEXT NOT NULL DEFAULT '', version INTEGER NOT NULL DEFAULT 1, notes TEXT)`,
   `CREATE TABLE IF NOT EXISTS room_inspections (id TEXT PRIMARY KEY, property_id TEXT NOT NULL, task_id TEXT NOT NULL, reservation_id TEXT NOT NULL, room_id TEXT NOT NULL, result TEXT NOT NULL, notes TEXT, damage_severity TEXT, completed_by TEXT NOT NULL, completed_at TEXT NOT NULL)`,
-  `CREATE TABLE IF NOT EXISTS damage_policy_rules (id TEXT PRIMARY KEY, property_id TEXT NOT NULL, severity TEXT NOT NULL, label TEXT NOT NULL, liability_cap_paise INTEGER NOT NULL, room_impact TEXT NOT NULL, active INTEGER NOT NULL DEFAULT 1, version INTEGER NOT NULL DEFAULT 1, updated_at TEXT NOT NULL)`,
-  `CREATE TABLE IF NOT EXISTS damage_reports (id TEXT PRIMARY KEY, property_id TEXT NOT NULL, inspection_id TEXT NOT NULL, reservation_id TEXT NOT NULL, room_id TEXT NOT NULL, folio_id TEXT NOT NULL, description TEXT NOT NULL, severity TEXT NOT NULL, status TEXT NOT NULL, policy_rule_id TEXT, policy_label TEXT, policy_liability_paise INTEGER, repair_cost_paise INTEGER, charge_amount_paise INTEGER, folio_line_id TEXT, decision_note TEXT, reported_by TEXT NOT NULL, reported_at TEXT NOT NULL, reviewed_by TEXT, reviewed_at TEXT, version INTEGER NOT NULL DEFAULT 1)`,
+  `CREATE TABLE IF NOT EXISTS damage_policy_rules (id TEXT PRIMARY KEY, property_id TEXT NOT NULL, severity TEXT NOT NULL, label TEXT NOT NULL, liability_cap_rupees INTEGER NOT NULL, room_impact TEXT NOT NULL, active INTEGER NOT NULL DEFAULT 1, version INTEGER NOT NULL DEFAULT 1, updated_at TEXT NOT NULL)`,
+  `CREATE TABLE IF NOT EXISTS damage_reports (id TEXT PRIMARY KEY, property_id TEXT NOT NULL, inspection_id TEXT NOT NULL, reservation_id TEXT NOT NULL, room_id TEXT NOT NULL, folio_id TEXT NOT NULL, description TEXT NOT NULL, severity TEXT NOT NULL, status TEXT NOT NULL, policy_rule_id TEXT, policy_label TEXT, policy_liability_rupees INTEGER, repair_cost_rupees INTEGER, charge_amount_rupees INTEGER, folio_line_id TEXT, decision_note TEXT, reported_by TEXT NOT NULL, reported_at TEXT NOT NULL, reviewed_by TEXT, reviewed_at TEXT, version INTEGER NOT NULL DEFAULT 1)`,
   `CREATE TABLE IF NOT EXISTS maintenance_tickets (id TEXT PRIMARY KEY, property_id TEXT NOT NULL, room_id TEXT, category TEXT NOT NULL, issue TEXT NOT NULL, severity TEXT NOT NULL, assigned_to TEXT, status TEXT NOT NULL, opened_at TEXT NOT NULL)`,
-  `CREATE TABLE IF NOT EXISTS inventory_items (id TEXT PRIMARY KEY, property_id TEXT NOT NULL, name TEXT NOT NULL, category TEXT NOT NULL, department TEXT NOT NULL DEFAULT 'HOTEL', unit TEXT NOT NULL, current_quantity INTEGER NOT NULL, minimum_quantity INTEGER NOT NULL, unit_cost_paise INTEGER NOT NULL, updated_at TEXT NOT NULL)`,
-  `CREATE TABLE IF NOT EXISTS restaurant_orders (id TEXT PRIMARY KEY, property_id TEXT NOT NULL, reservation_id TEXT, room_number TEXT, order_type TEXT NOT NULL, status TEXT NOT NULL, total_paise INTEGER NOT NULL, payment_status TEXT NOT NULL, created_at TEXT NOT NULL)`,
+  `CREATE TABLE IF NOT EXISTS inventory_items (id TEXT PRIMARY KEY, property_id TEXT NOT NULL, name TEXT NOT NULL, category TEXT NOT NULL, department TEXT NOT NULL DEFAULT 'HOTEL', unit TEXT NOT NULL, current_quantity INTEGER NOT NULL, minimum_quantity INTEGER NOT NULL, unit_cost_rupees INTEGER NOT NULL, updated_at TEXT NOT NULL)`,
+  `CREATE TABLE IF NOT EXISTS restaurant_orders (id TEXT PRIMARY KEY, property_id TEXT NOT NULL, reservation_id TEXT, room_number TEXT, order_type TEXT NOT NULL, status TEXT NOT NULL, total_rupees INTEGER NOT NULL, payment_status TEXT NOT NULL, created_at TEXT NOT NULL)`,
   `CREATE TABLE IF NOT EXISTS restaurant_meal_bookings (id TEXT PRIMARY KEY, property_id TEXT NOT NULL, reservation_id TEXT NOT NULL, service_date TEXT NOT NULL, meal_period TEXT NOT NULL, guest_count INTEGER NOT NULL DEFAULT 1, status TEXT NOT NULL DEFAULT 'BOOKED', dietary_notes TEXT, created_at TEXT NOT NULL, updated_at TEXT NOT NULL)`,
-  `CREATE TABLE IF NOT EXISTS travel_packages (id TEXT PRIMARY KEY, organisation_id TEXT NOT NULL, name TEXT NOT NULL, duration_days INTEGER NOT NULL, locations TEXT NOT NULL, capacity INTEGER NOT NULL, booked INTEGER NOT NULL, selling_price_paise INTEGER NOT NULL, status TEXT NOT NULL)`,
-  `CREATE TABLE IF NOT EXISTS travel_assets (id TEXT PRIMARY KEY, organisation_id TEXT NOT NULL, name TEXT NOT NULL, category TEXT NOT NULL, description TEXT NOT NULL, pricing_unit TEXT NOT NULL, unit_price_paise INTEGER NOT NULL, active INTEGER NOT NULL DEFAULT 1, updated_at TEXT NOT NULL)`,
-  `CREATE TABLE IF NOT EXISTS custom_travel_packages (id TEXT PRIMARY KEY, organisation_id TEXT NOT NULL, reference TEXT NOT NULL, client_name TEXT NOT NULL, name TEXT NOT NULL, owner_id TEXT NOT NULL, owner_name TEXT NOT NULL, asset_subtotal_paise INTEGER NOT NULL, base_price_paise INTEGER NOT NULL, floor_price_paise INTEGER NOT NULL, quoted_price_paise INTEGER NOT NULL, status TEXT NOT NULL, version INTEGER NOT NULL DEFAULT 1, created_at TEXT NOT NULL, updated_at TEXT NOT NULL)`,
-  `CREATE TABLE IF NOT EXISTS custom_travel_package_items (id TEXT PRIMARY KEY, package_id TEXT NOT NULL, asset_id TEXT NOT NULL, asset_name TEXT NOT NULL, category TEXT NOT NULL, pricing_unit TEXT NOT NULL, quantity INTEGER NOT NULL, unit_price_paise INTEGER NOT NULL, line_total_paise INTEGER NOT NULL)`,
-  `CREATE TABLE IF NOT EXISTS travel_discount_requests (id TEXT PRIMARY KEY, organisation_id TEXT NOT NULL, package_id TEXT NOT NULL, package_version INTEGER NOT NULL, requested_by_id TEXT NOT NULL, requested_by_name TEXT NOT NULL, requested_price_paise INTEGER NOT NULL, base_price_paise INTEGER NOT NULL, floor_price_paise INTEGER NOT NULL, reason TEXT NOT NULL, status TEXT NOT NULL, reviewed_by_id TEXT, reviewed_by_name TEXT, decision_note TEXT, created_at TEXT NOT NULL, decided_at TEXT)`,
-  `CREATE TABLE IF NOT EXISTS inquiries (id TEXT PRIMARY KEY, organisation_id TEXT NOT NULL, reference TEXT NOT NULL, customer_name TEXT NOT NULL, source TEXT NOT NULL, owner TEXT NOT NULL, service TEXT NOT NULL, estimated_value_paise INTEGER NOT NULL, status TEXT NOT NULL, follow_up_at TEXT, created_at TEXT NOT NULL)`,
+  `CREATE TABLE IF NOT EXISTS travel_packages (id TEXT PRIMARY KEY, organisation_id TEXT NOT NULL, name TEXT NOT NULL, duration_days INTEGER NOT NULL, locations TEXT NOT NULL, capacity INTEGER NOT NULL, booked INTEGER NOT NULL, selling_price_rupees INTEGER NOT NULL, status TEXT NOT NULL)`,
+  `CREATE TABLE IF NOT EXISTS travel_assets (id TEXT PRIMARY KEY, organisation_id TEXT NOT NULL, name TEXT NOT NULL, category TEXT NOT NULL, description TEXT NOT NULL, pricing_unit TEXT NOT NULL, unit_price_rupees INTEGER NOT NULL, active INTEGER NOT NULL DEFAULT 1, updated_at TEXT NOT NULL)`,
+  `CREATE TABLE IF NOT EXISTS custom_travel_packages (id TEXT PRIMARY KEY, organisation_id TEXT NOT NULL, reference TEXT NOT NULL, client_name TEXT NOT NULL, name TEXT NOT NULL, owner_id TEXT NOT NULL, owner_name TEXT NOT NULL, asset_subtotal_rupees INTEGER NOT NULL, base_price_rupees INTEGER NOT NULL, floor_price_rupees INTEGER NOT NULL, quoted_price_rupees INTEGER NOT NULL, status TEXT NOT NULL, version INTEGER NOT NULL DEFAULT 1, created_at TEXT NOT NULL, updated_at TEXT NOT NULL)`,
+  `CREATE TABLE IF NOT EXISTS custom_travel_package_items (id TEXT PRIMARY KEY, package_id TEXT NOT NULL, asset_id TEXT NOT NULL, asset_name TEXT NOT NULL, category TEXT NOT NULL, pricing_unit TEXT NOT NULL, quantity INTEGER NOT NULL, unit_price_rupees INTEGER NOT NULL, line_total_rupees INTEGER NOT NULL)`,
+  `CREATE TABLE IF NOT EXISTS travel_discount_requests (id TEXT PRIMARY KEY, organisation_id TEXT NOT NULL, package_id TEXT NOT NULL, package_version INTEGER NOT NULL, requested_by_id TEXT NOT NULL, requested_by_name TEXT NOT NULL, requested_price_rupees INTEGER NOT NULL, base_price_rupees INTEGER NOT NULL, floor_price_rupees INTEGER NOT NULL, reason TEXT NOT NULL, status TEXT NOT NULL, reviewed_by_id TEXT, reviewed_by_name TEXT, decision_note TEXT, created_at TEXT NOT NULL, decided_at TEXT)`,
+  `CREATE TABLE IF NOT EXISTS inquiries (id TEXT PRIMARY KEY, organisation_id TEXT NOT NULL, reference TEXT NOT NULL, customer_name TEXT NOT NULL, source TEXT NOT NULL, owner TEXT NOT NULL, service TEXT NOT NULL, estimated_value_rupees INTEGER NOT NULL, status TEXT NOT NULL, follow_up_at TEXT, created_at TEXT NOT NULL)`,
   `CREATE TABLE IF NOT EXISTS integration_events (id TEXT PRIMARY KEY, property_id TEXT, provider TEXT NOT NULL, event_type TEXT NOT NULL, status TEXT NOT NULL, provider_reference TEXT, payload TEXT NOT NULL, created_at TEXT NOT NULL)`,
   `CREATE TABLE IF NOT EXISTS audit_logs (id TEXT PRIMARY KEY, timestamp TEXT NOT NULL, actor_id TEXT NOT NULL, actor_name TEXT NOT NULL, role TEXT NOT NULL, property_id TEXT, device_id TEXT, action TEXT NOT NULL, entity TEXT NOT NULL, entity_id TEXT NOT NULL, previous_value TEXT, new_value TEXT, source TEXT NOT NULL, correlation_id TEXT NOT NULL)`,
   `CREATE UNIQUE INDEX IF NOT EXISTS idx_properties_org_code ON properties(organisation_id, code)`,
@@ -136,8 +136,8 @@ async function ensureOperationalColumns(database: D1) {
   const damageAdditions: Array<[string, string]> = [
     ['policy_rule_id', 'TEXT'],
     ['policy_label', 'TEXT'],
-    ['policy_liability_paise', 'INTEGER'],
-    ['repair_cost_paise', 'INTEGER'],
+    ['policy_liability_rupees', 'INTEGER'],
+    ['repair_cost_rupees', 'INTEGER'],
     ['decision_note', 'TEXT'],
   ];
   for (const [name, definition] of damageAdditions) {
@@ -161,21 +161,21 @@ async function seedOperationalReferenceData(database: D1) {
     ['inventory-restaurant-produce', 'Fresh produce', 'Kitchen', 'crate', 7, 5, 135000],
   ] as const;
   restaurantInventory.forEach(([id, name, category, unit, current, minimum, cost]) => statements.push(
-    database.prepare("INSERT OR IGNORE INTO inventory_items (id, property_id, name, category, department, unit, current_quantity, minimum_quantity, unit_cost_paise, updated_at) VALUES (?, ?, ?, ?, 'RESTAURANT', ?, ?, ?, ?, ?)").bind(id, PROPERTY_ID, name, category, unit, current, minimum, cost, timestamp),
+    database.prepare("INSERT OR IGNORE INTO inventory_items (id, property_id, name, category, department, unit, current_quantity, minimum_quantity, unit_cost_rupees, updated_at) VALUES (?, ?, ?, ?, 'RESTAURANT', ?, ?, ?, ?, ?)").bind(id, PROPERTY_ID, name, category, unit, current, minimum, cost, timestamp),
   ));
   const damagePolicies = [
     [`damage-policy-low-${PROPERTY_ID}`, 'LOW', 'Cosmetic damage', 250000, 'CLEAN_AFTER_REPAIR'],
     [`damage-policy-medium-${PROPERTY_ID}`, 'MEDIUM', 'Repair required', 1500000, 'MAINTENANCE_REVIEW'],
     [`damage-policy-high-${PROPERTY_ID}`, 'HIGH', 'Major repair or replacement', 5000000, 'ROOM_OUT_OF_ORDER'],
   ] as const;
-  damagePolicies.forEach(([id, severity, label, liabilityCapPaise, roomImpact]) => statements.push(
-    database.prepare("INSERT OR IGNORE INTO damage_policy_rules (id, property_id, severity, label, liability_cap_paise, room_impact, active, version, updated_at) VALUES (?, ?, ?, ?, ?, ?, 1, 1, ?)").bind(id, PROPERTY_ID, severity, label, liabilityCapPaise, roomImpact, timestamp),
+  damagePolicies.forEach(([id, severity, label, liabilityCapRupees, roomImpact]) => statements.push(
+    database.prepare("INSERT OR IGNORE INTO damage_policy_rules (id, property_id, severity, label, liability_cap_rupees, room_impact, active, version, updated_at) VALUES (?, ?, ?, ?, ?, ?, 1, 1, ?)").bind(id, PROPERTY_ID, severity, label, liabilityCapRupees, roomImpact, timestamp),
   ));
   statements.push(database.prepare(`UPDATE damage_reports SET
     policy_rule_id = (SELECT p.id FROM damage_policy_rules p WHERE p.property_id = damage_reports.property_id AND p.severity = damage_reports.severity AND p.active = 1 LIMIT 1),
     policy_label = (SELECT p.label FROM damage_policy_rules p WHERE p.property_id = damage_reports.property_id AND p.severity = damage_reports.severity AND p.active = 1 LIMIT 1),
-    policy_liability_paise = (SELECT p.liability_cap_paise FROM damage_policy_rules p WHERE p.property_id = damage_reports.property_id AND p.severity = damage_reports.severity AND p.active = 1 LIMIT 1)
-    WHERE property_id = ? AND (policy_rule_id IS NULL OR policy_label IS NULL OR policy_liability_paise IS NULL)`).bind(PROPERTY_ID));
+    policy_liability_rupees = (SELECT p.liability_cap_rupees FROM damage_policy_rules p WHERE p.property_id = damage_reports.property_id AND p.severity = damage_reports.severity AND p.active = 1 LIMIT 1)
+    WHERE property_id = ? AND (policy_rule_id IS NULL OR policy_label IS NULL OR policy_liability_rupees IS NULL)`).bind(PROPERTY_ID));
   const mealSeeds = [
     ['reservation-bh-10541', DEMO_DATE, 'BREAKFAST', 1, 'Vegetarian'],
     ['reservation-bh-10541', DEMO_DATE, 'DINNER', 1, 'Vegetarian'],
@@ -204,9 +204,9 @@ async function seedTravelReferenceData(database: D1) {
     ['travel-asset-meals', 'Curated meal plan', 'Dining', 'Breakfast and dinner plan', 'guest / day', 185000],
     ['travel-asset-insurance', 'Travel protection', 'Protection', 'Domestic trip protection cover', 'guest', 95000],
   ] as const;
-  const statements = assets.map(([id, name, category, description, pricingUnit, unitPricePaise]) => database
-    .prepare('INSERT OR IGNORE INTO travel_assets (id, organisation_id, name, category, description, pricing_unit, unit_price_paise, active, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, 1, ?)')
-    .bind(id, ORGANISATION_ID, name, category, description, pricingUnit, unitPricePaise, DEMO_TIMESTAMP));
+  const statements = assets.map(([id, name, category, description, pricingUnit, unitPriceRupees]) => database
+    .prepare('INSERT OR IGNORE INTO travel_assets (id, organisation_id, name, category, description, pricing_unit, unit_price_rupees, active, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, 1, ?)')
+    .bind(id, ORGANISATION_ID, name, category, description, pricingUnit, unitPriceRupees, DEMO_TIMESTAMP));
   await database.batch(statements);
 }
 
@@ -233,7 +233,7 @@ async function seed(database: D1) {
     const roomType = floor === 1 ? 'Standard' : floor === 2 ? 'Deluxe' : floor === 3 ? 'Premium' : 'Suite';
     const baseRate = floor === 1 ? 480000 : floor === 2 ? 680000 : floor === 3 ? 850000 : 1250000;
     const operational = number === '406' ? 'MAINTENANCE' : dirtyRooms.has(number) ? 'DIRTY' : 'CLEAN';
-    bind('INSERT INTO rooms (id, property_id, number, floor, room_type, base_rate_paise, occupancy_status, operational_status, version, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, 1, ?)', `room-${number}`, PROPERTY_ID, number, floor, roomType, baseRate, occupiedRooms.has(number) ? 'OCCUPIED' : 'VACANT', operational, DEMO_TIMESTAMP);
+    bind('INSERT INTO rooms (id, property_id, number, floor, room_type, base_rate_rupees, occupancy_status, operational_status, version, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, 1, ?)', `room-${number}`, PROPERTY_ID, number, floor, roomType, baseRate, occupiedRooms.has(number) ? 'OCCUPIED' : 'VACANT', operational, DEMO_TIMESTAMP);
   });
 
   const guestNames = ['Arjun Sharma','Aarav Gupta','Ishita Nair','Dev Malhotra','Saanvi Reddy','Kunal Bose','Riya Singh','Aditya Patil','Anika Menon','Kabir Shah','Tara Jain','Reyansh Das','Myra Kulkarni','Vihaan Joshi','Diya Kapoor','Rohan Rao','Aisha Verma','Neel Mehta'];
@@ -249,13 +249,13 @@ async function seed(database: D1) {
     const total = index === 0 ? 1103300 : 620000 + index * 21500;
     const subtotal = index === 0 ? 935000 : Math.round(total / 1.12);
     const tax = total - subtotal;
-    bind('INSERT INTO reservations (id, property_id, reference, guest_id, room_id, room_type, arrival_date, departure_date, status, source, total_amount_paise, balance_paise, created_while_property_offline, contact_status, version, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0, ?, 1, ?, ?)', reservationId, PROPERTY_ID, reference, guestId, `room-${room}`, type, index % 2 === 0 ? '2026-08-22' : '2026-08-23', departure, 'CHECKED_IN', index % 3 === 0 ? 'DIRECT' : index % 3 === 1 ? 'OTA' : 'WEBSITE', total, index % 5 === 0 ? 250000 : 0, 'ACKNOWLEDGED', DEMO_TIMESTAMP, DEMO_TIMESTAMP);
-    bind('INSERT INTO folios (id, property_id, reservation_id, status, subtotal_paise, tax_paise, total_paise, version, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, 1, ?)', `folio-${reservationId}`, PROPERTY_ID, reservationId, 'OPEN', subtotal, tax, total, DEMO_TIMESTAMP);
+    bind('INSERT INTO reservations (id, property_id, reference, guest_id, room_id, room_type, arrival_date, departure_date, status, source, total_amount_rupees, balance_rupees, created_while_property_offline, contact_status, version, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0, ?, 1, ?, ?)', reservationId, PROPERTY_ID, reference, guestId, `room-${room}`, type, index % 2 === 0 ? '2026-08-22' : '2026-08-23', departure, 'CHECKED_IN', index % 3 === 0 ? 'DIRECT' : index % 3 === 1 ? 'OTA' : 'WEBSITE', total, index % 5 === 0 ? 250000 : 0, 'ACKNOWLEDGED', DEMO_TIMESTAMP, DEMO_TIMESTAMP);
+    bind('INSERT INTO folios (id, property_id, reservation_id, status, subtotal_rupees, tax_rupees, total_rupees, version, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, 1, ?)', `folio-${reservationId}`, PROPERTY_ID, reservationId, 'OPEN', subtotal, tax, total, DEMO_TIMESTAMP);
     if (index === 0) {
-      bind('INSERT INTO folio_lines (id, folio_id, description, category, quantity, unit_amount_paise, tax_rate_bps, line_total_paise, source, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)', 'line-arjun-room', `folio-${reservationId}`, 'Room Charges', 'ROOM', 1, 800000, 1800, 800000, 'CLOUD', DEMO_TIMESTAMP);
-      bind('INSERT INTO folio_lines (id, folio_id, description, category, quantity, unit_amount_paise, tax_rate_bps, line_total_paise, source, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)', 'line-arjun-restaurant', `folio-${reservationId}`, 'Restaurant', 'RESTAURANT', 1, 135000, 1800, 135000, 'CLOUD', DEMO_TIMESTAMP);
+      bind('INSERT INTO folio_lines (id, folio_id, description, category, quantity, unit_amount_rupees, tax_rate_bps, line_total_rupees, source, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)', 'line-arjun-room', `folio-${reservationId}`, 'Room Charges', 'ROOM', 1, 800000, 1800, 800000, 'CLOUD', DEMO_TIMESTAMP);
+      bind('INSERT INTO folio_lines (id, folio_id, description, category, quantity, unit_amount_rupees, tax_rate_bps, line_total_rupees, source, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)', 'line-arjun-restaurant', `folio-${reservationId}`, 'Restaurant', 'RESTAURANT', 1, 135000, 1800, 135000, 'CLOUD', DEMO_TIMESTAMP);
     } else {
-      bind('INSERT INTO folio_lines (id, folio_id, description, category, quantity, unit_amount_paise, tax_rate_bps, line_total_paise, source, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)', `line-${reservationId}-room`, `folio-${reservationId}`, 'Room charge', 'ROOM', 1, subtotal, 1200, subtotal, 'CLOUD', DEMO_TIMESTAMP);
+      bind('INSERT INTO folio_lines (id, folio_id, description, category, quantity, unit_amount_rupees, tax_rate_bps, line_total_rupees, source, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)', `line-${reservationId}-room`, `folio-${reservationId}`, 'Room charge', 'ROOM', 1, subtotal, 1200, subtotal, 'CLOUD', DEMO_TIMESTAMP);
     }
   });
 
@@ -269,21 +269,21 @@ async function seed(database: D1) {
   arrivalGuests.forEach(([guestId, name, reference, room, type], index) => {
     bind('INSERT INTO guests (id, property_id, full_name, email, phone, city, preferences, dietary_requirements, loyalty_tier, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)', guestId, PROPERTY_ID, name, `${guestId}@example.in`, `+91 97${String(33000000 + index).padStart(8, '0')}`, 'Mumbai', 'Late arrival', null, 'Member', DEMO_TIMESTAMP, DEMO_TIMESTAMP);
     const reservationId = `reservation-${reference.toLowerCase()}`;
-    bind('INSERT INTO reservations (id, property_id, reference, guest_id, room_id, room_type, arrival_date, departure_date, status, source, total_amount_paise, balance_paise, created_while_property_offline, contact_status, version, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0, ?, 1, ?, ?)', reservationId, PROPERTY_ID, reference, guestId, `room-${room}`, type, DEMO_DATE, '2026-08-26', 'CONFIRMED', index % 2 === 0 ? 'WEBSITE' : 'OTA', 1850000 + index * 90000, index < 2 ? 850000 : 0, 'ACKNOWLEDGED', DEMO_TIMESTAMP, DEMO_TIMESTAMP);
-    bind('INSERT INTO folios (id, property_id, reservation_id, status, subtotal_paise, tax_paise, total_paise, version, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, 1, ?)', `folio-${reservationId}`, PROPERTY_ID, reservationId, 'OPEN', 0, 0, 0, DEMO_TIMESTAMP);
+    bind('INSERT INTO reservations (id, property_id, reference, guest_id, room_id, room_type, arrival_date, departure_date, status, source, total_amount_rupees, balance_rupees, created_while_property_offline, contact_status, version, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0, ?, 1, ?, ?)', reservationId, PROPERTY_ID, reference, guestId, `room-${room}`, type, DEMO_DATE, '2026-08-26', 'CONFIRMED', index % 2 === 0 ? 'WEBSITE' : 'OTA', 1850000 + index * 90000, index < 2 ? 850000 : 0, 'ACKNOWLEDGED', DEMO_TIMESTAMP, DEMO_TIMESTAMP);
+    bind('INSERT INTO folios (id, property_id, reservation_id, status, subtotal_rupees, tax_rupees, total_rupees, version, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, 1, ?)', `folio-${reservationId}`, PROPERTY_ID, reservationId, 'OPEN', 0, 0, 0, DEMO_TIMESTAMP);
   });
 
   bind('INSERT INTO housekeeping_tasks (id, property_id, room_id, assigned_to, priority, status, scheduled_at, notes) VALUES (?, ?, ?, ?, ?, ?, ?, ?)', 'hk-404', PROPERTY_ID, 'room-404', 'Sonal Pawar', 'HIGH', 'CLEANING', '2026-08-24T11:45:00.000Z', 'Arrival at 3:30 PM');
   bind('INSERT INTO housekeeping_tasks (id, property_id, room_id, assigned_to, priority, status, scheduled_at, notes) VALUES (?, ?, ?, ?, ?, ?, ?, ?)', 'hk-405', PROPERTY_ID, 'room-405', 'Deepa More', 'NORMAL', 'ASSIGNED', '2026-08-24T13:00:00.000Z', 'Arrival at 5:00 PM');
   bind('INSERT INTO maintenance_tickets (id, property_id, room_id, category, issue, severity, assigned_to, status, opened_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)', 'MT-2041', PROPERTY_ID, 'room-406', 'HVAC', 'Air conditioner compressor inspection', 'HIGH', 'Rakesh Yadav', 'IN_PROGRESS', '2026-08-24T08:20:00.000Z');
   const inventory = [['Bath towels','Housekeeping','piece',26,30,42000],['Basmati rice','Kitchen','kg',14,20,9800],['Water bottles','Guest supplies','case',38,15,48000],['Toiletry kits','Housekeeping','kit',52,25,7600]] as const;
-  inventory.forEach(([name, category, unit, current, minimum, cost], index) => bind('INSERT INTO inventory_items (id, property_id, name, category, unit, current_quantity, minimum_quantity, unit_cost_paise, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)', `inventory-${index + 1}`, PROPERTY_ID, name, category, unit, current, minimum, cost, DEMO_TIMESTAMP));
-  bind('INSERT INTO restaurant_orders (id, property_id, reservation_id, room_number, order_type, status, total_paise, payment_status, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)', 'order-204', PROPERTY_ID, 'reservation-bh-10541', '204', 'ROOM_SERVICE', 'DELIVERED', 135000, 'POSTED_TO_ROOM', '2026-08-24T12:10:00.000Z');
+  inventory.forEach(([name, category, unit, current, minimum, cost], index) => bind('INSERT INTO inventory_items (id, property_id, name, category, unit, current_quantity, minimum_quantity, unit_cost_rupees, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)', `inventory-${index + 1}`, PROPERTY_ID, name, category, unit, current, minimum, cost, DEMO_TIMESTAMP));
+  bind('INSERT INTO restaurant_orders (id, property_id, reservation_id, room_number, order_type, status, total_rupees, payment_status, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)', 'order-204', PROPERTY_ID, 'reservation-bh-10541', '204', 'ROOM_SERVICE', 'DELIVERED', 135000, 'POSTED_TO_ROOM', '2026-08-24T12:10:00.000Z');
 
   const packages = [['Royal Rajasthan Circuit',8,'Jaipur · Jodhpur · Udaipur',32,24,5899000],['Himalayan Escape',6,'Manali · Solang · Kasol',24,18,4299000],['Heritage Maharashtra',5,'Nagpur · Pench · Pachmarhi',28,11,3199000]] as const;
-  packages.forEach(([name, days, locations, capacity, booked, price], index) => bind('INSERT INTO travel_packages (id, organisation_id, name, duration_days, locations, capacity, booked, selling_price_paise, status) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)', `package-${index + 1}`, ORGANISATION_ID, name, days, locations, capacity, booked, price, 'ACTIVE'));
+  packages.forEach(([name, days, locations, capacity, booked, price], index) => bind('INSERT INTO travel_packages (id, organisation_id, name, duration_days, locations, capacity, booked, selling_price_rupees, status) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)', `package-${index + 1}`, ORGANISATION_ID, name, days, locations, capacity, booked, price, 'ACTIVE'));
   const inquiries = [['INQ-2048','Rhea Sharma','Website','Neha Kulkarni','Rajasthan group tour',4800000,'FOLLOW_UP','2026-08-24T15:00:00.000Z'],['INQ-2047','Harsh Mehta','Referral','Neha Kulkarni','Premium hotel stay',1650000,'NEGOTIATION','2026-08-25T10:30:00.000Z'],['INQ-2046','Priyanka Nair','Instagram','Rohan Verma','Himalayan couple package',8200000,'NEW','2026-08-24T17:00:00.000Z']] as const;
-  inquiries.forEach(([reference, customer, source, owner, service, value, status, followUp], index) => bind('INSERT INTO inquiries (id, organisation_id, reference, customer_name, source, owner, service, estimated_value_paise, status, follow_up_at, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)', `inquiry-${index + 1}`, ORGANISATION_ID, reference, customer, source, owner, service, value, status, followUp, DEMO_TIMESTAMP));
+  inquiries.forEach(([reference, customer, source, owner, service, value, status, followUp], index) => bind('INSERT INTO inquiries (id, organisation_id, reference, customer_name, source, owner, service, estimated_value_rupees, status, follow_up_at, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)', `inquiry-${index + 1}`, ORGANISATION_ID, reference, customer, source, owner, service, value, status, followUp, DEMO_TIMESTAMP));
   bind('INSERT INTO integration_events (id, property_id, provider, event_type, status, provider_reference, payload, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)', 'integration-godrej-1', PROPERTY_ID, 'GODREJ', 'ROOM_STATUS_SIMULATOR', 'AWAITING_API', 'SANDBOX-001', '{"capability":"room-status","mode":"SANDBOX"}', DEMO_TIMESTAMP);
   bind('INSERT INTO audit_logs (id, timestamp, actor_id, actor_name, role, property_id, device_id, action, entity, entity_id, previous_value, new_value, source, correlation_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)', 'audit-seed-brainadz', DEMO_TIMESTAMP, 'system', 'Demo seed', 'OWNER', PROPERTY_ID, null, 'DEMO_DATA_SEEDED', 'PROPERTY', PROPERTY_ID, null, '{"rooms":24}', 'CLOUD', 'seed-brainadz-20260824');
 
@@ -300,24 +300,24 @@ export async function getDemoState(actor: Actor, businessUnit: BusinessUnit = 'H
     : "SELECT id, timestamp, actor_name AS actorName, role, action, entity, entity_id AS entityId, previous_value AS previousValue, new_value AS newValue, source, correlation_id AS correlationId FROM audit_logs WHERE property_id = ? AND entity NOT IN ('CUSTOM_TRAVEL_PACKAGE','TRAVEL_DISCOUNT_REQUEST') ORDER BY timestamp DESC, id DESC LIMIT 50";
   const [property, rooms, reservations, folios, lines, offlineBills, housekeeping, maintenance, inventory, orders, mealBookings, reservationInspections, damageReports, packages, inquiries, travelAssets, customPackages, customPackageItems, discountRequests, audit] = await Promise.all([
     database.prepare('SELECT id, name, code, city, timezone, connection_status AS connectionStatus, last_sync_at AS lastSyncAt, version FROM properties WHERE id = ?').bind(PROPERTY_ID).first(),
-    database.prepare('SELECT id, number, floor, room_type AS roomType, base_rate_paise AS baseRatePaise, occupancy_status AS occupancyStatus, operational_status AS operationalStatus FROM rooms WHERE property_id = ? ORDER BY number').bind(PROPERTY_ID).all(),
-    database.prepare(`SELECT r.id, r.reference, r.arrival_date AS arrivalDate, r.departure_date AS departureDate, r.status, r.source, r.total_amount_paise AS totalAmountPaise, r.balance_paise AS balancePaise, r.created_while_property_offline AS createdWhilePropertyOffline, r.contact_status AS contactStatus, r.room_type AS roomType, r.room_id AS roomId, g.id AS guestId, g.full_name AS guestName, g.email, g.phone, g.city, g.preferences, g.dietary_requirements AS dietaryRequirements, g.loyalty_tier AS loyaltyTier, rm.number AS roomNumber FROM reservations r JOIN guests g ON g.id = r.guest_id LEFT JOIN rooms rm ON rm.id = r.room_id WHERE r.property_id = ? ORDER BY r.arrival_date, r.reference DESC`).bind(PROPERTY_ID).all(),
-    database.prepare('SELECT id, reservation_id AS reservationId, status, subtotal_paise AS subtotalPaise, tax_paise AS taxPaise, total_paise AS totalPaise, version, updated_at AS updatedAt FROM folios WHERE property_id = ?').bind(PROPERTY_ID).all(),
-    database.prepare(`SELECT fl.id, fl.folio_id AS folioId, fl.description, fl.category, fl.quantity, fl.unit_amount_paise AS unitAmountPaise, fl.tax_rate_bps AS taxRateBps, fl.line_total_paise AS lineTotalPaise, fl.source, fl.created_at AS createdAt FROM folio_lines fl JOIN folios f ON f.id = fl.folio_id WHERE f.property_id = ? ORDER BY fl.created_at`).bind(PROPERTY_ID).all(),
-    database.prepare('SELECT id, offline_reference AS offlineReference, reservation_id AS reservationId, booking_reference AS bookingReference, guest_id AS guestId, device_id AS deviceId, generated_by AS generatedBy, local_amount_paise AS localAmountPaise, tax_paise AS taxPaise, cloud_amount_paise AS cloudAmountPaise, currency, status, document_hash AS documentHash, notes, generated_at AS generatedAt, verified_at AS verifiedAt, verified_by AS verifiedBy FROM offline_bills WHERE property_id = ? ORDER BY generated_at DESC').bind(PROPERTY_ID).all(),
+    database.prepare('SELECT id, number, floor, room_type AS roomType, base_rate_rupees AS baseRateRupees, occupancy_status AS occupancyStatus, operational_status AS operationalStatus FROM rooms WHERE property_id = ? ORDER BY number').bind(PROPERTY_ID).all(),
+    database.prepare(`SELECT r.id, r.reference, r.arrival_date AS arrivalDate, r.departure_date AS departureDate, r.status, r.source, r.total_amount_rupees AS totalAmountRupees, r.balance_rupees AS balanceRupees, r.created_while_property_offline AS createdWhilePropertyOffline, r.contact_status AS contactStatus, r.room_type AS roomType, r.room_id AS roomId, g.id AS guestId, g.full_name AS guestName, g.email, g.phone, g.city, g.preferences, g.dietary_requirements AS dietaryRequirements, g.loyalty_tier AS loyaltyTier, rm.number AS roomNumber FROM reservations r JOIN guests g ON g.id = r.guest_id LEFT JOIN rooms rm ON rm.id = r.room_id WHERE r.property_id = ? ORDER BY r.arrival_date, r.reference DESC`).bind(PROPERTY_ID).all(),
+    database.prepare('SELECT id, reservation_id AS reservationId, status, subtotal_rupees AS subtotalRupees, tax_rupees AS taxRupees, total_rupees AS totalRupees, version, updated_at AS updatedAt FROM folios WHERE property_id = ?').bind(PROPERTY_ID).all(),
+    database.prepare(`SELECT fl.id, fl.folio_id AS folioId, fl.description, fl.category, fl.quantity, fl.unit_amount_rupees AS unitAmountRupees, fl.tax_rate_bps AS taxRateBps, fl.line_total_rupees AS lineTotalRupees, fl.source, fl.created_at AS createdAt FROM folio_lines fl JOIN folios f ON f.id = fl.folio_id WHERE f.property_id = ? ORDER BY fl.created_at`).bind(PROPERTY_ID).all(),
+    database.prepare('SELECT id, offline_reference AS offlineReference, reservation_id AS reservationId, booking_reference AS bookingReference, guest_id AS guestId, device_id AS deviceId, generated_by AS generatedBy, local_amount_rupees AS localAmountRupees, tax_rupees AS taxRupees, cloud_amount_rupees AS cloudAmountRupees, currency, status, document_hash AS documentHash, notes, generated_at AS generatedAt, verified_at AS verifiedAt, verified_by AS verifiedBy FROM offline_bills WHERE property_id = ? ORDER BY generated_at DESC').bind(PROPERTY_ID).all(),
     database.prepare(`SELECT h.id, h.reservation_id AS reservationId, r.number AS roomNumber, h.assigned_to AS assignedTo, h.task_type AS taskType, h.priority, h.status, h.outcome, h.scheduled_at AS scheduledAt, h.deferred_until AS deferredUntil, h.completed_at AS completedAt, h.updated_at AS updatedAt, h.version, h.notes FROM housekeeping_tasks h JOIN rooms r ON r.id = h.room_id WHERE h.property_id = ? ORDER BY CASE WHEN h.status = 'DEFERRED' THEN h.deferred_until ELSE h.scheduled_at END`).bind(PROPERTY_ID).all(),
     database.prepare(`SELECT m.id, r.number AS roomNumber, m.category, m.issue, m.severity, m.assigned_to AS assignedTo, m.status, m.opened_at AS openedAt FROM maintenance_tickets m LEFT JOIN rooms r ON r.id = m.room_id WHERE m.property_id = ? ORDER BY m.opened_at DESC`).bind(PROPERTY_ID).all(),
-    database.prepare('SELECT id, name, category, department, unit, current_quantity AS currentQuantity, minimum_quantity AS minimumQuantity, unit_cost_paise AS unitCostPaise, updated_at AS updatedAt FROM inventory_items WHERE property_id = ? ORDER BY name').bind(PROPERTY_ID).all(),
-    database.prepare('SELECT id, reservation_id AS reservationId, room_number AS roomNumber, order_type AS orderType, status, total_paise AS totalPaise, payment_status AS paymentStatus, created_at AS createdAt FROM restaurant_orders WHERE property_id = ? ORDER BY created_at DESC').bind(PROPERTY_ID).all(),
+    database.prepare('SELECT id, name, category, department, unit, current_quantity AS currentQuantity, minimum_quantity AS minimumQuantity, unit_cost_rupees AS unitCostRupees, updated_at AS updatedAt FROM inventory_items WHERE property_id = ? ORDER BY name').bind(PROPERTY_ID).all(),
+    database.prepare('SELECT id, reservation_id AS reservationId, room_number AS roomNumber, order_type AS orderType, status, total_rupees AS totalRupees, payment_status AS paymentStatus, created_at AS createdAt FROM restaurant_orders WHERE property_id = ? ORDER BY created_at DESC').bind(PROPERTY_ID).all(),
     database.prepare(`SELECT mb.id, mb.reservation_id AS reservationId, r.reference AS bookingReference, rm.number AS roomNumber, mb.service_date AS serviceDate, mb.meal_period AS mealPeriod, mb.guest_count AS guestCount, mb.status, mb.dietary_notes AS dietaryNotes, r.arrival_date AS arrivalDate, r.departure_date AS departureDate, r.status AS reservationStatus FROM restaurant_meal_bookings mb JOIN reservations r ON r.id = mb.reservation_id LEFT JOIN rooms rm ON rm.id = r.room_id WHERE mb.property_id = ? ORDER BY mb.service_date, mb.meal_period, rm.number`).bind(PROPERTY_ID).all(),
-    database.prepare(`SELECT r.id AS reservationId, r.reference AS bookingReference, rm.number AS roomNumber, h.id AS taskId, h.status AS taskStatus, h.outcome AS taskOutcome, h.version AS taskVersion, ri.id AS inspectionId, ri.result, ri.notes AS inspectionNotes, ri.damage_severity AS severity, ri.completed_by AS completedBy, ri.completed_at AS completedAt, d.id AS damageReportId, d.status AS damageStatus, d.description AS damageDescription, d.policy_rule_id AS policyRuleId, d.policy_label AS policyLabel, d.policy_liability_paise AS policyLiabilityPaise, d.repair_cost_paise AS repairCostPaise, d.charge_amount_paise AS chargeAmountPaise, d.decision_note AS decisionNote, d.reported_by AS reportedBy, d.reported_at AS reportedAt, d.reviewed_by AS reviewedBy, d.reviewed_at AS reviewedAt, d.version AS damageVersion, f.id AS folioId, f.status AS folioStatus, CASE WHEN ri.id IS NULL THEN 'PENDING' WHEN ri.result = 'NO_DAMAGE' THEN 'CLEARED' WHEN d.status = 'PENDING_REVIEW' OR d.status LIKE 'PROCESSING_%' THEN 'DAMAGE_REVIEW' WHEN d.status = 'CHARGED' THEN 'DAMAGE_CHARGED' WHEN d.status = 'WAIVED' THEN 'DAMAGE_WAIVED' ELSE 'DAMAGE_REPORTED' END AS inspectionStatus FROM reservations r JOIN housekeeping_tasks h ON h.reservation_id = r.id AND h.task_type = 'CHECKOUT_INSPECTION' LEFT JOIN rooms rm ON rm.id = h.room_id LEFT JOIN room_inspections ri ON ri.task_id = h.id LEFT JOIN damage_reports d ON d.inspection_id = ri.id JOIN folios f ON f.reservation_id = r.id WHERE r.property_id = ? ORDER BY h.scheduled_at DESC`).bind(PROPERTY_ID).all(),
-    database.prepare(`SELECT d.id, d.inspection_id AS inspectionId, d.reservation_id AS reservationId, r.reference AS bookingReference, rm.number AS roomNumber, d.folio_id AS folioId, d.description, d.severity, d.status, d.policy_rule_id AS policyRuleId, d.policy_label AS policyLabel, d.policy_liability_paise AS policyLiabilityPaise, d.repair_cost_paise AS repairCostPaise, d.charge_amount_paise AS chargeAmountPaise, d.folio_line_id AS folioLineId, d.decision_note AS decisionNote, d.reported_by AS reportedBy, d.reported_at AS reportedAt, d.reviewed_by AS reviewedBy, d.reviewed_at AS reviewedAt, d.version FROM damage_reports d JOIN reservations r ON r.id = d.reservation_id JOIN rooms rm ON rm.id = d.room_id WHERE d.property_id = ? ORDER BY d.reported_at DESC`).bind(PROPERTY_ID).all(),
-    database.prepare('SELECT id, name, duration_days AS durationDays, locations, capacity, booked, selling_price_paise AS sellingPricePaise, status FROM travel_packages WHERE organisation_id = ?').bind(ORGANISATION_ID).all(),
-    database.prepare('SELECT id, reference, customer_name AS customerName, source, owner, service, estimated_value_paise AS estimatedValuePaise, status, follow_up_at AS followUpAt, created_at AS createdAt FROM inquiries WHERE organisation_id = ? ORDER BY created_at DESC').bind(ORGANISATION_ID).all(),
-    database.prepare('SELECT id, name, category, description, pricing_unit AS pricingUnit, unit_price_paise AS unitPricePaise, active, updated_at AS updatedAt FROM travel_assets WHERE organisation_id = ? AND active = 1 ORDER BY category, name').bind(ORGANISATION_ID).all(),
-    database.prepare('SELECT id, reference, client_name AS clientName, name, owner_id AS ownerId, owner_name AS ownerName, asset_subtotal_paise AS assetSubtotalPaise, base_price_paise AS basePricePaise, floor_price_paise AS floorPricePaise, quoted_price_paise AS quotedPricePaise, status, version, created_at AS createdAt, updated_at AS updatedAt FROM custom_travel_packages WHERE organisation_id = ? ORDER BY updated_at DESC').bind(ORGANISATION_ID).all(),
-    database.prepare(`SELECT i.id, i.package_id AS packageId, i.asset_id AS assetId, i.asset_name AS assetName, i.category, i.pricing_unit AS pricingUnit, i.quantity, i.unit_price_paise AS unitPricePaise, i.line_total_paise AS lineTotalPaise FROM custom_travel_package_items i JOIN custom_travel_packages p ON p.id = i.package_id WHERE p.organisation_id = ? ORDER BY i.category, i.asset_name`).bind(ORGANISATION_ID).all(),
-    database.prepare(`SELECT d.id, d.package_id AS packageId, p.reference AS packageReference, p.name AS packageName, p.client_name AS clientName, d.package_version AS packageVersion, d.requested_by_id AS requestedById, d.requested_by_name AS requestedByName, d.requested_price_paise AS requestedPricePaise, d.base_price_paise AS basePricePaise, d.floor_price_paise AS floorPricePaise, d.reason, d.status, d.reviewed_by_id AS reviewedById, d.reviewed_by_name AS reviewedByName, d.decision_note AS decisionNote, d.created_at AS createdAt, d.decided_at AS decidedAt FROM travel_discount_requests d JOIN custom_travel_packages p ON p.id = d.package_id WHERE d.organisation_id = ? ORDER BY d.created_at DESC`).bind(ORGANISATION_ID).all(),
+    database.prepare(`SELECT r.id AS reservationId, r.reference AS bookingReference, rm.number AS roomNumber, h.id AS taskId, h.status AS taskStatus, h.outcome AS taskOutcome, h.version AS taskVersion, ri.id AS inspectionId, ri.result, ri.notes AS inspectionNotes, ri.damage_severity AS severity, ri.completed_by AS completedBy, ri.completed_at AS completedAt, d.id AS damageReportId, d.status AS damageStatus, d.description AS damageDescription, d.policy_rule_id AS policyRuleId, d.policy_label AS policyLabel, d.policy_liability_rupees AS policyLiabilityRupees, d.repair_cost_rupees AS repairCostRupees, d.charge_amount_rupees AS chargeAmountRupees, d.decision_note AS decisionNote, d.reported_by AS reportedBy, d.reported_at AS reportedAt, d.reviewed_by AS reviewedBy, d.reviewed_at AS reviewedAt, d.version AS damageVersion, f.id AS folioId, f.status AS folioStatus, CASE WHEN ri.id IS NULL THEN 'PENDING' WHEN ri.result = 'NO_DAMAGE' THEN 'CLEARED' WHEN d.status = 'PENDING_REVIEW' OR d.status LIKE 'PROCESSING_%' THEN 'DAMAGE_REVIEW' WHEN d.status = 'CHARGED' THEN 'DAMAGE_CHARGED' WHEN d.status = 'WAIVED' THEN 'DAMAGE_WAIVED' ELSE 'DAMAGE_REPORTED' END AS inspectionStatus FROM reservations r JOIN housekeeping_tasks h ON h.reservation_id = r.id AND h.task_type = 'CHECKOUT_INSPECTION' LEFT JOIN rooms rm ON rm.id = h.room_id LEFT JOIN room_inspections ri ON ri.task_id = h.id LEFT JOIN damage_reports d ON d.inspection_id = ri.id JOIN folios f ON f.reservation_id = r.id WHERE r.property_id = ? ORDER BY h.scheduled_at DESC`).bind(PROPERTY_ID).all(),
+    database.prepare(`SELECT d.id, d.inspection_id AS inspectionId, d.reservation_id AS reservationId, r.reference AS bookingReference, rm.number AS roomNumber, d.folio_id AS folioId, d.description, d.severity, d.status, d.policy_rule_id AS policyRuleId, d.policy_label AS policyLabel, d.policy_liability_rupees AS policyLiabilityRupees, d.repair_cost_rupees AS repairCostRupees, d.charge_amount_rupees AS chargeAmountRupees, d.folio_line_id AS folioLineId, d.decision_note AS decisionNote, d.reported_by AS reportedBy, d.reported_at AS reportedAt, d.reviewed_by AS reviewedBy, d.reviewed_at AS reviewedAt, d.version FROM damage_reports d JOIN reservations r ON r.id = d.reservation_id JOIN rooms rm ON rm.id = d.room_id WHERE d.property_id = ? ORDER BY d.reported_at DESC`).bind(PROPERTY_ID).all(),
+    database.prepare('SELECT id, name, duration_days AS durationDays, locations, capacity, booked, selling_price_rupees AS sellingPriceRupees, status FROM travel_packages WHERE organisation_id = ?').bind(ORGANISATION_ID).all(),
+    database.prepare('SELECT id, reference, customer_name AS customerName, source, owner, service, estimated_value_rupees AS estimatedValueRupees, status, follow_up_at AS followUpAt, created_at AS createdAt FROM inquiries WHERE organisation_id = ? ORDER BY created_at DESC').bind(ORGANISATION_ID).all(),
+    database.prepare('SELECT id, name, category, description, pricing_unit AS pricingUnit, unit_price_rupees AS unitPriceRupees, active, updated_at AS updatedAt FROM travel_assets WHERE organisation_id = ? AND active = 1 ORDER BY category, name').bind(ORGANISATION_ID).all(),
+    database.prepare('SELECT id, reference, client_name AS clientName, name, owner_id AS ownerId, owner_name AS ownerName, asset_subtotal_rupees AS assetSubtotalRupees, base_price_rupees AS basePriceRupees, floor_price_rupees AS floorPriceRupees, quoted_price_rupees AS quotedPriceRupees, status, version, created_at AS createdAt, updated_at AS updatedAt FROM custom_travel_packages WHERE organisation_id = ? ORDER BY updated_at DESC').bind(ORGANISATION_ID).all(),
+    database.prepare(`SELECT i.id, i.package_id AS packageId, i.asset_id AS assetId, i.asset_name AS assetName, i.category, i.pricing_unit AS pricingUnit, i.quantity, i.unit_price_rupees AS unitPriceRupees, i.line_total_rupees AS lineTotalRupees FROM custom_travel_package_items i JOIN custom_travel_packages p ON p.id = i.package_id WHERE p.organisation_id = ? ORDER BY i.category, i.asset_name`).bind(ORGANISATION_ID).all(),
+    database.prepare(`SELECT d.id, d.package_id AS packageId, p.reference AS packageReference, p.name AS packageName, p.client_name AS clientName, d.package_version AS packageVersion, d.requested_by_id AS requestedById, d.requested_by_name AS requestedByName, d.requested_price_rupees AS requestedPriceRupees, d.base_price_rupees AS basePriceRupees, d.floor_price_rupees AS floorPriceRupees, d.reason, d.status, d.reviewed_by_id AS reviewedById, d.reviewed_by_name AS reviewedByName, d.decision_note AS decisionNote, d.created_at AS createdAt, d.decided_at AS decidedAt FROM travel_discount_requests d JOIN custom_travel_packages p ON p.id = d.package_id WHERE d.organisation_id = ? ORDER BY d.created_at DESC`).bind(ORGANISATION_ID).all(),
     database.prepare(auditQuery).bind(PROPERTY_ID).all(),
   ]);
 
@@ -328,7 +328,7 @@ export async function getDemoState(actor: Actor, businessUnit: BusinessUnit = 'H
   const occupancyCount = roomRows.filter((room) => room.occupancyStatus === 'OCCUPIED').length;
   const arrivalsToday = reservationRows.filter((reservation) => reservation.arrivalDate === DEMO_DATE && ['CONFIRMED', 'HELD'].includes(String(reservation.status))).length;
   const departuresToday = reservationRows.filter((reservation) => reservation.departureDate === DEMO_DATE && reservation.status === 'CHECKED_IN').length;
-  const revenuePaise = folioRows.reduce((sum, folio) => sum + Number(folio.totalPaise ?? 0), 0);
+  const revenueRupees = folioRows.reduce((sum, folio) => sum + Number(folio.totalRupees ?? 0), 0);
   const paidRooms = Math.max(occupancyCount, 1);
   const metrics = {
     occupancyPercent: Math.round((occupancyCount / Math.max(roomRows.length, 1)) * 100),
@@ -341,10 +341,10 @@ export async function getDemoState(actor: Actor, businessUnit: BusinessUnit = 'H
     arrivalsToday,
     departuresToday,
     inHouseGuests: reservationRows.filter((reservation) => reservation.status === 'CHECKED_IN').length,
-    pendingPayments: reservationRows.filter((reservation) => Number(reservation.balancePaise) > 0).length,
-    revenuePaise,
-    adrPaise: Math.round(revenuePaise / paidRooms),
-    revParPaise: Math.round(revenuePaise / Math.max(roomRows.length, 1)),
+    pendingPayments: reservationRows.filter((reservation) => Number(reservation.balanceRupees) > 0).length,
+    revenueRupees,
+    adrRupees: Math.round(revenueRupees / paidRooms),
+    revParRupees: Math.round(revenueRupees / Math.max(roomRows.length, 0.01)),
     lowStockCount: (inventory.results as Array<Record<string, unknown>>).filter((item) => Number(item.currentQuantity) <= Number(item.minimumQuantity)).length,
     unresolvedMaintenance: (maintenance.results as Array<Record<string, unknown>>).filter((ticket) => !['RESOLVED', 'CLOSED'].includes(String(ticket.status))).length,
     overdueFollowUps: (inquiries.results as Array<Record<string, unknown>>).filter((inquiry) => String(inquiry.followUpAt ?? '') < `${DEMO_DATE}T23:59:59.999Z` && !['CONVERTED', 'LOST'].includes(String(inquiry.status))).length,
@@ -390,13 +390,13 @@ export async function getDemoState(actor: Actor, businessUnit: BusinessUnit = 'H
   const visibleMetrics = actor.role === 'RESTAURANT' ? {
     occupancyPercent: 0, totalRooms: 0, occupiedRooms: 0, availableRooms: 0, readyRooms: 0, dirtyRooms: 0,
     maintenanceRooms: 0, arrivalsToday, departuresToday: 0, inHouseGuests: 0, pendingPayments: 0,
-    revenuePaise: 0, adrPaise: 0, revParPaise: 0,
+    revenueRupees: 0, adrRupees: 0, revParRupees: 0,
     lowStockCount: visibleInventory.filter((item) => Number(item.currentQuantity) <= Number(item.minimumQuantity)).length,
     unresolvedMaintenance: 0, overdueFollowUps: 0,
   } : actor.role === 'HOUSEKEEPING' ? {
     occupancyPercent: 0, totalRooms: 0, occupiedRooms: 0, availableRooms: 0, readyRooms: 0,
     dirtyRooms: activeHousekeepingRows.length, maintenanceRooms: 0, arrivalsToday: 0, departuresToday: 0, inHouseGuests: 0, pendingPayments: 0,
-    revenuePaise: 0, adrPaise: 0, revParPaise: 0, lowStockCount: 0, unresolvedMaintenance: 0, overdueFollowUps: 0,
+    revenueRupees: 0, adrRupees: 0, revParRupees: 0, lowStockCount: 0, unresolvedMaintenance: 0, overdueFollowUps: 0,
   } : metrics;
   const permittedReservations = canReadReservations
     ? reservationRows.map((reservation) => canReadGuests ? reservation : {
@@ -427,12 +427,12 @@ export async function getDemoState(actor: Actor, businessUnit: BusinessUnit = 'H
     metrics: hotelWorkspace ? visibleMetrics : {
       occupancyPercent: 0, totalRooms: 0, occupiedRooms: 0, availableRooms: 0, readyRooms: 0, dirtyRooms: 0,
       maintenanceRooms: 0, arrivalsToday: 0, departuresToday: 0, inHouseGuests: 0, pendingPayments: 0,
-      revenuePaise: 0, adrPaise: 0, revParPaise: 0, lowStockCount: 0, unresolvedMaintenance: 0, overdueFollowUps: 0,
+      revenueRupees: 0, adrRupees: 0, revParRupees: 0, lowStockCount: 0, unresolvedMaintenance: 0, overdueFollowUps: 0,
     },
     travelMetrics: {
       activePackages: (packages.results as Array<Record<string, unknown>>).filter((item) => item.status === 'ACTIVE').length,
       openInquiries: (inquiries.results as Array<Record<string, unknown>>).filter((item) => !['CONVERTED', 'LOST'].includes(String(item.status))).length,
-      pipelineValuePaise: (inquiries.results as Array<Record<string, unknown>>).filter((item) => !['CONVERTED', 'LOST'].includes(String(item.status))).reduce((sum, item) => sum + Number(item.estimatedValuePaise ?? 0), 0),
+      pipelineValueRupees: (inquiries.results as Array<Record<string, unknown>>).filter((item) => !['CONVERTED', 'LOST'].includes(String(item.status))).reduce((sum, item) => sum + Number(item.estimatedValueRupees ?? 0), 0),
       customQuotes: visibleCustomPackages.length,
       pendingApprovals: visibleDiscountRequests.filter((item) => item.status === 'PENDING').length,
       overdueFollowUps: metrics.overdueFollowUps,
@@ -479,9 +479,9 @@ export async function runCommand(actor: Actor, command: Record<string, unknown>)
     case 'SYNC_OFFLINE_RESERVATION': return syncOfflineReservation(actor, command);
     case 'MARK_CONTACTED': return markContacted(actor, String(command.reservationId));
     case 'CHECK_IN': return checkIn(actor, String(command.reservationId), String(command.surface ?? 'PROPERTY'));
-    case 'POST_RESTAURANT': return postRestaurant(actor, String(command.reservationId), Number(command.amountPaise), String(command.surface ?? 'PROPERTY'), String(command.clientOperationId ?? ''));
+    case 'POST_RESTAURANT': return postRestaurant(actor, String(command.reservationId), Number(command.amountRupees), String(command.surface ?? 'PROPERTY'), String(command.clientOperationId ?? ''));
     case 'CHECK_OUT': return checkOut(actor, String(command.reservationId), String(command.surface ?? 'PROPERTY'));
-    case 'MANUAL_MASTER_UPDATE': return manualMasterUpdate(actor, String(command.bookingReference), Number(command.amountPaise));
+    case 'MANUAL_MASTER_UPDATE': return manualMasterUpdate(actor, String(command.bookingReference), Number(command.amountRupees));
     case 'UPLOAD_OFFLINE_BILL': return uploadOfflineBill(actor, command);
     case 'VERIFY_OFFLINE_BILL': return verifyOfflineBill(actor, String(command.offlineBillId));
     case 'UPDATE_HOUSEKEEPING': return updateHousekeeping(actor, String(command.taskId), String(command.expectedStatus), String(command.status), String(command.surface ?? 'PROPERTY'));
@@ -515,14 +515,14 @@ type DamagePolicyRule = {
   id: string;
   severity: DamageSeverity;
   label: string;
-  liabilityCapPaise: number;
+  liabilityCapRupees: number;
   roomImpact: string;
   version: number;
 };
 
 async function activeDamagePolicy(database: D1, severity: DamageSeverity): Promise<DamagePolicyRule> {
-  const policy = await database.prepare(`SELECT id, severity, label, liability_cap_paise AS liabilityCapPaise, room_impact AS roomImpact, version FROM damage_policy_rules WHERE property_id = ? AND severity = ? AND active = 1`).bind(PROPERTY_ID, severity).first<DamagePolicyRule>();
-  if (!policy || !Number.isSafeInteger(policy.liabilityCapPaise) || policy.liabilityCapPaise <= 0) {
+  const policy = await database.prepare(`SELECT id, severity, label, liability_cap_rupees AS liabilityCapRupees, room_impact AS roomImpact, version FROM damage_policy_rules WHERE property_id = ? AND severity = ? AND active = 1`).bind(PROPERTY_ID, severity).first<DamagePolicyRule>();
+  if (!policy || !Number.isSafeInteger(policy.liabilityCapRupees) || policy.liabilityCapRupees <= 0) {
     throw new DomainError('DAMAGE_POLICY_NOT_CONFIGURED', `No active ${severity.toLowerCase()} damage policy is configured for this property.`, 409);
   }
   return policy;
@@ -619,7 +619,7 @@ async function createReservation(actor: Actor, command: Record<string, unknown>)
       return { ...payload, idempotent: true, source, providerReference };
     }
   }
-  const room = await database.prepare(`SELECT r.id, r.number, r.base_rate_paise AS baseRatePaise FROM rooms r WHERE r.property_id = ? AND r.room_type = ? AND r.operational_status != 'MAINTENANCE' AND NOT EXISTS (SELECT 1 FROM reservations x WHERE x.room_id = r.id AND x.status IN ('CONFIRMED','HELD','CHECKED_IN') AND x.arrival_date < ? AND x.departure_date > ?) ORDER BY r.number LIMIT 1`).bind(PROPERTY_ID, roomType, departureDate, arrivalDate).first<{ id: string; number: string; baseRatePaise: number }>();
+  const room = await database.prepare(`SELECT r.id, r.number, r.base_rate_rupees AS baseRateRupees FROM rooms r WHERE r.property_id = ? AND r.room_type = ? AND r.operational_status != 'MAINTENANCE' AND NOT EXISTS (SELECT 1 FROM reservations x WHERE x.room_id = r.id AND x.status IN ('CONFIRMED','HELD','CHECKED_IN') AND x.arrival_date < ? AND x.departure_date > ?) ORDER BY r.number LIMIT 1`).bind(PROPERTY_ID, roomType, departureDate, arrivalDate).first<{ id: string; number: string; baseRateRupees: number }>();
   if (!room) throw new DomainError('NO_AVAILABILITY', `No ${roomType} room is available for those dates.`, 409);
   const localReference = String(command.localReference ?? '').trim();
   if (offlineSyncAuthenticated && localReference.length < 8) throw new DomainError('INVALID_LOCAL_REFERENCE', 'A local walk-in reference is required.', 400);
@@ -629,13 +629,13 @@ async function createReservation(actor: Actor, command: Record<string, unknown>)
   const folioId = crypto.randomUUID();
   const nights = calculateStayNights(arrivalDate, departureDate);
   if (nights > 90) throw new DomainError('STAY_TOO_LONG', 'Reservations are limited to 90 nights.', 400);
-  const total = Number(room.baseRatePaise) * nights;
+  const total = Number(room.baseRateRupees) * nights;
   const timestamp = now();
   const correlation = correlationId();
   const statements = [
     database.prepare('INSERT INTO guests (id, property_id, full_name, email, phone, city, preferences, dietary_requirements, loyalty_tier, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)').bind(guestId, PROPERTY_ID, guestName, String(command.email ?? ''), String(command.phone ?? ''), String(command.city ?? ''), null, dietaryRequirements, 'New', timestamp, timestamp),
-    database.prepare('INSERT INTO reservations (id, property_id, reference, guest_id, room_id, room_type, arrival_date, departure_date, status, source, total_amount_paise, balance_paise, created_while_property_offline, contact_status, version, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1, ?, ?)').bind(reservationId, PROPERTY_ID, reference, guestId, room.id, roomType, arrivalDate, departureDate, 'CONFIRMED', source, total, total, offlineSyncAuthenticated || status === 'OFFLINE' ? 1 : 0, status === 'OFFLINE' && !offlineSyncAuthenticated ? 'NOT_CONTACTED' : 'ACKNOWLEDGED', timestamp, timestamp),
-    database.prepare('INSERT INTO folios (id, property_id, reservation_id, status, subtotal_paise, tax_paise, total_paise, version, updated_at) VALUES (?, ?, ?, ?, 0, 0, 0, 1, ?)').bind(folioId, PROPERTY_ID, reservationId, 'OPEN', timestamp),
+    database.prepare('INSERT INTO reservations (id, property_id, reference, guest_id, room_id, room_type, arrival_date, departure_date, status, source, total_amount_rupees, balance_rupees, created_while_property_offline, contact_status, version, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1, ?, ?)').bind(reservationId, PROPERTY_ID, reference, guestId, room.id, roomType, arrivalDate, departureDate, 'CONFIRMED', source, total, total, offlineSyncAuthenticated || status === 'OFFLINE' ? 1 : 0, status === 'OFFLINE' && !offlineSyncAuthenticated ? 'NOT_CONTACTED' : 'ACKNOWLEDGED', timestamp, timestamp),
+    database.prepare('INSERT INTO folios (id, property_id, reservation_id, status, subtotal_rupees, tax_rupees, total_rupees, version, updated_at) VALUES (?, ?, ?, ?, 0, 0, 0, 1, ?)').bind(folioId, PROPERTY_ID, reservationId, 'OPEN', timestamp),
     auditStatement(database, actor, 'BOOKING_CREATED', 'RESERVATION', reservationId, null, { reference, guestName, room: room.number, source, providerReference: providerReference || null, mealPlan, guestCount, createdWhilePropertyOffline: offlineSyncAuthenticated || status === 'OFFLINE', offlineCreatedBy }, offlineSyncAuthenticated ? 'OFFLINE_SYNC' : providerReference ? 'INTEGRATION' : 'CLOUD', correlation),
   ];
   statements.push(...mealBookingStatements(database, { reservationId, arrivalDate, departureDate, mealPlan, guestCount, dietaryNotes: dietaryRequirements, timestamp }));
@@ -703,29 +703,29 @@ async function checkIn(actor: Actor, reservationId: string, surfaceValue: string
   return { reservationId, status: 'CHECKED_IN' };
 }
 
-async function postRestaurant(actor: Actor, reservationId: string, amountPaise: number, surfaceValue: string, clientOperationId: string) {
+async function postRestaurant(actor: Actor, reservationId: string, amountRupees: number, surfaceValue: string, clientOperationId: string) {
   requirePermission(actor, 'restaurant.charge.post');
   const status = await propertyStatus();
   assertPropertyMutationAllowed(status === 'ONLINE', surfaceValue === 'MASTER_HUB' ? 'MASTER_HUB' : 'PROPERTY');
-  if (!Number.isSafeInteger(amountPaise) || amountPaise <= 0 || amountPaise > 5_000_000) throw new DomainError('INVALID_AMOUNT', 'Restaurant amount must be between ₹1 and ₹50,000.', 400);
+  if (!Number.isSafeInteger(amountRupees) || amountRupees <= 0 || amountRupees > 5_000_000) throw new DomainError('INVALID_AMOUNT', 'Restaurant amount must be between ₹1 and ₹50,000.', 400);
   if (clientOperationId.trim().length < 8) throw new DomainError('INVALID_CLIENT_OPERATION', 'A stable restaurant posting ID is required.', 400);
   const database = env.DB;
   const provider = 'RESTAURANT_TERMINAL';
   const prior = await database.prepare('SELECT payload FROM integration_events WHERE provider = ? AND provider_reference = ?').bind(provider, clientOperationId).first<{ payload: string }>();
   if (prior) return { ...JSON.parse(prior.payload) as Record<string, unknown>, idempotent: true };
-  const row = await database.prepare(`SELECT f.id AS folioId, f.subtotal_paise AS subtotalPaise, f.tax_paise AS taxPaise, f.total_paise AS totalPaise, r.status, rm.number AS roomNumber FROM folios f JOIN reservations r ON r.id = f.reservation_id LEFT JOIN rooms rm ON rm.id = r.room_id WHERE r.id = ? AND r.property_id = ?`).bind(reservationId, PROPERTY_ID).first<{ folioId: string; subtotalPaise: number; taxPaise: number; totalPaise: number; status: string; roomNumber: string }>();
+  const row = await database.prepare(`SELECT f.id AS folioId, f.subtotal_rupees AS subtotalRupees, f.tax_rupees AS taxRupees, f.total_rupees AS totalRupees, r.status, rm.number AS roomNumber FROM folios f JOIN reservations r ON r.id = f.reservation_id LEFT JOIN rooms rm ON rm.id = r.room_id WHERE r.id = ? AND r.property_id = ?`).bind(reservationId, PROPERTY_ID).first<{ folioId: string; subtotalRupees: number; taxRupees: number; totalRupees: number; status: string; roomNumber: string }>();
   if (!row || row.status !== 'CHECKED_IN') throw new DomainError('NO_ACTIVE_STAY', 'Restaurant charges require an active checked-in stay.', 409);
-  const tax = Math.round(amountPaise * 0.05);
+  const tax = Math.round(amountRupees * 0.05);
   const timestamp = now();
   const correlation = correlationId();
   const orderId = crypto.randomUUID();
-  const result = { orderId, folioId: row.folioId, addedPaise: amountPaise + tax };
+  const result = { orderId, folioId: row.folioId, addedRupees: amountRupees + tax };
   try {
     await database.batch([
-    database.prepare('INSERT INTO restaurant_orders (id, property_id, reservation_id, room_number, order_type, status, total_paise, payment_status, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)').bind(orderId, PROPERTY_ID, reservationId, row.roomNumber, 'ROOM_SERVICE', 'DELIVERED', amountPaise + tax, 'POSTED_TO_ROOM', timestamp),
-    database.prepare('INSERT INTO folio_lines (id, folio_id, description, category, quantity, unit_amount_paise, tax_rate_bps, line_total_paise, source, created_at) VALUES (?, ?, ?, ?, 1, ?, 500, ?, ?, ?)').bind(crypto.randomUUID(), row.folioId, 'Room service order', 'ROOM_SERVICE', amountPaise, amountPaise, 'RESTAURANT', timestamp),
-    database.prepare('UPDATE folios SET subtotal_paise = subtotal_paise + ?, tax_paise = tax_paise + ?, total_paise = total_paise + ?, version = version + 1, updated_at = ? WHERE id = ?').bind(amountPaise, tax, amountPaise + tax, timestamp, row.folioId),
-    auditStatement(database, actor, 'RESTAURANT_POSTED_TO_ROOM', 'FOLIO', row.folioId, { totalPaise: row.totalPaise }, { totalPaise: row.totalPaise + amountPaise + tax, orderId }, 'CLOUD', correlation),
+    database.prepare('INSERT INTO restaurant_orders (id, property_id, reservation_id, room_number, order_type, status, total_rupees, payment_status, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)').bind(orderId, PROPERTY_ID, reservationId, row.roomNumber, 'ROOM_SERVICE', 'DELIVERED', amountRupees + tax, 'POSTED_TO_ROOM', timestamp),
+    database.prepare('INSERT INTO folio_lines (id, folio_id, description, category, quantity, unit_amount_rupees, tax_rate_bps, line_total_rupees, source, created_at) VALUES (?, ?, ?, ?, 1, ?, 500, ?, ?, ?)').bind(crypto.randomUUID(), row.folioId, 'Room service order', 'ROOM_SERVICE', amountRupees, amountRupees, 'RESTAURANT', timestamp),
+    database.prepare('UPDATE folios SET subtotal_rupees = subtotal_rupees + ?, tax_rupees = tax_rupees + ?, total_rupees = total_rupees + ?, version = version + 1, updated_at = ? WHERE id = ?').bind(amountRupees, tax, amountRupees + tax, timestamp, row.folioId),
+    auditStatement(database, actor, 'RESTAURANT_POSTED_TO_ROOM', 'FOLIO', row.folioId, { totalRupees: row.totalRupees }, { totalRupees: row.totalRupees + amountRupees + tax, orderId }, 'CLOUD', correlation),
     database.prepare('INSERT INTO integration_events (id, property_id, provider, event_type, status, provider_reference, payload, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)').bind(crypto.randomUUID(), PROPERTY_ID, provider, 'RESTAURANT_POSTED_TO_ROOM', 'SUCCESSFUL', clientOperationId, JSON.stringify(result), timestamp),
     ]);
   } catch (error) {
@@ -763,24 +763,24 @@ async function checkOut(actor: Actor, reservationId: string, surfaceValue: strin
   return { reservationId, status: 'CHECKED_OUT', inspectionCreated: true };
 }
 
-async function manualMasterUpdate(actor: Actor, bookingReference: string, amountPaise: number) {
+async function manualMasterUpdate(actor: Actor, bookingReference: string, amountRupees: number) {
   requirePermission(actor, 'folio.write');
-  if (!Number.isInteger(amountPaise) || amountPaise < 0) throw new DomainError('INVALID_AMOUNT', 'Amount must be a non-negative integer in paise.', 400);
+  if (!Number.isInteger(amountRupees) || amountRupees < 0) throw new DomainError('INVALID_AMOUNT', 'Amount must be a non-negative integer in rupees.', 400);
   const database = env.DB;
-  const row = await database.prepare(`SELECT r.id AS reservationId, f.id AS folioId, f.status AS folioStatus, f.subtotal_paise AS subtotalPaise, f.tax_paise AS taxPaise, f.total_paise AS totalPaise FROM reservations r JOIN folios f ON f.reservation_id = r.id WHERE r.property_id = ? AND r.reference = ?`).bind(PROPERTY_ID, bookingReference).first<{ reservationId: string; folioId: string; folioStatus: string; subtotalPaise: number; taxPaise: number; totalPaise: number }>();
+  const row = await database.prepare(`SELECT r.id AS reservationId, f.id AS folioId, f.status AS folioStatus, f.subtotal_rupees AS subtotalRupees, f.tax_rupees AS taxRupees, f.total_rupees AS totalRupees FROM reservations r JOIN folios f ON f.reservation_id = r.id WHERE r.property_id = ? AND r.reference = ?`).bind(PROPERTY_ID, bookingReference).first<{ reservationId: string; folioId: string; folioStatus: string; subtotalRupees: number; taxRupees: number; totalRupees: number }>();
   if (!row) throw new DomainError('NOT_FOUND', 'Cloud reservation/folio not found.', 404);
   if (['PENDING_INSPECTION', 'PENDING_DAMAGE_REVIEW'].includes(row.folioStatus) || row.folioStatus.startsWith('PROCESSING_')) {
     throw new DomainError('FOLIO_LOCKED_FOR_INSPECTION', 'Complete the room inspection and damage review before manually updating this folio.', 409);
   }
   const timestamp = now();
   const correlation = correlationId();
-  const statements = [database.prepare("UPDATE folios SET status = 'MASTER_UPDATED', total_paise = ?, subtotal_paise = ?, tax_paise = ?, version = version + 1, updated_at = ? WHERE id = ?").bind(amountPaise, Math.max(0, amountPaise - row.taxPaise), row.taxPaise, timestamp, row.folioId)];
-  if (row.totalPaise !== amountPaise) {
-    statements.push(database.prepare('INSERT INTO folio_lines (id, folio_id, description, category, quantity, unit_amount_paise, tax_rate_bps, line_total_paise, source, created_at) VALUES (?, ?, ?, ?, 1, ?, 0, ?, ?, ?)').bind(crypto.randomUUID(), row.folioId, 'Authorised manual Master Hub adjustment', 'ADJUSTMENT', amountPaise - row.totalPaise, amountPaise - row.totalPaise, 'MASTER_MANUAL', timestamp));
+  const statements = [database.prepare("UPDATE folios SET status = 'MASTER_UPDATED', total_rupees = ?, subtotal_rupees = ?, tax_rupees = ?, version = version + 1, updated_at = ? WHERE id = ?").bind(amountRupees, Math.max(0, amountRupees - row.taxRupees), row.taxRupees, timestamp, row.folioId)];
+  if (row.totalRupees !== amountRupees) {
+    statements.push(database.prepare('INSERT INTO folio_lines (id, folio_id, description, category, quantity, unit_amount_rupees, tax_rate_bps, line_total_rupees, source, created_at) VALUES (?, ?, ?, ?, 1, ?, 0, ?, ?, ?)').bind(crypto.randomUUID(), row.folioId, 'Authorised manual Master Hub adjustment', 'ADJUSTMENT', amountRupees - row.totalRupees, amountRupees - row.totalRupees, 'MASTER_MANUAL', timestamp));
   }
-  statements.push(auditStatement(database, actor, 'MASTER_FOLIO_MANUALLY_UPDATED', 'FOLIO', row.folioId, { totalPaise: row.totalPaise }, { totalPaise: amountPaise, source: 'operational communication' }, 'CLOUD', correlation));
+  statements.push(auditStatement(database, actor, 'MASTER_FOLIO_MANUALLY_UPDATED', 'FOLIO', row.folioId, { totalRupees: row.totalRupees }, { totalRupees: amountRupees, source: 'operational communication' }, 'CLOUD', correlation));
   await database.batch(statements);
-  return { bookingReference, folioId: row.folioId, amountPaise, createdFinancialLine: row.totalPaise !== amountPaise };
+  return { bookingReference, folioId: row.folioId, amountRupees, createdFinancialLine: row.totalRupees !== amountRupees };
 }
 
 async function uploadOfflineBill(actor: Actor, command: Record<string, unknown>) {
@@ -789,8 +789,8 @@ async function uploadOfflineBill(actor: Actor, command: Record<string, unknown>)
   const id = String(command.id);
   const offlineReference = String(command.offlineReference);
   const bookingReference = String(command.bookingReference);
-  const localAmountPaise = Number(command.localAmountPaise);
-  const taxPaise = Number(command.taxPaise);
+  const localAmountRupees = Number(command.localAmountRupees);
+  const taxRupees = Number(command.taxRupees);
   const documentHash = String(command.documentHash);
   const generatedAt = String(command.generatedAt ?? now());
   const existing = await database.prepare('SELECT id, document_hash AS documentHash, status FROM offline_bills WHERE id = ?').bind(id).first<{ id: string; documentHash: string; status: string }>();
@@ -799,15 +799,15 @@ async function uploadOfflineBill(actor: Actor, command: Record<string, unknown>)
     const documentKey = await persistOfflineDocument(id, String(command.documentBase64 ?? ''), documentHash);
     return { id, status: existing.status, documentKey, idempotent: true };
   }
-  const cloud = await database.prepare(`SELECT r.id AS reservationId, r.guest_id AS guestId, r.reference AS bookingReference, f.total_paise AS cloudAmountPaise FROM reservations r LEFT JOIN folios f ON f.reservation_id = r.id WHERE r.property_id = ? AND r.reference = ?`).bind(PROPERTY_ID, bookingReference).first<{ reservationId: string; guestId: string; bookingReference: string; cloudAmountPaise: number }>();
-  const reconciliationStatus = reconcileOfflineBill({ localBookingReference: bookingReference, localAmountPaise, cloudBookingReference: cloud?.bookingReference, cloudAmountPaise: cloud?.cloudAmountPaise });
+  const cloud = await database.prepare(`SELECT r.id AS reservationId, r.guest_id AS guestId, r.reference AS bookingReference, f.total_rupees AS cloudAmountRupees FROM reservations r LEFT JOIN folios f ON f.reservation_id = r.id WHERE r.property_id = ? AND r.reference = ?`).bind(PROPERTY_ID, bookingReference).first<{ reservationId: string; guestId: string; bookingReference: string; cloudAmountRupees: number }>();
+  const reconciliationStatus = reconcileOfflineBill({ localBookingReference: bookingReference, localAmountRupees, cloudBookingReference: cloud?.bookingReference, cloudAmountRupees: cloud?.cloudAmountRupees });
   const documentKey = await persistOfflineDocument(id, String(command.documentBase64 ?? ''), documentHash);
   const correlation = correlationId();
   await database.batch([
-    database.prepare('INSERT INTO offline_bills (id, property_id, offline_reference, reservation_id, booking_reference, guest_id, device_id, generated_by, local_amount_paise, tax_paise, cloud_amount_paise, currency, status, document_hash, notes, generated_at, verified_at, verified_by) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NULL, NULL)').bind(id, PROPERTY_ID, offlineReference, cloud?.reservationId ?? 'unknown', bookingReference, cloud?.guestId ?? 'unknown', 'BHZ-FD01', actor.name, localAmountPaise, taxPaise, cloud?.cloudAmountPaise ?? null, 'INR', reconciliationStatus, documentHash, 'Reference upload for controlled reconciliation.', generatedAt),
-    auditStatement(database, actor, 'OFFLINE_BILL_REFERENCE_UPLOADED', 'OFFLINE_BILL', id, null, { offlineReference, bookingReference, localAmountPaise, reconciliationStatus, documentKey, financialReplay: false }, 'RECONCILIATION', correlation),
+    database.prepare('INSERT INTO offline_bills (id, property_id, offline_reference, reservation_id, booking_reference, guest_id, device_id, generated_by, local_amount_rupees, tax_rupees, cloud_amount_rupees, currency, status, document_hash, notes, generated_at, verified_at, verified_by) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NULL, NULL)').bind(id, PROPERTY_ID, offlineReference, cloud?.reservationId ?? 'unknown', bookingReference, cloud?.guestId ?? 'unknown', 'BHZ-FD01', actor.name, localAmountRupees, taxRupees, cloud?.cloudAmountRupees ?? null, 'INR', reconciliationStatus, documentHash, 'Reference upload for controlled reconciliation.', generatedAt),
+    auditStatement(database, actor, 'OFFLINE_BILL_REFERENCE_UPLOADED', 'OFFLINE_BILL', id, null, { offlineReference, bookingReference, localAmountRupees, reconciliationStatus, documentKey, financialReplay: false }, 'RECONCILIATION', correlation),
   ]);
-  return { id, status: reconciliationStatus, cloudAmountPaise: cloud?.cloudAmountPaise ?? null, documentKey, financialReplay: false };
+  return { id, status: reconciliationStatus, cloudAmountRupees: cloud?.cloudAmountRupees ?? null, documentKey, financialReplay: false };
 }
 
 async function persistOfflineDocument(id: string, documentBase64: string, expectedHash: string) {
@@ -835,14 +835,14 @@ async function persistOfflineDocument(id: string, documentBase64: string, expect
 async function verifyOfflineBill(actor: Actor, offlineBillId: string) {
   requirePermission(actor, 'offline.bill.verify');
   const database = env.DB;
-  const row = await database.prepare(`SELECT ob.id, ob.status, ob.local_amount_paise AS localAmountPaise, ob.booking_reference AS bookingReference, f.total_paise AS cloudAmountPaise FROM offline_bills ob LEFT JOIN reservations r ON r.id = ob.reservation_id LEFT JOIN folios f ON f.reservation_id = r.id WHERE ob.id = ? AND ob.property_id = ?`).bind(offlineBillId, PROPERTY_ID).first<{ id: string; status: string; localAmountPaise: number; bookingReference: string; cloudAmountPaise: number | null }>();
+  const row = await database.prepare(`SELECT ob.id, ob.status, ob.local_amount_rupees AS localAmountRupees, ob.booking_reference AS bookingReference, f.total_rupees AS cloudAmountRupees FROM offline_bills ob LEFT JOIN reservations r ON r.id = ob.reservation_id LEFT JOIN folios f ON f.reservation_id = r.id WHERE ob.id = ? AND ob.property_id = ?`).bind(offlineBillId, PROPERTY_ID).first<{ id: string; status: string; localAmountRupees: number; bookingReference: string; cloudAmountRupees: number | null }>();
   if (!row) throw new DomainError('NOT_FOUND', 'Offline bill not found.', 404);
-  const match = reconcileOfflineBill({ localBookingReference: row.bookingReference, localAmountPaise: row.localAmountPaise, cloudBookingReference: row.bookingReference, cloudAmountPaise: row.cloudAmountPaise });
+  const match = reconcileOfflineBill({ localBookingReference: row.bookingReference, localAmountRupees: row.localAmountRupees, cloudBookingReference: row.bookingReference, cloudAmountRupees: row.cloudAmountRupees });
   if (match !== 'MATCHED') throw new DomainError('RECONCILIATION_NOT_MATCHED', `Bill cannot be verified: ${match}.`, 409);
   const timestamp = now();
   const correlation = correlationId();
   await database.batch([
-    database.prepare("UPDATE offline_bills SET status = 'VERIFIED', cloud_amount_paise = ?, verified_at = ?, verified_by = ? WHERE id = ? AND property_id = ?").bind(row.cloudAmountPaise, timestamp, actor.name, offlineBillId, PROPERTY_ID),
+    database.prepare("UPDATE offline_bills SET status = 'VERIFIED', cloud_amount_rupees = ?, verified_at = ?, verified_by = ? WHERE id = ? AND property_id = ?").bind(row.cloudAmountRupees, timestamp, actor.name, offlineBillId, PROPERTY_ID),
     auditStatement(database, actor, 'OFFLINE_BILL_VERIFIED', 'OFFLINE_BILL', offlineBillId, { status: row.status }, { status: 'VERIFIED', linkedOnly: true, financialReplay: false }, 'RECONCILIATION', correlation),
   ]);
   return { id: offlineBillId, status: 'VERIFIED', financialReplay: false };
@@ -932,10 +932,10 @@ async function submitRoomInspection(actor: Actor, command: Record<string, unknow
     database.prepare('UPDATE housekeeping_tasks SET status = ?, outcome = ?, completed_at = ?, updated_at = ?, version = version + 1 WHERE id = ? AND property_id = ? AND version = ?').bind('COMPLETED', result, timestamp, timestamp, taskId, PROPERTY_ID, expectedVersion),
     database.prepare('INSERT INTO room_inspections (id, property_id, task_id, reservation_id, room_id, result, notes, damage_severity, completed_by, completed_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)').bind(inspectionId, PROPERTY_ID, taskId, row.reservationId, row.roomId, result, description || null, result === 'DAMAGE_FOUND' ? severity : null, actor.name, timestamp),
     database.prepare('UPDATE folios SET status = ?, version = version + 1, updated_at = ? WHERE id = ?').bind(result === 'DAMAGE_FOUND' ? 'PENDING_DAMAGE_REVIEW' : 'CLOSED', timestamp, row.folioId),
-    auditStatement(database, actor, 'ROOM_INSPECTION_SUBMITTED', 'ROOM_INSPECTION', inspectionId, null, { taskId, reservationId: row.reservationId, roomId: row.roomId, result, severity: result === 'DAMAGE_FOUND' ? severity : null, damagePolicy: policy ? { id: policy.id, label: policy.label, liabilityPaise: policy.liabilityCapPaise } : null, financialMutation: false }, 'CLOUD', correlation),
+    auditStatement(database, actor, 'ROOM_INSPECTION_SUBMITTED', 'ROOM_INSPECTION', inspectionId, null, { taskId, reservationId: row.reservationId, roomId: row.roomId, result, severity: result === 'DAMAGE_FOUND' ? severity : null, damagePolicy: policy ? { id: policy.id, label: policy.label, liabilityRupees: policy.liabilityCapRupees } : null, financialMutation: false }, 'CLOUD', correlation),
   ];
   if (result === 'DAMAGE_FOUND') {
-    statements.push(database.prepare("INSERT INTO damage_reports (id, property_id, inspection_id, reservation_id, room_id, folio_id, description, severity, status, policy_rule_id, policy_label, policy_liability_paise, repair_cost_paise, charge_amount_paise, folio_line_id, decision_note, reported_by, reported_at, reviewed_by, reviewed_at, version) VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'PENDING_REVIEW', ?, ?, ?, NULL, NULL, NULL, NULL, ?, ?, NULL, NULL, 1)").bind(damageReportId, PROPERTY_ID, inspectionId, row.reservationId, row.roomId, row.folioId, description, severity, policy?.id, policy?.label, policy?.liabilityCapPaise, actor.name, timestamp));
+    statements.push(database.prepare("INSERT INTO damage_reports (id, property_id, inspection_id, reservation_id, room_id, folio_id, description, severity, status, policy_rule_id, policy_label, policy_liability_rupees, repair_cost_rupees, charge_amount_rupees, folio_line_id, decision_note, reported_by, reported_at, reviewed_by, reviewed_at, version) VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'PENDING_REVIEW', ?, ?, ?, NULL, NULL, NULL, NULL, ?, ?, NULL, NULL, 1)").bind(damageReportId, PROPERTY_ID, inspectionId, row.reservationId, row.roomId, row.folioId, description, severity, policy?.id, policy?.label, policy?.liabilityCapRupees, actor.name, timestamp));
     if (policy?.roomImpact === 'ROOM_OUT_OF_ORDER') {
       statements.push(database.prepare("UPDATE rooms SET operational_status = 'MAINTENANCE', version = version + 1, updated_at = ? WHERE id = ? AND property_id = ?").bind(timestamp, row.roomId, PROPERTY_ID));
     }
@@ -954,7 +954,7 @@ async function submitRoomInspection(actor: Actor, command: Record<string, unknow
     result,
     severity: result === 'DAMAGE_FOUND' ? severity : null,
     damageReportId,
-    damagePolicy: policy ? { id: policy.id, label: policy.label, liabilityPaise: policy.liabilityCapPaise } : null,
+    damagePolicy: policy ? { id: policy.id, label: policy.label, liabilityRupees: policy.liabilityCapRupees } : null,
     folioStatus: result === 'DAMAGE_FOUND' ? 'PENDING_DAMAGE_REVIEW' : 'CLOSED',
   };
 }
@@ -968,24 +968,24 @@ async function resolveDamageReport(actor: Actor, command: Record<string, unknown
   const expectedVersion = Number(command.expectedVersion);
   const decision = String(command.decision ?? '').toUpperCase();
   if (!['POST_CHARGE', 'WAIVE'].includes(decision)) throw new DomainError('INVALID_DAMAGE_DECISION', 'Choose Post charge or Waive.', 400);
-  const repairCostInput = command.repairCostPaise ?? command.amountPaise;
-  const repairCostPaise = repairCostInput == null || repairCostInput === '' ? null : Number(repairCostInput);
-  if (repairCostPaise != null && (!Number.isSafeInteger(repairCostPaise) || repairCostPaise < 0)) throw new DomainError('INVALID_REPAIR_COST', 'Repair cost must be a non-negative whole amount in paise.', 400);
+  const repairCostInput = command.repairCostRupees ?? command.amountRupees;
+  const repairCostRupees = repairCostInput == null || repairCostInput === '' ? null : Number(repairCostInput);
+  if (repairCostRupees != null && (!Number.isSafeInteger(repairCostRupees) || repairCostRupees < 0)) throw new DomainError('INVALID_REPAIR_COST', 'Repair cost must be a non-negative whole amount in rupees.', 400);
   const suppliedDecisionNote = String(command.decisionNote ?? '').trim();
   if (suppliedDecisionNote.length > 500) throw new DomainError('DAMAGE_DECISION_NOTE_TOO_LONG', 'Decision note must be 500 characters or fewer.', 400);
   const database = env.DB;
-  const row = await database.prepare(`SELECT d.id, d.status, d.version, d.description, d.severity, d.policy_rule_id AS policyRuleId, d.policy_label AS policyLabel, d.policy_liability_paise AS policyLiabilityPaise, d.repair_cost_paise AS existingRepairCostPaise, d.charge_amount_paise AS existingChargeAmountPaise, d.folio_line_id AS existingFolioLineId, d.decision_note AS existingDecisionNote, d.reservation_id AS reservationId, d.folio_id AS folioId, f.status AS folioStatus, f.version AS folioVersion, f.subtotal_paise AS subtotalPaise, f.total_paise AS totalPaise, r.total_amount_paise AS reservationTotalPaise, r.balance_paise AS balancePaise FROM damage_reports d JOIN folios f ON f.id = d.folio_id JOIN reservations r ON r.id = d.reservation_id WHERE d.id = ? AND d.property_id = ?`).bind(reportId, PROPERTY_ID).first<Record<string, unknown>>();
+  const row = await database.prepare(`SELECT d.id, d.status, d.version, d.description, d.severity, d.policy_rule_id AS policyRuleId, d.policy_label AS policyLabel, d.policy_liability_rupees AS policyLiabilityRupees, d.repair_cost_rupees AS existingRepairCostRupees, d.charge_amount_rupees AS existingChargeAmountRupees, d.folio_line_id AS existingFolioLineId, d.decision_note AS existingDecisionNote, d.reservation_id AS reservationId, d.folio_id AS folioId, f.status AS folioStatus, f.version AS folioVersion, f.subtotal_rupees AS subtotalRupees, f.total_rupees AS totalRupees, r.total_amount_rupees AS reservationTotalRupees, r.balance_rupees AS balanceRupees FROM damage_reports d JOIN folios f ON f.id = d.folio_id JOIN reservations r ON r.id = d.reservation_id WHERE d.id = ? AND d.property_id = ?`).bind(reportId, PROPERTY_ID).first<Record<string, unknown>>();
   if (!row) throw new DomainError('NOT_FOUND', 'Damage report not found.', 404);
   const completedStatus = decision === 'POST_CHARGE' ? 'CHARGED' : 'WAIVED';
   if (row.status === completedStatus) {
-    if (decision === 'POST_CHARGE' && repairCostPaise != null && Number(row.existingRepairCostPaise) !== repairCostPaise) throw new DomainError('DAMAGE_REVIEW_IDEMPOTENCY_CONFLICT', 'This damage report was already charged with a different repair cost.', 409);
-    return { reportId, status: completedStatus, repairCostPaise: row.existingRepairCostPaise, policyLiabilityPaise: row.policyLiabilityPaise, amountPaise: row.existingChargeAmountPaise, decisionNote: row.existingDecisionNote, folioLineId: row.existingFolioLineId, idempotent: true };
+    if (decision === 'POST_CHARGE' && repairCostRupees != null && Number(row.existingRepairCostRupees) !== repairCostRupees) throw new DomainError('DAMAGE_REVIEW_IDEMPOTENCY_CONFLICT', 'This damage report was already charged with a different repair cost.', 409);
+    return { reportId, status: completedStatus, repairCostRupees: row.existingRepairCostRupees, policyLiabilityRupees: row.policyLiabilityRupees, amountRupees: row.existingChargeAmountRupees, decisionNote: row.existingDecisionNote, folioLineId: row.existingFolioLineId, idempotent: true };
   }
   if (row.status !== 'PENDING_REVIEW' || Number(row.version) !== expectedVersion) throw new DomainError('STALE_DAMAGE_REPORT', 'This damage report has already been reviewed.', 409);
   if (row.folioStatus !== 'PENDING_DAMAGE_REVIEW') throw new DomainError('INVALID_FOLIO_STATE', 'This folio is no longer awaiting damage review.', 409);
-  const policyLiabilityPaise = Number(row.policyLiabilityPaise);
-  const amountPaise = decision === 'POST_CHARGE'
-    ? calculatePolicyDamageCharge(Number(repairCostPaise), policyLiabilityPaise)
+  const policyLiabilityRupees = Number(row.policyLiabilityRupees);
+  const amountRupees = decision === 'POST_CHARGE'
+    ? calculatePolicyDamageCharge(Number(repairCostRupees), policyLiabilityRupees)
     : null;
   const decisionNote = suppliedDecisionNote || (decision === 'POST_CHARGE'
     ? `Repair cost reviewed and capped by ${String(row.policyLabel)} policy.`
@@ -998,13 +998,13 @@ async function resolveDamageReport(actor: Actor, command: Record<string, unknown
   const claim = await database.prepare("UPDATE damage_reports SET status = ?, reviewed_by = ?, reviewed_at = ?, version = version + 1 WHERE id = ? AND property_id = ? AND status = 'PENDING_REVIEW' AND version = ?").bind(processingStatus, actor.name, timestamp, reportId, PROPERTY_ID, expectedVersion).run();
   if (Number(claim.meta.changes ?? 0) !== 1) throw new DomainError('STALE_DAMAGE_REPORT', 'This damage report has already been reviewed.', 409);
   const statements: import('@/demo/storage').DemoStatement[] = [
-    database.prepare('UPDATE damage_reports SET status = ?, repair_cost_paise = ?, charge_amount_paise = ?, folio_line_id = ?, decision_note = ?, version = version + 1 WHERE id = ? AND property_id = ? AND status = ? AND version = ?').bind(nextStatus, repairCostPaise, amountPaise, folioLineId, decisionNote, reportId, PROPERTY_ID, processingStatus, expectedVersion + 1),
-    auditStatement(database, actor, decision === 'POST_CHARGE' ? 'DAMAGE_CHARGE_POSTED' : 'DAMAGE_CHARGE_WAIVED', 'DAMAGE_REPORT', reportId, row, { status: nextStatus, severity: row.severity, policyRuleId: row.policyRuleId, policyLabel: row.policyLabel, policyLiabilityPaise, repairCostPaise, amountPaise, decisionNote, folioLineId }, 'CLOUD', correlation),
+    database.prepare('UPDATE damage_reports SET status = ?, repair_cost_rupees = ?, charge_amount_rupees = ?, folio_line_id = ?, decision_note = ?, version = version + 1 WHERE id = ? AND property_id = ? AND status = ? AND version = ?').bind(nextStatus, repairCostRupees, amountRupees, folioLineId, decisionNote, reportId, PROPERTY_ID, processingStatus, expectedVersion + 1),
+    auditStatement(database, actor, decision === 'POST_CHARGE' ? 'DAMAGE_CHARGE_POSTED' : 'DAMAGE_CHARGE_WAIVED', 'DAMAGE_REPORT', reportId, row, { status: nextStatus, severity: row.severity, policyRuleId: row.policyRuleId, policyLabel: row.policyLabel, policyLiabilityRupees, repairCostRupees, amountRupees, decisionNote, folioLineId }, 'CLOUD', correlation),
   ];
   if (decision === 'POST_CHARGE') {
-    statements.push(database.prepare("INSERT INTO folio_lines (id, folio_id, description, category, quantity, unit_amount_paise, tax_rate_bps, line_total_paise, source, created_at) VALUES (?, ?, ?, 'DAMAGE', 1, ?, 0, ?, 'INSPECTION_REVIEW', ?)").bind(folioLineId, row.folioId, `Room damage: ${String(row.description)}`, amountPaise, amountPaise, timestamp));
-    statements.push(database.prepare("UPDATE folios SET status = 'CLOSED', subtotal_paise = subtotal_paise + ?, total_paise = total_paise + ?, version = version + 1, updated_at = ? WHERE id = ?").bind(amountPaise, amountPaise, timestamp, row.folioId));
-    statements.push(database.prepare('UPDATE reservations SET total_amount_paise = total_amount_paise + ?, balance_paise = balance_paise + ?, version = version + 1, updated_at = ? WHERE id = ?').bind(amountPaise, amountPaise, timestamp, row.reservationId));
+    statements.push(database.prepare("INSERT INTO folio_lines (id, folio_id, description, category, quantity, unit_amount_rupees, tax_rate_bps, line_total_rupees, source, created_at) VALUES (?, ?, ?, 'DAMAGE', 1, ?, 0, ?, 'INSPECTION_REVIEW', ?)").bind(folioLineId, row.folioId, `Room damage: ${String(row.description)}`, amountRupees, amountRupees, timestamp));
+    statements.push(database.prepare("UPDATE folios SET status = 'CLOSED', subtotal_rupees = subtotal_rupees + ?, total_rupees = total_rupees + ?, version = version + 1, updated_at = ? WHERE id = ?").bind(amountRupees, amountRupees, timestamp, row.folioId));
+    statements.push(database.prepare('UPDATE reservations SET total_amount_rupees = total_amount_rupees + ?, balance_rupees = balance_rupees + ?, version = version + 1, updated_at = ? WHERE id = ?').bind(amountRupees, amountRupees, timestamp, row.reservationId));
   } else {
     statements.push(database.prepare("UPDATE folios SET status = 'CLOSED', version = version + 1, updated_at = ? WHERE id = ?").bind(timestamp, row.folioId));
   }
@@ -1015,7 +1015,7 @@ async function resolveDamageReport(actor: Actor, command: Record<string, unknown
     await database.prepare("UPDATE damage_reports SET status = 'PENDING_REVIEW', reviewed_by = NULL, reviewed_at = NULL, version = ? WHERE id = ? AND property_id = ? AND status = ? AND version = ?").bind(expectedVersion, reportId, PROPERTY_ID, processingStatus, expectedVersion + 1).run();
     throw error;
   }
-  return { reportId, status: nextStatus, repairCostPaise, policyLiabilityPaise, amountPaise, decisionNote, folioLineId };
+  return { reportId, status: nextStatus, repairCostRupees, policyLiabilityRupees, amountRupees, decisionNote, folioLineId };
 }
 
 async function upsertInventory(actor: Actor, command: Record<string, unknown>) {
@@ -1030,36 +1030,36 @@ async function upsertInventory(actor: Actor, command: Record<string, unknown>) {
   const unit = String(command.unit ?? '').trim();
   const currentQuantity = Number(command.currentQuantity);
   const minimumQuantity = Number(command.minimumQuantity);
-  const unitCostPaise = Number(command.unitCostPaise);
+  const unitCostRupees = Number(command.unitCostRupees);
   if ([name, category, unit].some((value) => value.length < 1)) throw new DomainError('INVALID_INVENTORY_ITEM', 'Name, category and unit are required.', 400);
   if (actor.role === 'RESTAURANT' && !['Kitchen', 'Beverage', 'Restaurant Supplies'].includes(category)) throw new DomainError('INVALID_RESTAURANT_CATEGORY', 'Restaurant inventory must use Kitchen, Beverage or Restaurant Supplies.', 400);
   if (!['HOTEL', 'RESTAURANT'].includes(department)) throw new DomainError('INVALID_INVENTORY_DEPARTMENT', 'Inventory department must be Hotel or Restaurant.', 400);
-  if (![currentQuantity, minimumQuantity, unitCostPaise].every((value) => Number.isSafeInteger(value) && value >= 0)) throw new DomainError('INVALID_INVENTORY_AMOUNT', 'Stock levels and unit cost must be non-negative whole numbers.', 400);
+  if (![currentQuantity, minimumQuantity, unitCostRupees].every((value) => Number.isSafeInteger(value) && value >= 0)) throw new DomainError('INVALID_INVENTORY_AMOUNT', 'Stock levels and unit cost must be non-negative whole numbers.', 400);
   const database = env.DB;
-  const existing = id ? await database.prepare('SELECT id, name, category, department, unit, current_quantity AS currentQuantity, minimum_quantity AS minimumQuantity, unit_cost_paise AS unitCostPaise, updated_at AS updatedAt FROM inventory_items WHERE id = ? AND property_id = ?').bind(id, PROPERTY_ID).first<Record<string, unknown>>() : null;
+  const existing = id ? await database.prepare('SELECT id, name, category, department, unit, current_quantity AS currentQuantity, minimum_quantity AS minimumQuantity, unit_cost_rupees AS unitCostRupees, updated_at AS updatedAt FROM inventory_items WHERE id = ? AND property_id = ?').bind(id, PROPERTY_ID).first<Record<string, unknown>>() : null;
   if (id && !existing) throw new DomainError('NOT_FOUND', 'Inventory item not found.', 404);
   if (actor.role === 'RESTAURANT' && existing && existing.department !== 'RESTAURANT') throw new DomainError('FORBIDDEN_INVENTORY_SCOPE', 'Restaurant staff can update restaurant inventory only.', 403);
   if (existing && String(command.expectedUpdatedAt ?? '') !== String(existing.updatedAt)) throw new DomainError('STALE_INVENTORY_ITEM', 'This inventory item was updated by someone else. Refresh and try again.', 409);
   const itemId = existing ? String(existing.id) : crypto.randomUUID();
   const previousTimestamp = existing ? Date.parse(String(existing.updatedAt)) : 0;
   const timestamp = new Date(Math.max(Date.now(), previousTimestamp + 1)).toISOString();
-  const next = { id: itemId, name, category, department, unit, currentQuantity, minimumQuantity, unitCostPaise, updatedAt: timestamp };
+  const next = { id: itemId, name, category, department, unit, currentQuantity, minimumQuantity, unitCostRupees, updatedAt: timestamp };
   const correlation = correlationId();
   if (existing) {
-    const changedFields = ['name', 'category', 'department', 'unit', 'currentQuantity', 'minimumQuantity', 'unitCostPaise'].filter((field) => String(existing[field]) !== String(next[field as keyof typeof next]));
+    const changedFields = ['name', 'category', 'department', 'unit', 'currentQuantity', 'minimumQuantity', 'unitCostRupees'].filter((field) => String(existing[field]) !== String(next[field as keyof typeof next]));
     if (!changedFields.length) return { item: existing, changedFields: [], noOp: true };
     const results = await database.batch([
-      database.prepare('UPDATE inventory_items SET name = ?, category = ?, department = ?, unit = ?, current_quantity = ?, minimum_quantity = ?, unit_cost_paise = ?, updated_at = ? WHERE id = ? AND property_id = ? AND updated_at = ?').bind(name, category, department, unit, currentQuantity, minimumQuantity, unitCostPaise, timestamp, itemId, PROPERTY_ID, existing.updatedAt),
+      database.prepare('UPDATE inventory_items SET name = ?, category = ?, department = ?, unit = ?, current_quantity = ?, minimum_quantity = ?, unit_cost_rupees = ?, updated_at = ? WHERE id = ? AND property_id = ? AND updated_at = ?').bind(name, category, department, unit, currentQuantity, minimumQuantity, unitCostRupees, timestamp, itemId, PROPERTY_ID, existing.updatedAt),
       auditStatement(database, actor, 'INVENTORY_ITEM_UPDATED', 'INVENTORY_ITEM', itemId, existing, next, 'CLOUD', correlation),
     ]);
     if (Number(results[0].meta.changes ?? 0) !== 1) throw new DomainError('STALE_INVENTORY_ITEM', 'This inventory item was updated by someone else. Refresh and try again.', 409);
     return { item: next, changedFields, correlationId: correlation };
   }
   await database.batch([
-    database.prepare('INSERT INTO inventory_items (id, property_id, name, category, department, unit, current_quantity, minimum_quantity, unit_cost_paise, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)').bind(itemId, PROPERTY_ID, name, category, department, unit, currentQuantity, minimumQuantity, unitCostPaise, timestamp),
+    database.prepare('INSERT INTO inventory_items (id, property_id, name, category, department, unit, current_quantity, minimum_quantity, unit_cost_rupees, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)').bind(itemId, PROPERTY_ID, name, category, department, unit, currentQuantity, minimumQuantity, unitCostRupees, timestamp),
     auditStatement(database, actor, 'INVENTORY_ITEM_CREATED', 'INVENTORY_ITEM', itemId, null, next, 'CLOUD', correlation),
   ]);
-  return { item: next, changedFields: ['name', 'category', 'department', 'unit', 'currentQuantity', 'minimumQuantity', 'unitCostPaise'], correlationId: correlation };
+  return { item: next, changedFields: ['name', 'category', 'department', 'unit', 'currentQuantity', 'minimumQuantity', 'unitCostRupees'], correlationId: correlation };
 }
 
 async function createCustomPackage(actor: Actor, command: Record<string, unknown>) {
@@ -1080,22 +1080,22 @@ async function createCustomPackage(actor: Actor, command: Record<string, unknown
   if (!assetIds.length) throw new DomainError('PACKAGE_ASSETS_REQUIRED', 'Select at least one available travel asset.', 400);
   const database = env.DB;
   const placeholders = assetIds.map(() => '?').join(',');
-  const result = await database.prepare(`SELECT id, name, category, pricing_unit AS pricingUnit, unit_price_paise AS unitPricePaise FROM travel_assets WHERE organisation_id = ? AND active = 1 AND id IN (${placeholders})`).bind(ORGANISATION_ID, ...assetIds).all<Record<string, unknown>>();
+  const result = await database.prepare(`SELECT id, name, category, pricing_unit AS pricingUnit, unit_price_rupees AS unitPriceRupees FROM travel_assets WHERE organisation_id = ? AND active = 1 AND id IN (${placeholders})`).bind(ORGANISATION_ID, ...assetIds).all<Record<string, unknown>>();
   if (result.results.length !== assetIds.length) throw new DomainError('PACKAGE_ASSET_UNAVAILABLE', 'One or more selected assets are unavailable.', 409);
-  const assetRows = result.results as Array<{ id: string; name: string; category: string; pricingUnit: string; unitPricePaise: number }>;
+  const assetRows = result.results as Array<{ id: string; name: string; category: string; pricingUnit: string; unitPriceRupees: number }>;
   const items = assetRows.map((asset) => {
     const quantity = quantities.get(String(asset.id)) ?? 0;
-    return { ...asset, quantity, lineTotalPaise: Number(asset.unitPricePaise) * quantity };
+    return { ...asset, quantity, lineTotalRupees: Number(asset.unitPriceRupees) * quantity };
   });
-  const assetSubtotalPaise = items.reduce((sum, item) => sum + Number(item.lineTotalPaise), 0);
+  const assetSubtotalRupees = items.reduce((sum, item) => sum + Number(item.lineTotalRupees), 0);
   const canManagePricing = roleCan(actor.role, 'travel.pricing.manage');
-  const requestedBase = Number(command.basePricePaise);
-  const requestedFloor = Number(command.floorPricePaise);
-  const basePricePaise = canManagePricing && Number.isSafeInteger(requestedBase) && requestedBase > 0 ? requestedBase : assetSubtotalPaise;
-  const floorPricePaise = canManagePricing && Number.isSafeInteger(requestedFloor) && requestedFloor >= 0 ? requestedFloor : Math.round(basePricePaise * 0.9);
-  const quotedPricePaise = Number(command.quotedPricePaise || basePricePaise);
-  if (![basePricePaise, floorPricePaise, quotedPricePaise].every((value) => Number.isSafeInteger(value) && value >= 0) || floorPricePaise > basePricePaise || quotedPricePaise < 1) throw new DomainError('INVALID_PACKAGE_PRICING', 'Pricing must use whole paise and the floor cannot exceed the base price.', 400);
-  const belowFloor = quotedPricePaise < floorPricePaise;
+  const requestedBase = Number(command.basePriceRupees);
+  const requestedFloor = Number(command.floorPriceRupees);
+  const basePriceRupees = canManagePricing && Number.isSafeInteger(requestedBase) && requestedBase > 0 ? requestedBase : assetSubtotalRupees;
+  const floorPriceRupees = canManagePricing && Number.isSafeInteger(requestedFloor) && requestedFloor >= 0 ? requestedFloor : Math.round(basePriceRupees * 0.9);
+  const quotedPriceRupees = Number(command.quotedPriceRupees || basePriceRupees);
+  if (![basePriceRupees, floorPriceRupees, quotedPriceRupees].every((value) => Number.isSafeInteger(value) && value >= 0) || floorPriceRupees > basePriceRupees || quotedPriceRupees < 1) throw new DomainError('INVALID_PACKAGE_PRICING', 'Pricing must use whole rupees and the floor cannot exceed the base price.', 400);
+  const belowFloor = quotedPriceRupees < floorPriceRupees;
   const reason = String(command.discountReason ?? '').trim();
   if (belowFloor && !canManagePricing && reason.length < 5) throw new DomainError('DISCOUNT_REASON_REQUIRED', 'A reason is required for a quote below the manager floor.', 400);
   const packageId = crypto.randomUUID();
@@ -1104,39 +1104,39 @@ async function createCustomPackage(actor: Actor, command: Record<string, unknown
   const status = belowFloor && !canManagePricing ? 'DISCOUNT_REQUESTED' : 'READY_TO_SEND';
   const correlation = correlationId();
   const statements: import('@/demo/storage').DemoStatement[] = [
-    database.prepare('INSERT INTO custom_travel_packages (id, organisation_id, reference, client_name, name, owner_id, owner_name, asset_subtotal_paise, base_price_paise, floor_price_paise, quoted_price_paise, status, version, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1, ?, ?)').bind(packageId, ORGANISATION_ID, reference, clientName, name, actor.id, actor.name, assetSubtotalPaise, basePricePaise, floorPricePaise, quotedPricePaise, status, timestamp, timestamp),
-    ...items.map((item) => database.prepare('INSERT INTO custom_travel_package_items (id, package_id, asset_id, asset_name, category, pricing_unit, quantity, unit_price_paise, line_total_paise) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)').bind(crypto.randomUUID(), packageId, item.id, item.name, item.category, item.pricingUnit, item.quantity, item.unitPricePaise, item.lineTotalPaise)),
-    auditStatement(database, actor, 'CUSTOM_PACKAGE_CREATED', 'CUSTOM_TRAVEL_PACKAGE', packageId, null, { reference, clientName, name, assetSubtotalPaise, basePricePaise, floorPricePaise, quotedPricePaise, status }, 'CLOUD', correlation),
+    database.prepare('INSERT INTO custom_travel_packages (id, organisation_id, reference, client_name, name, owner_id, owner_name, asset_subtotal_rupees, base_price_rupees, floor_price_rupees, quoted_price_rupees, status, version, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1, ?, ?)').bind(packageId, ORGANISATION_ID, reference, clientName, name, actor.id, actor.name, assetSubtotalRupees, basePriceRupees, floorPriceRupees, quotedPriceRupees, status, timestamp, timestamp),
+    ...items.map((item) => database.prepare('INSERT INTO custom_travel_package_items (id, package_id, asset_id, asset_name, category, pricing_unit, quantity, unit_price_rupees, line_total_rupees) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)').bind(crypto.randomUUID(), packageId, item.id, item.name, item.category, item.pricingUnit, item.quantity, item.unitPriceRupees, item.lineTotalRupees)),
+    auditStatement(database, actor, 'CUSTOM_PACKAGE_CREATED', 'CUSTOM_TRAVEL_PACKAGE', packageId, null, { reference, clientName, name, assetSubtotalRupees, basePriceRupees, floorPriceRupees, quotedPriceRupees, status }, 'CLOUD', correlation),
   ];
   let discountRequestId: string | null = null;
   if (belowFloor && !canManagePricing) {
     discountRequestId = crypto.randomUUID();
-    statements.push(database.prepare('INSERT INTO travel_discount_requests (id, organisation_id, package_id, package_version, requested_by_id, requested_by_name, requested_price_paise, base_price_paise, floor_price_paise, reason, status, created_at) VALUES (?, ?, ?, 1, ?, ?, ?, ?, ?, ?, ?, ?)').bind(discountRequestId, ORGANISATION_ID, packageId, actor.id, actor.name, quotedPricePaise, basePricePaise, floorPricePaise, reason, 'PENDING', timestamp));
-    statements.push(auditStatement(database, actor, 'PACKAGE_DISCOUNT_REQUESTED', 'TRAVEL_DISCOUNT_REQUEST', discountRequestId, null, { packageId, requestedPricePaise: quotedPricePaise, floorPricePaise, reason }, 'CLOUD', correlation));
+    statements.push(database.prepare('INSERT INTO travel_discount_requests (id, organisation_id, package_id, package_version, requested_by_id, requested_by_name, requested_price_rupees, base_price_rupees, floor_price_rupees, reason, status, created_at) VALUES (?, ?, ?, 1, ?, ?, ?, ?, ?, ?, ?, ?)').bind(discountRequestId, ORGANISATION_ID, packageId, actor.id, actor.name, quotedPriceRupees, basePriceRupees, floorPriceRupees, reason, 'PENDING', timestamp));
+    statements.push(auditStatement(database, actor, 'PACKAGE_DISCOUNT_REQUESTED', 'TRAVEL_DISCOUNT_REQUEST', discountRequestId, null, { packageId, requestedPriceRupees: quotedPriceRupees, floorPriceRupees, reason }, 'CLOUD', correlation));
   }
   await database.batch(statements);
-  return { packageId, reference, status, assetSubtotalPaise, basePricePaise, floorPricePaise, quotedPricePaise, discountRequestId };
+  return { packageId, reference, status, assetSubtotalRupees, basePriceRupees, floorPriceRupees, quotedPriceRupees, discountRequestId };
 }
 
 async function setPackagePricing(actor: Actor, command: Record<string, unknown>) {
   requirePermission(actor, 'travel.pricing.manage');
   const packageId = String(command.packageId ?? '');
-  const basePricePaise = Number(command.basePricePaise);
-  const floorPricePaise = Number(command.floorPricePaise);
-  if (![basePricePaise, floorPricePaise].every((value) => Number.isSafeInteger(value) && value >= 0) || floorPricePaise > basePricePaise) throw new DomainError('INVALID_PACKAGE_PRICING', 'Floor price must be between zero and the base price.', 400);
+  const basePriceRupees = Number(command.basePriceRupees);
+  const floorPriceRupees = Number(command.floorPriceRupees);
+  if (![basePriceRupees, floorPriceRupees].every((value) => Number.isSafeInteger(value) && value >= 0) || floorPriceRupees > basePriceRupees) throw new DomainError('INVALID_PACKAGE_PRICING', 'Floor price must be between zero and the base price.', 400);
   const database = env.DB;
-  const previous = await database.prepare('SELECT id, base_price_paise AS basePricePaise, floor_price_paise AS floorPricePaise, quoted_price_paise AS quotedPricePaise, status, version FROM custom_travel_packages WHERE id = ? AND organisation_id = ?').bind(packageId, ORGANISATION_ID).first<Record<string, unknown>>();
+  const previous = await database.prepare('SELECT id, base_price_rupees AS basePriceRupees, floor_price_rupees AS floorPriceRupees, quoted_price_rupees AS quotedPriceRupees, status, version FROM custom_travel_packages WHERE id = ? AND organisation_id = ?').bind(packageId, ORGANISATION_ID).first<Record<string, unknown>>();
   if (!previous) throw new DomainError('NOT_FOUND', 'Custom package not found.', 404);
   const version = Number(previous.version) + 1;
-  const status = Number(previous.quotedPricePaise) < floorPricePaise ? 'NEEDS_REPRICE' : 'READY_TO_SEND';
+  const status = Number(previous.quotedPriceRupees) < floorPriceRupees ? 'NEEDS_REPRICE' : 'READY_TO_SEND';
   const timestamp = now();
   const correlation = correlationId();
   await database.batch([
-    database.prepare('UPDATE custom_travel_packages SET base_price_paise = ?, floor_price_paise = ?, status = ?, version = ?, updated_at = ? WHERE id = ? AND organisation_id = ?').bind(basePricePaise, floorPricePaise, status, version, timestamp, packageId, ORGANISATION_ID),
+    database.prepare('UPDATE custom_travel_packages SET base_price_rupees = ?, floor_price_rupees = ?, status = ?, version = ?, updated_at = ? WHERE id = ? AND organisation_id = ?').bind(basePriceRupees, floorPriceRupees, status, version, timestamp, packageId, ORGANISATION_ID),
     database.prepare("UPDATE travel_discount_requests SET status = 'STALE', decided_at = ? WHERE package_id = ? AND status = 'PENDING'").bind(timestamp, packageId),
-    auditStatement(database, actor, 'PACKAGE_PRICING_SET', 'CUSTOM_TRAVEL_PACKAGE', packageId, previous, { basePricePaise, floorPricePaise, status, version }, 'CLOUD', correlation),
+    auditStatement(database, actor, 'PACKAGE_PRICING_SET', 'CUSTOM_TRAVEL_PACKAGE', packageId, previous, { basePriceRupees, floorPriceRupees, status, version }, 'CLOUD', correlation),
   ]);
-  return { packageId, basePricePaise, floorPricePaise, status, version };
+  return { packageId, basePriceRupees, floorPriceRupees, status, version };
 }
 
 async function resolveDiscountRequest(actor: Actor, command: Record<string, unknown>) {
@@ -1145,7 +1145,7 @@ async function resolveDiscountRequest(actor: Actor, command: Record<string, unkn
   const decision = String(command.decision ?? '').toUpperCase();
   if (!['APPROVED', 'REJECTED'].includes(decision)) throw new DomainError('INVALID_DECISION', 'Choose approve or reject.', 400);
   const database = env.DB;
-  const request = await database.prepare(`SELECT d.id, d.package_id AS packageId, d.package_version AS packageVersion, d.requested_by_id AS requestedById, d.requested_price_paise AS requestedPricePaise, d.status, p.version AS currentVersion FROM travel_discount_requests d JOIN custom_travel_packages p ON p.id = d.package_id WHERE d.id = ? AND d.organisation_id = ?`).bind(requestId, ORGANISATION_ID).first<Record<string, unknown>>();
+  const request = await database.prepare(`SELECT d.id, d.package_id AS packageId, d.package_version AS packageVersion, d.requested_by_id AS requestedById, d.requested_price_rupees AS requestedPriceRupees, d.status, p.version AS currentVersion FROM travel_discount_requests d JOIN custom_travel_packages p ON p.id = d.package_id WHERE d.id = ? AND d.organisation_id = ?`).bind(requestId, ORGANISATION_ID).first<Record<string, unknown>>();
   if (!request) throw new DomainError('NOT_FOUND', 'Discount request not found.', 404);
   if (request.status !== 'PENDING') throw new DomainError('DISCOUNT_ALREADY_RESOLVED', 'This discount request has already been resolved.', 409);
   if (String(request.requestedById) === actor.id) throw new DomainError('SELF_APPROVAL_FORBIDDEN', 'The requester cannot approve their own discount.', 403);
@@ -1155,7 +1155,7 @@ async function resolveDiscountRequest(actor: Actor, command: Record<string, unkn
   const note = String(command.decisionNote ?? '').trim();
   const correlation = correlationId();
   const packageUpdate = decision === 'APPROVED'
-    ? database.prepare('UPDATE custom_travel_packages SET quoted_price_paise = ?, status = ?, updated_at = ? WHERE id = ? AND organisation_id = ?').bind(request.requestedPricePaise, packageStatus, timestamp, request.packageId, ORGANISATION_ID)
+    ? database.prepare('UPDATE custom_travel_packages SET quoted_price_rupees = ?, status = ?, updated_at = ? WHERE id = ? AND organisation_id = ?').bind(request.requestedPriceRupees, packageStatus, timestamp, request.packageId, ORGANISATION_ID)
     : database.prepare('UPDATE custom_travel_packages SET status = ?, updated_at = ? WHERE id = ? AND organisation_id = ?').bind(packageStatus, timestamp, request.packageId, ORGANISATION_ID);
   await database.batch([
     database.prepare('UPDATE travel_discount_requests SET status = ?, reviewed_by_id = ?, reviewed_by_name = ?, decision_note = ?, decided_at = ? WHERE id = ? AND status = ?').bind(decision, actor.id, actor.name, note || null, timestamp, requestId, 'PENDING'),

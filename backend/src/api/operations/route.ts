@@ -534,15 +534,15 @@ export async function GET(request: Request) {
           policyLabel:
             report?.policyLabel ?? null,
 
-          policyLiabilityPaise:
-            report?.policyLiabilityPaise ??
+          policyLiabilityRupees:
+            report?.policyLiabilityRupees ??
             null,
 
-          repairCostPaise:
-            report?.repairCostPaise ?? null,
+          repairCostRupees:
+            report?.repairCostRupees ?? null,
 
-          chargeAmountPaise:
-            report?.chargeAmountPaise ??
+          chargeAmountRupees:
+            report?.chargeAmountRupees ??
             null,
 
           decisionNote:

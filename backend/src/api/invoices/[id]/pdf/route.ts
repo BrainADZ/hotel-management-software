@@ -284,7 +284,7 @@ export async function GET(
         (sum, payment) =>
           sum +
           Number(
-            payment.amountPaise,
+            payment.amountRupees,
           ),
         0,
       );
@@ -299,7 +299,7 @@ export async function GET(
             ).toUpperCase() ===
             "RECORDED"
               ? Number(
-                  refund.amountPaise,
+                  refund.amountRupees,
                 )
               : 0
           ),
@@ -312,7 +312,7 @@ export async function GET(
 
     const grandTotal =
       Number(
-        invoice.grandTotalPaise,
+        invoice.grandTotalRupees,
       );
 
     const balance =
@@ -457,58 +457,58 @@ export async function GET(
                     1,
                 ),
 
-              unitAmountPaise:
+              unitAmountRupees:
                 Number(
-                  line.unitAmountPaise ??
+                  line.unitAmountRupees ??
                     0,
                 ),
 
-              amountPaise:
+              amountRupees:
                 Number(
-                  line.lineTotalPaise ??
+                  line.lineTotalRupees ??
                     0,
                 ),
             }),
           ),
 
         totals: {
-          subtotalPaise:
+          subtotalRupees:
             Number(
-              invoice.subtotalPaise,
+              invoice.subtotalRupees,
             ),
 
-          discountPaise:
+          discountRupees:
             Number(
-              invoice.discountPaise,
+              invoice.discountRupees,
             ),
 
-          taxableAmountPaise:
+          taxableAmountRupees:
             Number(
-              invoice.taxableAmountPaise,
+              invoice.taxableAmountRupees,
             ),
 
-          cgstPaise:
+          cgstRupees:
             Number(
-              invoice.cgstPaise,
+              invoice.cgstRupees,
             ),
 
-          sgstPaise:
+          sgstRupees:
             Number(
-              invoice.sgstPaise,
+              invoice.sgstRupees,
             ),
 
-          igstPaise:
+          igstRupees:
             Number(
-              invoice.igstPaise,
+              invoice.igstRupees,
             ),
 
-          grandTotalPaise:
+          grandTotalRupees:
             grandTotal,
 
-          paidPaise:
+          paidRupees:
             paid,
 
-          balancePaise:
+          balanceRupees:
             balance,
         },
       });

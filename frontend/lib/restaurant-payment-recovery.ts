@@ -17,10 +17,10 @@ export function loadPendingRestaurantPayment(storage: RecoveryStorage, scope: Pa
   try {
     const value = JSON.parse(body);
     if (!value || !['CASH', 'CARD', 'UPI'].includes(value.method) ||
-        !Number.isSafeInteger(value.amountPaise) || value.amountPaise <= 0 || value.amountPaise > 1_000_000_000 ||
+        !Number.isSafeInteger(value.amountRupees) || value.amountRupees <= 0 || value.amountRupees > 1_000_000_000 ||
         typeof value.idempotencyKey !== 'string' || !/^[A-Za-z0-9._:-]{8,100}$/.test(value.idempotencyKey) ||
         (value.reference !== undefined && (typeof value.reference !== 'string' || value.reference.length > 100)) ||
-        Object.keys(value).some(key => !['method', 'amountPaise', 'reference', 'idempotencyKey'].includes(key))) {
+        Object.keys(value).some(key => !['method', 'amountRupees', 'reference', 'idempotencyKey'].includes(key))) {
       throw new Error('Invalid pending payment');
     }
     return body;

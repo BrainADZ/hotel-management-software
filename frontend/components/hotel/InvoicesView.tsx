@@ -24,7 +24,7 @@ export function InvoicesView({
   const stats = useMemo(() => {
     const totalValue = invoices.reduce(
       (sum, invoice) =>
-        sum + Number(invoice.grandTotalPaise ?? 0),
+        sum + Number(invoice.grandTotalRupees ?? 0),
       0,
     );
 
@@ -144,7 +144,7 @@ export function InvoicesView({
                       <td>
                         <strong>
                           {money(
-                            invoice.grandTotalPaise ?? 0,
+                            invoice.grandTotalRupees ?? 0,
                           )}
                         </strong>
                       </td>

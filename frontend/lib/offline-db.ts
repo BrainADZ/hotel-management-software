@@ -2,6 +2,23 @@
 
 import Dexie, { type EntityTable } from "dexie";
 import { jsPDF } from "jspdf";
+
+// Built-in PDF fonts do not contain ₹, so draw the symbol as vector strokes.
+function pdfRupees(doc: jsPDF, amount: number, right: number, baseline: number) {
+  const text = amount.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  const size = doc.getFontSize() / doc.internal.scaleFactor;
+  const x = right - doc.getTextWidth(text) - size;
+  const top = baseline - size * 0.75;
+  doc.saveGraphicsState();
+  doc.setDrawColor(doc.getTextColor());
+  doc.setLineWidth(size * 0.07);
+  doc.line(x, top, x + size * 0.65, top);
+  doc.line(x, top + size * 0.22, x + size * 0.65, top + size * 0.22);
+  doc.lines([[size * 0.6, 0, size * 0.6, size * 0.44, 0, size * 0.44]], x, top, [1, 1], 'S', false);
+  doc.line(x, top + size * 0.44, x + size * 0.65, baseline);
+  doc.restoreGraphicsState();
+  doc.text(text, right, baseline, { align: 'right' });
+}
 import {
   calculateBill,
   calculateStayNights,
@@ -47,9 +64,9 @@ export type CachedGuest = {
 export type CachedFolio = {
   id: string;
   reservationId: string;
-  subtotalPaise: number;
-  taxPaise: number;
-  totalPaise: number;
+  subtotalRupees: number;
+  taxRupees: number;
+  totalRupees: number;
   status: string;
 };
 
@@ -59,9 +76,9 @@ export type CachedFolioLine = {
   description: string;
   category: string;
   quantity: number;
-  unitAmountPaise: number;
+  unitAmountRupees: number;
   taxRateBps: number;
-  lineTotalPaise: number;
+  lineTotalRupees: number;
 };
 
 export type LocalOfflineBill = {
@@ -75,9 +92,9 @@ export type LocalOfflineBill = {
   arrivalDate?: string;
   departureDate?: string;
   stayNights?: number;
-  subtotalPaise: number;
-  taxPaise: number;
-  totalPaise: number;
+  subtotalRupees: number;
+  taxRupees: number;
+  totalRupees: number;
   currency: "INR";
   status:
     | "PENDING_MANUAL_MASTER_UPDATE"
@@ -346,9 +363,9 @@ export async function cacheCloudPayload(payload: {
     id: String(folio.id),
     reservationId: String(folio.reservationId),
     status: String(folio.status),
-    subtotalPaise: Number(folio.subtotalPaise),
-    taxPaise: Number(folio.taxPaise),
-    totalPaise: Number(folio.totalPaise),
+    subtotalRupees: Number(folio.subtotalRupees),
+    taxRupees: Number(folio.taxRupees),
+    totalRupees: Number(folio.totalRupees),
   }));
   const lines = payload.folioLines.map((line) => ({
     id: String(line.id),
@@ -356,9 +373,9 @@ export async function cacheCloudPayload(payload: {
     description: String(line.description),
     category: String(line.category),
     quantity: Number(line.quantity),
-    unitAmountPaise: Number(line.unitAmountPaise),
+    unitAmountRupees: Number(line.unitAmountRupees),
     taxRateBps: Number(line.taxRateBps),
-    lineTotalPaise: Number(line.lineTotalPaise),
+    lineTotalRupees: Number(line.lineTotalRupees),
   }));
   const persistent =
     "storage" in navigator && "persist" in navigator.storage
@@ -867,15 +884,15 @@ export function createOnlineFolioPdf(input: {
   arrivalDate: string;
   departureDate: string;
   folioStatus: string;
-  subtotalPaise: number;
-  taxPaise: number;
-  totalPaise: number;
+  subtotalRupees: number;
+  taxRupees: number;
+  totalRupees: number;
   lines: Array<{
     description: string;
     quantity: number;
-    unitAmountPaise: number;
+    unitAmountRupees: number;
     taxRateBps: number;
-    lineTotalPaise: number;
+    lineTotalRupees: number;
   }>;
 }) {
   const stayNights = calculateStayNights(
@@ -935,28 +952,18 @@ export function createOnlineFolioPdf(input: {
     doc.text(`${(line.taxRateBps / 100).toFixed(0)}%`, 137, y, {
       align: "right",
     });
-    doc.text(
-      `INR ${(line.lineTotalPaise / 100).toLocaleString("en-IN", { minimumFractionDigits: 2 })}`,
-      184,
-      y,
-      { align: "right" },
-    );
+    pdfRupees(doc, line.lineTotalRupees, 184, y);
   });
   y += 12;
   const totals: Array<[string, number]> = [
-    ["Subtotal", input.subtotalPaise],
-    ["Tax", input.taxPaise],
-    ["Grand total", input.totalPaise],
+    ["Subtotal", input.subtotalRupees],
+    ["Tax", input.taxRupees],
+    ["Grand total", input.totalRupees],
   ];
   totals.forEach(([label, value], index) => {
     doc.setFont("helvetica", index === totals.length - 1 ? "bold" : "normal");
     doc.text(label, 118, y, { align: "right" });
-    doc.text(
-      `INR ${(value / 100).toLocaleString("en-IN", { minimumFractionDigits: 2 })}`,
-      184,
-      y,
-      { align: "right" },
-    );
+    pdfRupees(doc, value, 184, y);
     y += 9;
   });
   doc.setFont("helvetica", "normal");
@@ -977,9 +984,9 @@ export function createOnlineFolioPdf(input: {
 export async function generateOfflineBill(input: {
   reservationId: string;
   generatedBy: string;
-  roomChargesPaise: number;
-  restaurantPaise: number;
-  otherPaise: number;
+  roomChargesRupees: number;
+  restaurantRupees: number;
+  otherRupees: number;
   taxRateBps: number;
 }) {
   const stay = await getCachedStay(input.reservationId);
@@ -997,9 +1004,9 @@ export async function generateOfflineBill(input: {
     updatedAt: generatedAt,
   });
   try {
-    const subtotalPaise =
-      input.roomChargesPaise + input.restaurantPaise + input.otherPaise;
-    const totals = calculateBill(subtotalPaise, input.taxRateBps);
+    const subtotalRupees =
+      input.roomChargesRupees + input.restaurantRupees + input.otherRupees;
+    const totals = calculateBill(subtotalRupees, input.taxRateBps);
     const sequence = (await offlineDb.offlineBills.count()) + 1;
     const offlineReference = createOfflineReference(sequence);
     const stayNights = calculateStayNights(
@@ -1043,11 +1050,11 @@ export async function generateOfflineBill(input: {
     doc.setFillColor(244, 247, 239);
     doc.roundedRect(18, 117, 174, 58, 3, 3, "F");
     const moneyRows: Array<[string, number]> = [
-      ["Room charges", input.roomChargesPaise],
-      ["Restaurant", input.restaurantPaise],
-      ["Other", input.otherPaise],
-      ["Tax", totals.taxPaise],
-      ["Grand total", totals.totalPaise],
+      ["Room charges", input.roomChargesRupees],
+      ["Restaurant", input.restaurantRupees],
+      ["Other", input.otherRupees],
+      ["Tax", totals.taxRupees],
+      ["Grand total", totals.totalRupees],
     ];
     moneyRows.forEach(([label, value], index) => {
       const y = 129 + index * 9;
@@ -1057,12 +1064,7 @@ export async function generateOfflineBill(input: {
       );
       doc.setTextColor(23, 52, 89);
       doc.text(label, 26, y);
-      doc.text(
-        `INR ${(value / 100).toLocaleString("en-IN", { minimumFractionDigits: 2 })}`,
-        181,
-        y,
-        { align: "right" },
-      );
+      pdfRupees(doc, value, 181, y);
     });
     doc.setFont("helvetica", "bold");
     doc.setTextColor(177, 94, 8);
@@ -1092,9 +1094,9 @@ export async function generateOfflineBill(input: {
       arrivalDate: stay.booking.arrivalDate,
       departureDate: stay.booking.departureDate,
       stayNights,
-      subtotalPaise,
-      taxPaise: totals.taxPaise,
-      totalPaise: totals.totalPaise,
+      subtotalRupees,
+      taxRupees: totals.taxRupees,
+      totalRupees: totals.totalRupees,
       currency: "INR",
       status: "PENDING_MANUAL_MASTER_UPDATE",
       documentHash,

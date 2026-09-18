@@ -3,7 +3,8 @@
   "private": true,
   "type": "module",
   "exports": {
-    "./domain": "./domain.ts"
+    "./domain": "./domain.ts",
+    "./money": "./money.ts"
   },
   "scripts": {
     "test": "vitest run",

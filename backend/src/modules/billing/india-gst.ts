@@ -1,14 +1,14 @@
 export const HOTEL_GST_CURRENT_EFFECTIVE_DATE = '2025-09-22';
-export const HOTEL_GST_THRESHOLD_PAISE = 750_000;
+export const HOTEL_GST_THRESHOLD_RUPEES = 7500;
 
 export type RestaurantGstProfile =
   | 'UNCONFIGURED'
   | 'STANDARD_5_NO_ITC'
   | 'SPECIFIED_18_WITH_ITC';
 
-function assertWholePaise(value: number, label: string) {
+function assertWholeRupees(value: number, label: string) {
   if (!Number.isInteger(value) || value < 0) {
-    throw new Error(`${label} must be a non-negative whole-paise value.`);
+    throw new Error(`${label} must be a non-negative whole-rupees value.`);
   }
 }
 
@@ -29,19 +29,19 @@ function assertIsoDate(value: string, label: string) {
  * stays. Historical corrections should use the accounting/reversal workflow.
  */
 export function hotelAccommodationGstRateBps(
-  valueOfSupplyPaise: number,
+  valueOfSupplyRupees: number,
   serviceDate: string,
   historicalFallbackRateBps = 0,
 ) {
-  assertWholePaise(valueOfSupplyPaise, 'Accommodation value');
-  assertWholePaise(historicalFallbackRateBps, 'Historical GST rate');
+  assertWholeRupees(valueOfSupplyRupees, 'Accommodation value');
+  assertWholeRupees(historicalFallbackRateBps, 'Historical GST rate');
   assertIsoDate(serviceDate, 'Service date');
 
   if (serviceDate < HOTEL_GST_CURRENT_EFFECTIVE_DATE) {
     return historicalFallbackRateBps;
   }
 
-  return valueOfSupplyPaise <= HOTEL_GST_THRESHOLD_PAISE ? 500 : 1800;
+  return valueOfSupplyRupees <= HOTEL_GST_THRESHOLD_RUPEES ? 500 : 1800;
 }
 
 /**
@@ -49,13 +49,13 @@ export function hotelAccommodationGstRateBps(
  * folio posting path uses. Tax is rounded per room night, matching line-level
  * accounting.
  */
-export function hotelAccommodationStayEstimatePaise(
-  nightlyRatePaise: number,
+export function hotelAccommodationStayEstimateRupees(
+  nightlyRateRupees: number,
   arrivalDate: string,
   departureDate: string,
   historicalFallbackRateBps = 0,
 ) {
-  assertWholePaise(nightlyRatePaise, 'Nightly rate');
+  assertWholeRupees(nightlyRateRupees, 'Nightly rate');
   assertIsoDate(arrivalDate, 'Arrival date');
   assertIsoDate(departureDate, 'Departure date');
 
@@ -66,7 +66,7 @@ export function hotelAccommodationStayEstimatePaise(
     throw new Error('Departure date must be after arrival date.');
   }
 
-  let totalPaise = 0;
+  let totalRupees = 0;
 
   for (
     let cursor = new Date(arrival);
@@ -75,15 +75,15 @@ export function hotelAccommodationStayEstimatePaise(
   ) {
     const serviceDate = cursor.toISOString().slice(0, 10);
     const taxRateBps = hotelAccommodationGstRateBps(
-      nightlyRatePaise,
+      nightlyRateRupees,
       serviceDate,
       historicalFallbackRateBps,
     );
-    const taxPaise = Math.round((nightlyRatePaise * taxRateBps) / 10_000);
-    totalPaise += nightlyRatePaise + taxPaise;
+    const taxRupees = Math.round((nightlyRateRupees * taxRateBps) / 10_000);
+    totalRupees += nightlyRateRupees + taxRupees;
   }
 
-  return totalPaise;
+  return totalRupees;
 }
 
 /**

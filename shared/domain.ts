@@ -66,6 +66,8 @@ export type Permission =
   | 'billing.invoice'
   | 'billing.checkout'
   | 'billing.override_checkout'
+  | 'night_audit.read'
+  | 'night_audit.run'
   | 'offline.cached.read'
   | 'offline.bill.create'
   | 'offline.bill.print'

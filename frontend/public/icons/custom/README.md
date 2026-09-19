@@ -1,17 +1,8 @@
-# Custom UI icons
+# UI icons
 
-Place your SVG, PNG or WebP icons in this directory.
-Then add their URLs to `frontend/lib/custom-icons.ts`, for example:
+Feature and service icons use Lucide React through the shared `AppGlyph`
+component in `frontend/app/hotel-platform.tsx`.
 
-```ts
-hotel: "/icons/custom/hotel.svg",
-"booking-calendar": "/icons/custom/booking-calendar.svg",
-restaurant: "/icons/custom/restaurant.svg",
-```
-
-Each empty placeholder has a `data-icon` attribute identifying its key.
-The complete list of keys is the `AppGlyphName` type in
-`frontend/app/hotel-platform.tsx`.
-
-An unmapped key stays an empty outlined placeholder. Mapped images fit the
-existing icon size automatically. Use a square image with a transparent background.
+Add or change semantic icon mappings in `frontend/lib/app-icons.ts`.
+Each rendered SVG has a `data-icon` attribute identifying its key and inherits
+its color from the surrounding UI. Custom image files are no longer needed.

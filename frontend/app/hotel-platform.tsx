@@ -1,4 +1,4 @@
-"use client";
+﻿"use client";
 import {readProductionOffline,cacheProductionOffline} from '@/lib/production-offline';
 import { productionSummary } from '@/lib/production-summary';
 import { loadReservationPages } from '@/lib/load-reservations';
@@ -17,6 +17,7 @@ import { WorkspaceSwitcher } from "@/components/layout/WorkspaceSwitcher";
 import { OperatingSurfaceSwitcher } from "@/components/layout/OperatingSurfaceSwitcher";
 import { OverviewView, RestaurantOverviewView } from "@/components/hotel/OverviewView";
 import { ReservationsView } from "@/components/hotel/ReservationsView";
+import { NightAuditView } from "@/components/hotel/NightAuditView";
 import { ConnectivityView } from "@/components/hotel/ConnectivityView";
 import { FrontDeskView } from "@/components/hotel/FrontDeskView";
 import { GuestsView } from "@/components/hotel/GuestsView";
@@ -68,7 +69,8 @@ import {
   type FeatureView,
 } from "@/lib/navigation";
 
-import { customIconSources } from "../lib/custom-icons";
+import { appIcons, type AppGlyphName } from "@/lib/app-icons";
+export type { AppGlyphName } from "@/lib/app-icons";
 import { usePathname, useRouter } from "next/navigation";
 import {
   AlertTriangle,
@@ -139,7 +141,9 @@ function SidebarLogo({ collapsed }: { collapsed: boolean }) {
           onError={() => setMissing(true)}
         />
       ) : collapsed ? (
-        <span aria-label="Hotel Management logo placeholder">HM</span>
+        <span role="img" aria-label="Hotel Management">
+          <AppGlyph name="hotel" size={28} />
+        </span>
       ) : (
         <>
           <strong>
@@ -271,49 +275,6 @@ export type DemoState = {
 type ViewName = FeatureView;
 export type Surface = "MASTER_HUB" | "PROPERTY";
 
-export type AppGlyphName =
-  | "occupancy"
-  | "booking-calendar"
-  | "front-desk"
-  | "guest"
-  | "folio"
-  | "housekeeping"
-  | "maintenance"
-  | "inventory"
-  | "restaurant"
-  | "travel"
-  | "inquiry"
-  | "offline"
-  | "policy"
-  | "payment"
-  | "integrations"
-  | "reports"
-  | "audit"
-  | "cloud-network"
-  | "hotel"
-  | "breakfast"
-  | "brunch"
-  | "lunch"
-  | "high-tea"
-  | "dinner"
-  | "supper"
-  | "room-ready"
-  | "booking-feed"
-  | "arrivals-departures"
-  | "staff"
-  | "wallet-alert"
-  | "damage-alert"
-  | "charge-receipt"
-  | "waived-charge"
-  | "device-status"
-  | "phone-chat"
-  | "email"
-  | "channel-sync"
-  | "smart-lock"
-  | "attention-queue"
-  | "offline-billing"
-  | "receipt-verification";
-
 const navGlyphs: Record<ViewName, AppGlyphName> = {
   Overview: "occupancy",
   Reservations: "booking-calendar",
@@ -333,24 +294,25 @@ const navGlyphs: Record<ViewName, AppGlyphName> = {
   Integrations: "integrations",
   Reports: "reports",
   "Audit Logs": "audit",
+  "Night Audit": "audit",
   "Room Calendar": "booking-calendar",
   "Arrivals & Departures": "arrivals-departures",
-  "Room Types & Rates": "hotel",
+  "Room Types & Rates": "room-types",
   "Guest Profiles": "guest",
   Invoices: "charge-receipt",
-  "Inventory Movements": "inventory",
-  "Lost & Found": "guest",
-  "Room Service": "restaurant",
-  "Meal Service": "breakfast",
-  "Menu Management": "restaurant",
-  Tours: "travel",
-  Participants: "guest",
-  "Tour Managers": "staff",
-  "Sales Pipeline": "inquiry",
-  "Follow-ups": "phone-chat",
-  Communications: "email",
-  "Users & Permissions": "policy",
-  "Properties & Settings": "hotel",
+  "Inventory Movements": "inventory-movements",
+  "Lost & Found": "lost-found",
+  "Room Service": "room-service",
+  "Meal Service": "meal-service",
+  "Menu Management": "menu-management",
+  Tours: "tours",
+  Participants: "participants",
+  "Tour Managers": "tour-managers",
+  "Sales Pipeline": "sales-pipeline",
+  "Follow-ups": "follow-ups",
+  Communications: "communications",
+  "Users & Permissions": "users-permissions",
+  "Properties & Settings": "property-settings",
 };
 
 export function AppGlyph({
@@ -362,19 +324,14 @@ export function AppGlyph({
   size?: number;
   className?: string;
 }) {
-  const source = customIconSources[name];
+  const Icon = appIcons[name];
   return (
-    <span
-      className={`app-glyph ${source ? "" : "app-glyph-placeholder"} ${className}`.trim()}
+    <Icon
+      className={`app-glyph ${className}`.trim()}
       data-icon={name}
-      style={{
-        width: size,
-        height: size,
-        backgroundImage: source ? `url(${source})` : undefined,
-        backgroundSize: "contain",
-        backgroundPosition: "center",
-      }}
+      size={size}
       aria-hidden="true"
+      focusable="false"
     />
   );
 }
@@ -1970,6 +1927,8 @@ function ViewRouter(props: PlatformViewProps) {
     "Device Status": DeviceStatusView,
 
     Integrations: IntegrationsView,
+
+    "Night Audit": NightAuditView,
 
     Reports:
       props.businessUnit === "TRAVEL"

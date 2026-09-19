@@ -16,6 +16,7 @@ export const properties = pgTable('properties', {
   name: text('name').notNull(),
   city: text('city').notNull(),
   timezone: text('timezone').notNull(),
+  businessDate: text('business_date').notNull(),
   checkInTime: text('check_in_time').notNull().default('14:00'),
   checkOutTime: text('check_out_time').notNull().default('11:00'),
   kycRequired: boolean('kyc_required').notNull().default(true),
@@ -105,6 +106,116 @@ export const userSessions = pgTable('user_sessions', {
 }, (table) => [
   uniqueIndex('idx_user_sessions_token_hash').on(table.tokenHash),
   index('idx_user_sessions_user_expiry').on(table.userId, table.expiresAt),
+]);
+
+export const nightAuditRuns = pgTable('night_audit_runs', {
+  id: text('id').primaryKey(),
+
+  organisationId: text('organisation_id')
+    .notNull()
+    .references(() => organisations.id),
+
+  propertyId: text('property_id')
+    .notNull()
+    .references(() => properties.id),
+
+  businessDate: text('business_date').notNull(),
+
+  status: text('status')
+    .notNull()
+    .default('IN_PROGRESS'),
+
+  attemptCount: integer('attempt_count')
+    .notNull()
+    .default(1),
+
+  startedAt: timestamp('started_at', {
+    withTimezone: true,
+    mode: 'string',
+  }).notNull(),
+
+  startedBy: text('started_by')
+    .notNull()
+    .references(() => appUsers.id),
+
+  completedAt: timestamp('completed_at', {
+    withTimezone: true,
+    mode: 'string',
+  }),
+
+  completedBy: text('completed_by')
+    .references(() => appUsers.id),
+
+  roomRevenueRupees: paiseMoney('room_revenue_paise')
+    .notNull()
+    .default(0),
+
+  otherRevenueRupees: paiseMoney('other_revenue_paise')
+    .notNull()
+    .default(0),
+
+  taxRupees: paiseMoney('tax_paise')
+    .notNull()
+    .default(0),
+
+  paymentsRupees: paiseMoney('payments_paise')
+    .notNull()
+    .default(0),
+
+  refundsRupees: paiseMoney('refunds_paise')
+    .notNull()
+    .default(0),
+
+  outstandingRupees: paiseMoney('outstanding_paise')
+    .notNull()
+    .default(0),
+
+  roomNightsPosted: integer('room_nights_posted')
+    .notNull()
+    .default(0),
+
+  pendingArrivals: integer('pending_arrivals')
+    .notNull()
+    .default(0),
+
+  pendingDepartures: integer('pending_departures')
+    .notNull()
+    .default(0),
+
+  openFolios: integer('open_folios')
+    .notNull()
+    .default(0),
+
+  snapshot: jsonb('snapshot')
+    .$type<Record<string, unknown>>(),
+
+  failureReason: text('failure_reason'),
+}, (table) => [
+  uniqueIndex('idx_night_audit_property_business_date')
+    .on(table.propertyId, table.businessDate),
+
+  index('idx_night_audit_property_status')
+    .on(table.propertyId, table.status),
+
+  check(
+    'chk_night_audit_status',
+    sql`${table.status} in ('IN_PROGRESS', 'COMPLETED', 'FAILED')`,
+  ),
+
+  check(
+    'chk_night_audit_attempt_count',
+    sql`${table.attemptCount} >= 1`,
+  ),
+
+  check(
+    'chk_night_audit_counts_nonnegative',
+    sql`
+      ${table.roomNightsPosted} >= 0
+      and ${table.pendingArrivals} >= 0
+      and ${table.pendingDepartures} >= 0
+      and ${table.openFolios} >= 0
+    `,
+  ),
 ]);
 
 export const rooms = pgTable('rooms', {
@@ -425,7 +536,15 @@ export const folioLines = pgTable('folio_lines', {
   source: text('source').notNull(),
   createdAt: text('created_at').notNull(),
 }, (table) => [
-  index('idx_folio_lines_folio').on(table.folioId)
+  index('idx_folio_lines_folio')
+    .on(table.folioId),
+
+  uniqueIndex('idx_folio_lines_property_source')
+    .on(
+      table.propertyId,
+      table.sourceType,
+      table.sourceId,
+    ),
 ]);
 
 export const financialSequences = pgTable('financial_sequences', {

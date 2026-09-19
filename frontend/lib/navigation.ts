@@ -11,6 +11,7 @@ export type FeatureView =
   | "Arrivals & Departures"
   | "Room Types & Rates"
   | "Guest Profiles"
+  | "Night Audit"
   | "Invoices"
   | "Housekeeping"
   | "Maintenance"
@@ -119,6 +120,7 @@ export const navigationGroups: NavigationGroup[] = [
     workspace: "HOTEL",
     items: [
       hotel("Integrations", "integrations"),
+      hotel("Night Audit", "night-audit"),
       hotel("Reports", "reports"),
       hotel("Audit Logs", "audit-logs"),
       hotel("Users & Permissions", "users-permissions"),
@@ -214,6 +216,7 @@ export const roleViewAccess: Partial<Record<AppRole, FeatureView[]>> = {
     "Folios & Billing",
     "Invoices",
     "Verification",
+    "Night Audit",
     "Reports",
     "Audit Logs",
   ],

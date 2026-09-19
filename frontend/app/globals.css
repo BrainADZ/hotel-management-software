@@ -89,18 +89,11 @@ textarea:focus-visible {
   display: inline-block;
   flex: 0 0 auto;
   overflow: hidden;
-  background-repeat: no-repeat;
   vertical-align: middle;
   transform-origin: center;
   transition:
     opacity 160ms ease,
     transform 160ms ease;
-}
-.app-glyph-placeholder {
-  box-sizing: border-box;
-  border: 1px dashed currentColor;
-  border-radius: 4px;
-  opacity: 0.35;
 }
 .app-glyph.invert-on-active {
   transition:

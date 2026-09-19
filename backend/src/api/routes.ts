@@ -51,6 +51,7 @@ import * as route49 from './travel/discount-requests/[id]/decision/route';
 import * as route50 from './travel/follow-ups/route';
 import * as route51 from './travel/follow-ups/[id]/route';
 import * as route52 from './sync/mutations/route';
+import * as nightAudit from './night-audit/route';
 
 /*
  * Reservation-level room move resolver.
@@ -69,6 +70,10 @@ import * as travelWorkflows from './travel/workflows/route';
 import * as restaurantPayments from './restaurant-orders/[id]/payments/route';
 
 export const routes = [
+  {
+  path: '/api/night-audit',
+  handlers: nightAudit,
+  },
   {
     path: '/api/restaurant-orders/:id/payments',
     handlers: restaurantPayments,

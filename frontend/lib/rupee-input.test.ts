@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { rupeeInputValue, parseRupees } from './rupee-input';
 
 describe('rupee form boundary', () => {
-  it.each([[100, '1.00'], [123456, '1234.56'], [29, '0.29'], [0, '0.00']])('round trips stored amount %s', (stored, input) => {
+  it.each([[100, '100.00'], [1234.56, '1234.56'], [0.29, '0.29'], [0, '0.00']])('round trips rupee amount %s', (stored, input) => {
     expect(rupeeInputValue(stored)).toBe(input);
     expect(parseRupees(input)).toBe(stored);
   });

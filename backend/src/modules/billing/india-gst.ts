@@ -1,4 +1,4 @@
-export const HOTEL_GST_CURRENT_EFFECTIVE_DATE = '2025-09-22';
+﻿export const HOTEL_GST_CURRENT_EFFECTIVE_DATE = '2025-09-22';
 export const HOTEL_GST_THRESHOLD_RUPEES = 7500;
 
 export type RestaurantGstProfile =
@@ -6,9 +6,32 @@ export type RestaurantGstProfile =
   | 'STANDARD_5_NO_ITC'
   | 'SPECIFIED_18_WITH_ITC';
 
-function assertWholeRupees(value: number, label: string) {
-  if (!Number.isInteger(value) || value < 0) {
-    throw new Error(`${label} must be a non-negative whole-rupees value.`);
+function rupeesToPaise(value: number, label: string) {
+  const paise = Math.round((value + Number.EPSILON) * 100);
+
+  if (
+    !Number.isFinite(value) ||
+    value < 0 ||
+    !Number.isSafeInteger(paise) ||
+    Math.abs(value - paise / 100) > 1e-9
+  ) {
+    throw new Error(
+      `${label} must be a non-negative rupee amount with at most two decimal places.`,
+    );
+  }
+
+  return paise;
+}
+
+function assertBps(value: number, label: string) {
+  if (
+    !Number.isInteger(value) ||
+    value < 0 ||
+    value > 10000
+  ) {
+    throw new Error(
+      `${label} must be between 0 and 10000 basis points.`,
+    );
   }
 }
 
@@ -33,8 +56,8 @@ export function hotelAccommodationGstRateBps(
   serviceDate: string,
   historicalFallbackRateBps = 0,
 ) {
-  assertWholeRupees(valueOfSupplyRupees, 'Accommodation value');
-  assertWholeRupees(historicalFallbackRateBps, 'Historical GST rate');
+  rupeesToPaise(valueOfSupplyRupees, 'Accommodation value');
+  assertBps(historicalFallbackRateBps, 'Historical GST rate');
   assertIsoDate(serviceDate, 'Service date');
 
   if (serviceDate < HOTEL_GST_CURRENT_EFFECTIVE_DATE) {
@@ -55,7 +78,7 @@ export function hotelAccommodationStayEstimateRupees(
   departureDate: string,
   historicalFallbackRateBps = 0,
 ) {
-  assertWholeRupees(nightlyRateRupees, 'Nightly rate');
+  const nightlyRatePaise = rupeesToPaise(nightlyRateRupees, 'Nightly rate');
   assertIsoDate(arrivalDate, 'Arrival date');
   assertIsoDate(departureDate, 'Departure date');
 
@@ -79,8 +102,10 @@ export function hotelAccommodationStayEstimateRupees(
       serviceDate,
       historicalFallbackRateBps,
     );
-    const taxRupees = Math.round((nightlyRateRupees * taxRateBps) / 10_000);
-    totalRupees += nightlyRateRupees + taxRupees;
+    const taxPaise = Math.round(
+      (nightlyRatePaise * taxRateBps) / 10_000,
+    );
+    totalRupees += (nightlyRatePaise + taxPaise) / 100;
   }
 
   return totalRupees;
@@ -108,3 +133,4 @@ export function normalizeRestaurantGstProfile(
     ? 'SPECIFIED_18_WITH_ITC'
     : 'STANDARD_5_NO_ITC';
 }
+

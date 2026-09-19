@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+﻿import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { getTableName } from 'drizzle-orm';
 import { createApp } from '@/app';
 import * as documents from './documents';
@@ -176,13 +176,13 @@ describe('restaurant payment HTTP flow', () => {
     expect((await request(input)).json().error.code).toBe('ORDER_ALREADY_PAID');
     expect(db.writes).toHaveLength(0);
   });
-  it.each([25000, 85000])('records restaurant refund %s and recalculates net balance', async amountRupees => {
+  it.each([250, 850])('records restaurant refund %s and recalculates net balance', async amountRupees => {
     const db = database([[payment], [order], [], [], [payment]]);
     const response = await request({ amountRupees, reason: 'Customer money returned', reference: 'refund-ref', idempotencyKey: 'refund-key-123' }, `/api/payments/${payment.id}/refund`);
     expect(response.statusCode).toBe(201);
     expect(db.writes[0]).toMatchObject({ table: 'payment_refunds', value: { paymentId: payment.id, folioId: null, amountRupees, reference: 'refund-ref' } });
     expect(db.writes[1]).toMatchObject({ table: 'audit_logs', value: { action: 'REFUND_RECORDED' } });
-    expect(db.updates).toEqual([{ table: 'restaurant_orders', value: { paidRupees: 85000 - amountRupees, paymentStatus: amountRupees === 85000 ? 'UNPAID' : 'PARTIALLY_PAID', settledAt: null } }]);
+    expect(db.updates).toEqual([{ table: 'restaurant_orders', value: { paidRupees: 850 - amountRupees, paymentStatus: amountRupees === 850 ? 'UNPAID' : 'PARTIALLY_PAID', settledAt: null } }]);
   });
   it('replays an identical refund without further writes', async () => {
     const refund = { amountRupees: 200, reason: 'Cash returned', reference: 'cash', idempotencyKey: 'refund-key-123' };
@@ -193,7 +193,7 @@ describe('restaurant payment HTTP flow', () => {
   it.each(['amountRupees', 'reason', 'reference'])('rejects changed refund replay %s', async field => {
     const refund = { amountRupees: 200, reason: 'Cash returned', reference: 'cash', idempotencyKey: 'refund-key-123' };
     const db = database([[payment], [order], [refund]]);
-    const response = await request({ ...refund, [field]: field === 'amountRupees' ? 30000 : 'Different value' }, `/api/payments/${payment.id}/refund`);
+    const response = await request({ ...refund, [field]: field === 'amountRupees' ? 300 : 'Different value' }, `/api/payments/${payment.id}/refund`);
     expect(response.statusCode).toBe(409); expect(response.json().error.code).toBe('IDEMPOTENCY_CONFLICT');
     expect(db.writes).toHaveLength(0);
   });
@@ -230,7 +230,7 @@ describe('restaurant payment HTTP flow', () => {
       }));
     } finally { renderer.mockRestore(); }
   });
-  it.each([0, -1, 1.5])('rejects invalid refund amount %s before database access', async amountRupees => {
+  it.each([0, -1, 1.001])('rejects invalid refund amount %s before database access', async amountRupees => {
     expect((await request({ amountRupees, reason: 'Cash returned', idempotencyKey: 'refund-key-123' }, `/api/payments/${payment.id}/refund`)).statusCode).toBe(400);
     expect(mocks.db).not.toHaveBeenCalled();
   });
@@ -252,7 +252,7 @@ describe('restaurant payment HTTP flow', () => {
     expect((await request({ reason: 'Incorrect entry' }, `/api/payments/${payment.id}/reverse`)).statusCode).toBe(200);
     expect(db.updates[1].value).toMatchObject({ paidRupees: 150, paymentStatus: 'PARTIALLY_PAID' });
   });
-  it.each([0, 20000])('reverses a mistaken payment and recalculates remaining paid amount %s', async remaining => {
+  it.each([0, 200])('reverses a mistaken payment and recalculates remaining paid amount %s', async remaining => {
     const db = database([[payment], [order], [], [payment, ...(remaining ? [{ ...payment, id: 'other', amountRupees: remaining }] : [])]]);
     const response = await request({ reason: 'Incorrect cash entry' }, `/api/payments/${payment.id}/reverse`);
     expect(response.statusCode).toBe(200);
@@ -312,3 +312,4 @@ describe('restaurant payment HTTP flow', () => {
     expect((await request(undefined, `/api/payments/${payment.id}/receipt`, 'GET')).statusCode).toBe(403);
   });
 });
+

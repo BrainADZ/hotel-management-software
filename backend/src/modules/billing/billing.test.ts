@@ -8,10 +8,10 @@ import { simpleFinancialPdf } from './documents';
 describe('Step 4 deterministic financial calculations', () => {
   it('counts and identifies each room night', () => expect(roomChargeDates('2026-09-10','2026-09-12')).toEqual(['2026-09-10','2026-09-11']));
   it('rejects invalid and zero-night stays', () => expect(() => roomChargeDates('2026-09-10','2026-09-10')).toThrow());
-  it('calculates room charges in integer rupees', () => expect(calculateLine(2,4000,0,1800,'CGST_SGST')).toEqual({subtotalRupees:8000,discountRupees:0,taxableAmountRupees:8000,taxRupees:1440,cgstRupees:720,sgstRupees:720,igstRupees:0,totalRupees:9440}));
+  it('calculates room charges in rupees', () => expect(calculateLine(2,4000,0,1800,'CGST_SGST')).toEqual({subtotalRupees:8000,discountRupees:0,taxableAmountRupees:8000,taxRupees:1440,cgstRupees:720,sgstRupees:720,igstRupees:0,totalRupees:9440}));
   it('supports IGST without inventing a rate', () => expect(calculateLine(1,100,0,500,'IGST')).toMatchObject({taxRupees:5,cgstRupees:0,sgstRupees:0,igstRupees:5}));
   it('supports exempt configured treatment', () => expect(calculateLine(1,100,0,1800,'EXEMPT').taxRupees).toBe(0));
-  it('rounds tax deterministically to a rupees', () => expect(calculateLine(1,1.01,0,500,'IGST').taxRupees).toBe(0.05));
+  it('rounds tax deterministically to paise precision', () => expect(calculateLine(1,1.01,0,500,'IGST').taxRupees).toBe(0.05));
   it('rejects negative arbitrary charges', () => expect(() => calculateLine(1,-0.01,0,0,'EXEMPT')).toThrow());
   it('calculates advance and partial payment outstanding', () => expect(calculateFolio([calculateLine(1,20000,0,0,'EXEMPT')],[5000],[],[]).outstandingRupees).toBe(15000));
   it('sums split payments independently', () => expect(calculateFolio([calculateLine(1,20000,0,0,'EXEMPT')],[5000,8000,7000],[],[]).outstandingRupees).toBe(0));

@@ -1,4 +1,4 @@
-import { readFileSync } from 'node:fs';
+﻿import { readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
 
 const migration = readFileSync('drizzle-postgres/0000_production_foundation.sql', 'utf8');
@@ -32,7 +32,7 @@ describe('PostgreSQL reservation migration', () => {
     expect(reservationMigration).toContain('CREATE TABLE "reservation_events"');
     expect(reservationMigration).toContain('CREATE TABLE "reservation_sequences"');
     expect(reservationMigration).toContain('ADD COLUMN "organisation_id" text NOT NULL');
-    expect(reservationMigration).toContain('ADD COLUMN "nightly_rate_rupees" integer');
+    expect(reservationMigration).toContain('ADD COLUMN "nightly_rate_paise" integer');
     expect(reservationMigration).toContain('ADD COLUMN "created_by" text NOT NULL');
   });
 
@@ -42,3 +42,4 @@ describe('PostgreSQL reservation migration', () => {
     expect(reservationMigration).toContain('"metadata" jsonb');
   });
 });
+

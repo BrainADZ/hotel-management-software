@@ -1,9 +1,10 @@
-import { pgTable, text, integer, numeric, boolean, index } from 'drizzle-orm/pg-core';
+import { pgTable, text, integer, boolean, index } from 'drizzle-orm/pg-core';
 import { properties, inventoryItems, appUsers, organisations, travelPackages, inquiries } from './schema';
+import { paiseMoney } from './money';
 
 export const menuItems = pgTable('hotel_menu_items', {
   id: text('id').primaryKey(), propertyId: text('property_id').notNull().references(() => properties.id),
-  name: text('name').notNull(), category: text('category').notNull(), priceRupees: numeric('price_rupees', { precision: 16, scale: 2, mode: 'number' }).notNull(),
+  name: text('name').notNull(), category: text('category').notNull(), priceRupees: paiseMoney('price_paise').notNull(),
   available: boolean('available').notNull().default(true), version: integer('version').notNull().default(1), updatedAt: text('updated_at').notNull(),
 }, t => [index('hotel_menu_property').on(t.propertyId)]);
 export const lostFound = pgTable('hotel_lost_found', {
